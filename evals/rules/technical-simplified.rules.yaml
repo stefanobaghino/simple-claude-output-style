@@ -1,0 +1,171 @@
+# Rule data for the technical-simplified output style.
+#
+# The style file lives at plugin/output-styles/technical-simplified.md.
+#
+# Documented exclusions. These rules of the style need judgment, so the
+# linter does not check them, and the fidelity score does not cover them:
+# active voice, one term per concept, phrasal verbs, tense restrictions,
+# word order, paragraph structure, and ambiguous pronouns.
+#
+# Format:
+#   sentence_length: word limits per sentence kind. Omit the key to disable
+#     the check.
+#   modals.banned: modal verbs that the style bans. The engine flags a word
+#     in this list only when the tagger marks the word as a modal (tag MD).
+#     Thus "May" the month and "can" the noun never count as violations.
+#   modals.permitted: the modal verbs that the style permits. The list only
+#     feeds the violation message.
+#   contractions.banned / semicolons.banned: toggles for the built-in checks.
+#   latin_abbreviations: abbreviations to flag, with the replacement.
+#   patterns: regex checks. Each entry gives an id, a regex, and a message.
+#   words: the canonical word table. Each entry gives:
+#     avoid: one lemma, or a lemma sequence for a multi-word term.
+#     write: the replacement that the style prescribes.
+#     pos: universal part-of-speech tags. When present, the engine flags the
+#       lemma only in these parts of speech. "display" the noun stays legal
+#       while "display" the verb is flagged.
+#     except_phrases: phrases in which the word is legal. "as a result" is a
+#       prescribed connector, so "as" inside that phrase never counts.
+#     only_before_pos: flag the word only when the next token has one of
+#       these parts of speech. "over" is wrong only before a number.
+
+style: technical-simplified
+
+sentence_length:
+  instruction: 20
+  description: 25
+
+modals:
+  banned: [may, might, could, should, shall, would]
+  permitted: [can, must, will]
+
+contractions:
+  banned: true
+
+semicolons:
+  banned: true
+
+latin_abbreviations:
+  - avoid: "e.g."
+    write: "for example"
+  - avoid: "i.e."
+    write: "that is"
+  - avoid: "etc."
+    write: "and so on, or stop the list"
+  - avoid: "et al."
+    write: "and others"
+  - avoid: "cf."
+    write: "compare"
+  - avoid: "viz."
+    write: "namely"
+
+words:
+  # start | begin, commence, initiate
+  - { avoid: begin, write: start, pos: [VERB] }
+  - { avoid: commence, write: start, pos: [VERB] }
+  - { avoid: initiate, write: start, pos: [VERB] }
+  # do | perform, carry out, conduct, execute, accomplish
+  - { avoid: perform, write: do, pos: [VERB] }
+  - { avoid: [carry, out], write: do, pos: [VERB] }
+  - { avoid: conduct, write: do, pos: [VERB] }
+  - { avoid: execute, write: do, pos: [VERB] }
+  - { avoid: accomplish, write: do, pos: [VERB] }
+  # use | utilize, employ, leverage
+  - { avoid: utilize, write: use, pos: [VERB] }
+  - { avoid: employ, write: use, pos: [VERB] }
+  - { avoid: leverage, write: use, pos: [VERB] }
+  # make sure that | ensure, verify, confirm
+  - { avoid: ensure, write: make sure that, pos: [VERB] }
+  - { avoid: verify, write: make sure that, pos: [VERB] }
+  - { avoid: confirm, write: make sure that, pos: [VERB] }
+  # tell | inform, notify, advise
+  - { avoid: inform, write: tell, pos: [VERB] }
+  - { avoid: notify, write: tell, pos: [VERB] }
+  - { avoid: advise, write: tell, pos: [VERB] }
+  # get | obtain, acquire, achieve
+  - { avoid: obtain, write: get, pos: [VERB] }
+  - { avoid: acquire, write: get, pos: [VERB] }
+  - { avoid: achieve, write: get, pos: [VERB] }
+  # keep | maintain, retain
+  - { avoid: maintain, write: keep, pos: [VERB] }
+  - { avoid: retain, write: keep, pos: [VERB] }
+  # prevent | avoid, avert, inhibit
+  - { avoid: avoid, write: prevent, pos: [VERB] }
+  - { avoid: avert, write: prevent, pos: [VERB] }
+  - { avoid: inhibit, write: prevent, pos: [VERB] }
+  # obey | comply with, follow, adhere to
+  - { avoid: [comply, with], write: obey, pos: [VERB] }
+  - { avoid: follow, write: obey, pos: [VERB], except_phrases: ["as follows"] }
+  - { avoid: [adhere, to], write: obey, pos: [VERB] }
+  # correct | proper, appropriate, suitable
+  - { avoid: proper, write: correct, pos: [ADJ] }
+  - { avoid: appropriate, write: correct, pos: [ADJ] }
+  - { avoid: suitable, write: correct, pos: [ADJ] }
+  # sufficient | adequate
+  - { avoid: adequate, write: sufficient, pos: [ADJ] }
+  # because | since, as, due to
+  # The tagger marks both senses of "since" as SCONJ. The dependency label
+  # separates them: the causal sense is "mark", the temporal sense is "prep".
+  - { avoid: since, write: because, pos: [SCONJ], dep: [mark] }
+  - avoid: as
+    write: because
+    pos: [SCONJ]
+    except_phrases: ["as a result", "as follows", "as well", "such as", "as soon as"]
+  # The tagger marks the causal "due" as ADP. The deadline sense ("the
+  # report is due to the committee") is ADJ and stays legal.
+  - { avoid: [due, to], write: because, pos: [ADP] }
+  # but | however, yet
+  - { avoid: however, write: but, pos: [ADV] }
+  - { avoid: yet, write: but, pos: [CCONJ] }
+  # thus, as a result | therefore, hence, consequently
+  - { avoid: therefore, write: thus, pos: [ADV] }
+  - { avoid: hence, write: thus, pos: [ADV] }
+  - { avoid: consequently, write: thus, pos: [ADV] }
+  # more than | exceed, over, beyond
+  - { avoid: exceed, write: more than, pos: [VERB] }
+  - { avoid: over, write: more than, pos: [ADP], only_before_pos: [NUM] }
+  - { avoid: beyond, write: more than, pos: [ADP] }
+  # primary | main, principal, major
+  - { avoid: main, write: primary, pos: [ADJ], except_phrases: ["main branch"] }
+  - { avoid: principal, write: primary, pos: [ADJ] }
+  - { avoid: major, write: primary, pos: [ADJ], except_phrases: ["major version"] }
+  # quantity | amount
+  - { avoid: amount, write: quantity, pos: [NOUN] }
+  # decrease | reduce, diminish
+  - { avoid: reduce, write: decrease, pos: [VERB] }
+  - { avoid: diminish, write: decrease, pos: [VERB] }
+  # find | detect, discover, determine, locate, identify
+  - { avoid: detect, write: find, pos: [VERB] }
+  - { avoid: discover, write: find, pos: [VERB] }
+  - { avoid: determine, write: find, pos: [VERB] }
+  - { avoid: locate, write: find, pos: [VERB] }
+  - { avoid: identify, write: find, pos: [VERB] }
+  # show | indicate, display, reveal, denote
+  - { avoid: indicate, write: show, pos: [VERB] }
+  - { avoid: display, write: show, pos: [VERB] }
+  - { avoid: reveal, write: show, pos: [VERB] }
+  - { avoid: denote, write: show, pos: [VERB] }
+  # push | press, depress
+  - { avoid: press, write: push, pos: [VERB] }
+  - { avoid: depress, write: push, pos: [VERB] }
+  # remove | extract, withdraw, eliminate
+  - { avoid: extract, write: remove, pos: [VERB] }
+  - { avoid: withdraw, write: remove, pos: [VERB] }
+  - { avoid: eliminate, write: remove, pos: [VERB] }
+  # stop | cease, discontinue, halt, terminate
+  - { avoid: cease, write: stop, pos: [VERB] }
+  - { avoid: discontinue, write: stop, pos: [VERB] }
+  - { avoid: halt, write: stop, pos: [VERB] }
+  - { avoid: terminate, write: stop, pos: [VERB] }
+  # replace | substitute
+  - { avoid: substitute, write: replace, pos: [VERB] }
+  # quickly | rapidly
+  - { avoid: rapidly, write: quickly, pos: [ADV] }
+  # at this time | currently
+  - { avoid: currently, write: at this time, pos: [ADV] }
+  # permitted | acceptable, allowable, permissible
+  - { avoid: acceptable, write: permitted, pos: [ADJ] }
+  - { avoid: allowable, write: permitted, pos: [ADJ] }
+  - { avoid: permissible, write: permitted, pos: [ADJ] }
+  # through | via (the clarity section of the style)
+  - { avoid: via, write: through, pos: [ADP] }

@@ -1,0 +1,38 @@
+[project]
+name = "style-evals"
+version = "0.1.0"
+description = "Evaluation harness for the output styles in this repository"
+requires-python = ">=3.13,<3.15"
+dependencies = [
+    "spacy>=3.8,<3.9",
+    # spacy imports click through typer, but new typer versions do not depend on click
+    "click>=8,<9",
+    "en-core-web-sm",
+    "markdown-it-py>=3,<4",
+    "pyyaml>=6,<7",
+]
+
+[project.scripts]
+style-lint = "linter.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.11",
+]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/linter"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

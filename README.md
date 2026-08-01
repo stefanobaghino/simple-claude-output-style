@@ -1,6 +1,6 @@
 # Make Claude write clearly, for everyone
 
-This plugin adds a collection of [output styles](https://code.claude.com/docs/en/output-styles) for Claude Code. An output style replaces part of the system prompt of Claude Code, and thus shapes how Claude writes in every turn. A [skill](https://code.claude.com/docs/en/skills) loads instructions for one specific task on demand, but an output style applies to the whole session. The styles in this plugin aim at output that is clear, simple, and unambiguous, also for non-native readers.
+This plugin adds a collection of [output styles](https://code.claude.com/docs/en/output-styles) for Claude Code. An output style replaces part of the system prompt of Claude Code, and thus shapes how Claude writes in every turn. The styles in this plugin aim at output that is clear, simple, and unambiguous, also for non-native readers.
 
 | Style | Original source | Implementation |
 |---|---|---|

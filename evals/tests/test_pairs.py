@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from runner import GenerationError, build_argv, cli, generate
+from runner import GenerationError, build_argv, cli, generate, style_reference
 from runner.provenance import build_provenance
 
 HERE = Path(__file__).parent
@@ -69,13 +69,31 @@ def test_prompt_set_is_complete():
     assert all(p["text"].strip() for p in prompts)
 
 
-def test_build_argv_styled():
-    argv = build_argv("prompt", "sonnet", "plain-language", Path("/repo/plugin"))
+def make_plugin(root, name="test-plugin", styles=("alpha",)):
+    (root / ".claude-plugin").mkdir(parents=True)
+    (root / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": name}))
+    style_dir = root / "output-styles"
+    style_dir.mkdir()
+    for style in styles:
+        (style_dir / f"{style}.md").write_text(f"# {style}\n")
+    return root
+
+
+def test_style_reference_is_plugin_qualified(tmp_path):
+    plugin = make_plugin(tmp_path / "plugin")
+    assert style_reference(plugin, "alpha") == "test-plugin:alpha"
+
+
+def test_build_argv_styled(tmp_path):
+    plugin = make_plugin(tmp_path / "plugin", styles=("plain-language",))
+    argv = build_argv("prompt", "sonnet", "plain-language", plugin)
     assert argv[:3] == ["claude", "-p", "prompt"]
     assert argv[argv.index("--model") + 1] == "sonnet"
-    assert argv[argv.index("--plugin-dir") + 1] == "/repo/plugin"
+    assert argv[argv.index("--plugin-dir") + 1] == str(plugin)
     settings = json.loads(argv[argv.index("--settings") + 1])
-    assert settings == {"disableAllHooks": True, "outputStyle": "plain-language"}
+    # The bare style name does not resolve; only the qualified form
+    # injects the style.
+    assert settings == {"disableAllHooks": True, "outputStyle": "test-plugin:plain-language"}
     assert "--disallowedTools" in argv
     assert "--no-session-persistence" in argv
     assert "--exclude-dynamic-system-prompt-sections" in argv
@@ -89,23 +107,27 @@ def test_build_argv_unstyled_forces_the_default_style():
 
 
 def test_generate_parses_the_stream(tmp_path):
-    def run(argv, cwd):
-        return stream_output(output_style="plain-language", answer="the answer")
+    plugin = make_plugin(tmp_path / "plugin", styles=("plain-language",))
 
-    result = generate("prompt", "sonnet", "plain-language", Path("/p"), tmp_path, run=run)
+    def run(argv, cwd):
+        return stream_output(output_style="test-plugin:plain-language", answer="the answer")
+
+    result = generate("prompt", "sonnet", "plain-language", plugin, tmp_path, run=run)
     assert result.answer == "the answer"
-    assert result.output_style == "plain-language"
+    assert result.output_style == "test-plugin:plain-language"
     assert result.resolved_model == "claude-sonnet-5"
     assert result.output_tokens == 7
     assert result.plugins == ("simple-output-styles",)
 
 
 def test_generate_rejects_a_wrong_active_style(tmp_path):
+    plugin = make_plugin(tmp_path / "plugin", styles=("plain-language",))
+
     def run(argv, cwd):
         return stream_output(output_style="default")
 
     with pytest.raises(GenerationError, match="output style"):
-        generate("prompt", "sonnet", "plain-language", Path("/p"), tmp_path, run=run)
+        generate("prompt", "sonnet", "plain-language", plugin, tmp_path, run=run)
 
 
 def test_generate_rejects_an_error_result(tmp_path):
@@ -129,9 +151,7 @@ def project(tmp_path, monkeypatch):
     rules = tmp_path / "rules"
     rules.mkdir()
     (rules / "alpha.rules.yaml").write_text("style: alpha\n")
-    style_dir = tmp_path / "plugin" / "output-styles"
-    style_dir.mkdir(parents=True)
-    (style_dir / "alpha.md").write_text("# Alpha style\n")
+    make_plugin(tmp_path / "plugin")
     monkeypatch.setattr(cli, "claude_version", lambda: "0.0.0 (test)")
     return tmp_path
 

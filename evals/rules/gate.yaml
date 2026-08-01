@@ -1,0 +1,29 @@
+# The gate policy: the pass threshold per style.
+#
+# The thresholds live outside the rule files on purpose. A threshold edit
+# changes only the pass mark, never the measured rate. The rule-file hash
+# thus keeps answering the question "did the measured quantity change?".
+#
+# A pair passes when its styled answer has at least one sentence and a
+# violation rate at or below max_rate per 100 sentences. The thresholds
+# differ per style, because the rule counts differ and thus the rates are
+# not comparable across styles.
+#
+# Calibrated against runs/2026-08-01b. The pass marks of that run carry
+# a one-time asterisk: the same data set the thresholds and took the
+# test. Later runs are gated by these pre-committed values.
+#
+# technical-simplified: the styled rates were 12 zeros, then 3.2 to 12.5
+#   (one violation each, the rate depends on the answer length), then
+#   22.2 and above (2 to 4 violations). The baseline rates started at
+#   16.7. The threshold 15.0 sits in the gap: one violation passes at
+#   any answer length, 2 or more violations fail, and every nonzero
+#   baseline rate fails.
+# plain-language: the styled rates were all zero. The baseline rates
+#   started at 8.3. The threshold 5.0 sits below the baseline floor and
+#   grants slack for one violation in an answer of 20 or more sentences.
+thresholds:
+  technical-simplified:
+    max_rate: 15.0
+  plain-language:
+    max_rate: 5.0

@@ -1,10 +1,10 @@
 # Simplified Technical English for Claude Code
 
-This plugin adds one output style: **simple**. The style makes Claude write in Simplified Technical English, adapted from ASD-STE100 Issue 9. The output becomes clear, simple, and unambiguous, also for non-native readers.
+This plugin adds one output style: **simple**. The style makes Claude write in Simplified Technical English. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The output becomes clear, simple, and unambiguous, also for non-native readers.
 
-The style applies to chat answers, code comments, commit messages, PR text, and documentation. It keeps the standard coding instructions of Claude Code.
+The style applies to chat answers, code comments, commit messages, PR text, and documentation. The style keeps the default coding instructions of Claude Code.
 
-## Installation
+## How to install the plugin
 
 1. Add the marketplace:
 
@@ -22,7 +22,7 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 
 ## What the style does
 
-- It uses one term per concept and the simplest word that keeps the meaning.
+- The style uses one term per concept and the simplest word that keeps the meaning.
 - It permits only the modal verbs "can", "must", and "will".
 - It uses the active voice and simple tenses.
 - It limits sentences to 20 words for instructions and 25 words for descriptions.
@@ -34,12 +34,12 @@ See [output-styles/simple.md](output-styles/simple.md) for the full rules.
 
 This project is an independent adaptation of the writing rules of ASD-STE100 Issue 9. It restates the rules in its own words. It does not reproduce the text, the examples, or the dictionary of the specification.
 
-"ASD-STE100 Simplified Technical English" is a registered trademark of the Aerospace, Security and Defence Industries Association of Europe (ASD). This project uses the name only to refer to the standard. ASD and the STEMG are not affiliated with this project, and they do not endorse or certify it.
+"ASD-STE100 Simplified Technical English" is a registered trademark of the Aerospace, Security and Defence Industries Association of Europe (ASD). This project uses the name only to refer to the specification. ASD and the STEMG are not affiliated with this project, and they do not endorse or certify this project.
 
-This plugin does not make the output of Claude compliant with ASD-STE100. To read the full standard, download the official specification free of charge from [asd-ste100.org](https://www.asd-ste100.org/).
+This plugin does not make the output of Claude compliant with ASD-STE100. Download the full specification free of charge from [asd-ste100.org](https://www.asd-ste100.org/).
 
 ## License
 
 The Zero-Clause BSD license (0BSD) covers this project. See [LICENSE](LICENSE).
 
-The license covers only the content of this project: the adapted rules, the examples, and the packaging. It does not give rights to the ASD-STE100 specification or to the trademarks of ASD.
+The license covers only the content of this project: the adapted rules, the examples, and the packaging. The license does not give rights to the ASD-STE100 specification or to the trademarks of ASD.

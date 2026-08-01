@@ -1,4 +1,6 @@
-# Simplified Technical English for Claude Code
+# Make Claude write clearly, for everyone
+
+*An output style for Claude Code.*
 
 This plugin adds one output style: **simple**. The style makes Claude write in Simplified Technical English. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The output becomes clear, simple, and unambiguous, also for non-native readers.
 

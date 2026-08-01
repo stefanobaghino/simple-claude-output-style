@@ -2,7 +2,6 @@
   "name": "simple-claude-output-style",
   "displayName": "Simple output style",
   "description": "An output style with clear and simple writing rules, adapted from ASD-STE100 Issue 9 for chat and code work.",
-  "version": "1.0.0",
   "author": {
     "name": "Stefano Baghino",
     "url": "https://github.com/stefanobaghino"

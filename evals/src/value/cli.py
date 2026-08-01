@@ -70,7 +70,7 @@ def load_prompts(path: Path) -> dict[str, str]:
     return {prompt["id"]: prompt["text"] for prompt in data["prompts"]}
 
 
-def _answer_index(answers: list[dict]) -> dict[tuple[str, str | None], dict]:
+def answer_index(answers: list[dict]) -> dict[tuple[str, str | None], dict]:
     return {
         (answer["prompt_id"], answer.get("style")): {
             "text": answer["answer"],
@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
 
     run_dir = Path(args.run_dir)
     answers = load_answers(run_dir / "answers.jsonl")
-    index = _answer_index(answers)
+    index = answer_index(answers)
     answer_shas = {key: arm["sha256"] for key, arm in index.items()}
 
     fidelity_rows = load_fidelity(run_dir / "fidelity.jsonl")

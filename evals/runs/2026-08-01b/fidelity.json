@@ -1,5 +1,5 @@
 {
-  "date": "2026-08-01T19:09:11+00:00",
+  "date": "2026-08-01T19:41:13+00:00",
   "run": "2026-08-01b",
   "thresholds": {
     "plain-language": 5.0,
@@ -15,10 +15,10 @@
     },
     "technical-simplified": {
       "gated": 20,
-      "passed": 17,
-      "failed": 3,
-      "styled_rate": 5.32,
-      "baseline_rate": 80.6
+      "passed": 18,
+      "failed": 2,
+      "styled_rate": 4.56,
+      "baseline_rate": 80.1
     }
   },
   "linter_toolchain": {
@@ -36,7 +36,7 @@
     },
     "technical-simplified": {
       "file": "rules/technical-simplified.rules.yaml",
-      "sha256": "4426404bc33de8c10655df1eeb3b6e2c7f20e1d06aebf9d2f936dfc3d6be4ec7"
+      "sha256": "f7120e410a1863e07bda72bd5b0fe07c7ca0cbad642c9a093681e86497025fdd"
     }
   },
   "gate_config": {

@@ -94,8 +94,15 @@ words:
   - { avoid: avert, write: prevent, pos: [VERB] }
   - { avoid: inhibit, write: prevent, pos: [VERB] }
   # obey | comply with, follow, adhere to
+  # The table entry targets the rule-obedience sense. The procedural sense
+  # ("follow these steps") is a different sense: "obey these steps" is not
+  # English. The exception list is surface text, so it names the inflected
+  # forms of the collocation.
   - { avoid: [comply, with], write: obey, pos: [VERB] }
-  - { avoid: follow, write: obey, pos: [VERB], except_phrases: ["as follows"] }
+  - avoid: follow
+    write: obey
+    pos: [VERB]
+    except_phrases: ["as follows", "follow these steps", "follows these steps"]
   - { avoid: [adhere, to], write: obey, pos: [VERB] }
   # correct | proper, appropriate, suitable
   - { avoid: proper, write: correct, pos: [ADJ] }
@@ -126,7 +133,9 @@ words:
   - { avoid: over, write: more than, pos: [ADP], only_before_pos: [NUM] }
   - { avoid: beyond, write: more than, pos: [ADP] }
   # primary | main, principal, major
-  - { avoid: main, write: primary, pos: [ADJ], except_phrases: ["main branch"] }
+  # "main risk" is a fixed collocation in incident and review prose, as
+  # natural as "primary risk"; the exception spares it.
+  - { avoid: main, write: primary, pos: [ADJ], except_phrases: ["main branch", "main risk"] }
   - { avoid: principal, write: primary, pos: [ADJ] }
   - { avoid: major, write: primary, pos: [ADJ], except_phrases: ["major version"] }
   # quantity | amount

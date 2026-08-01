@@ -92,6 +92,16 @@ def test_clean_sample_is_dirty_for_the_other_style(linters, style):
     assert report.violations != []
 
 
+def test_word_exceptions_spare_the_phrase_but_not_the_word(linters):
+    linter = linters["technical-simplified"]
+    assert linter.lint_text("The sender then follows these steps:").violations == []
+    assert linter.lint_text("The main risk is a delay.").violations == []
+    flagged = linter.lint_text("Follow the security rules.").violations
+    assert [v.match for v in flagged] == ["Follow"]
+    flagged = linter.lint_text("The main goal is speed.").violations
+    assert [v.match for v in flagged] == ["main"]
+
+
 def test_rate_is_per_100_sentences(linters):
     report = linters["technical-simplified"].lint_text("You should retry. The test failed.")
     assert report.sentence_count == 2

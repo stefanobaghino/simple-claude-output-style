@@ -14,6 +14,9 @@ The parser found the token of the user, and the log shows the user's session.
 The cache grew since 2020, and the size doubled as a result. The migration is
 not done yet.
 
+To reproduce the failure, the tester follows these steps: install, run, wait.
+The main risk of the rollout is a slow cache.
+
 > This quoted paragraph could utilize every banned word, e.g. don't worry;
 > however, nothing here should count.
 

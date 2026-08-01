@@ -5,7 +5,7 @@ This directory holds the evaluation harness for the output styles in
 the marketplace serves only the `plugin/` directory, so installers never
 receive the harness.
 
-The harness has four components. The first is a deterministic linter.
+The harness has five components. The first is a deterministic linter.
 It checks a Markdown text against the writing rules of a style and
 reports each violation, plus a rate per 100 sentences. The second is a
 pair runner. It produces, per prompt, one answer per style and one
@@ -17,8 +17,11 @@ its style. The judged measurements read only the pairs with a true
 `pass` mark; the token-cost measurement reads all pairs. The fourth is
 a token-cost report. It states two numbers per style: the fixed input
 overhead of the style block per request, and the distribution of the
-ratio of styled answer length to unstyled answer length. See the
-tracking issue in this repository for the other planned components.
+ratio of styled answer length to unstyled answer length. The fifth is
+a reader-value report. It compares, per gated pair, the styled answer
+with the unstyled answer on three reader-facing checks, as win, loss,
+or tie. See the tracking issue in this repository for the other
+planned components.
 
 ## Rule files
 
@@ -44,6 +47,7 @@ uv run style-lint FILE.md --rules rules/technical-simplified.rules.yaml
 uv run style-pairs
 uv run style-gate runs/<date>
 uv run style-cost runs/<date> [--probe]
+uv run style-value runs/<date> [--judge]
 ```
 
 The linter exits with code 1 when it finds a violation.
@@ -80,6 +84,24 @@ lands in `cost-probe.json`, and a later `style-cost` call without
 warnings exist, 1 when warnings exist (for example, the overhead is not
 measured), 2 when the run cannot be reported.
 
+The reader-value report reads only the pairs whose styled answer
+passes the gate, because rule obedience alone can produce compliant,
+useless text, and this report measures whether a reader gains
+anything. Three checks compare the two answers of a pair: weak-reader
+comprehension (a weaker model answers questions about one answer text,
+and a grader marks the answers), ambiguity through paraphrase
+(independent restatements of one answer text, scored by their mutual
+agreement), and translation round-trip (one answer text goes to
+another language and back, scored by the lexical loss). Every judge
+call sees one bare text without a style name or an arm label, and the
+judge models must differ from the writer model of the run. `--judge`
+runs the live calls and appends the raw outputs to `value-raw.jsonl`;
+an interrupted judge run resumes when the same invocation runs again.
+Without `--judge` the tool rescores the stored raw data offline. Exit
+codes: 0 when the checks are scored and no warnings exist, 1 when
+warnings exist (for example, a check without judge data), 2 when the
+run cannot be scored.
+
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,
@@ -96,6 +118,9 @@ runs/<YYYY-MM-DD>/
   cost-probe.json   # probe provenance and the measured input overhead per style
   cost.json         # answer-length ratios and input overhead, machine-readable
   cost.md           # the token-cost report for a human
+  value-raw.jsonl   # judge provenance plus one line per raw judge call
+  value.json        # win/loss/tie per check and per style, machine-readable
+  value.md          # the reader-value report for a human
 ```
 
 A pair is not stored twice: it is the line for `(prompt, style)` plus

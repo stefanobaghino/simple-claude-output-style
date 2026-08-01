@@ -32,7 +32,13 @@ def repo_state(repo_dir: Path) -> dict:
         return completed.stdout.strip()
 
     try:
-        return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
+        # Untracked files stay out of the dirty check: the run writes its
+        # own output into the repository, and untracked files cannot alter
+        # the tracked style files.
+        return {
+            "commit": git("rev-parse", "HEAD"),
+            "dirty": bool(git("status", "--porcelain", "-uno")),
+        }
     except (OSError, subprocess.CalledProcessError):
         return {"commit": None, "dirty": None}
 

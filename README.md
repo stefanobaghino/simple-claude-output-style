@@ -1,8 +1,6 @@
 # Make Claude write clearly, for everyone
 
-*Output styles for Claude Code.*
-
-This plugin adds a collection of output styles.
+This plugin adds a collection of [output styles](https://code.claude.com/docs/en/output-styles) for Claude Code. The styles aim at output that is clear, simple, and unambiguous, also for non-native readers.
 
 | Style | Original source | Implementation |
 |---|---|---|

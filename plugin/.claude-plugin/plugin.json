@@ -1,7 +1,7 @@
 {
   "name": "simple-output-styles",
   "displayName": "Simple output styles",
-  "description": "Output styles with clear and simple writing rules, adapted from ASD-STE100 Issue 9 and the Federal Plain Language Guidelines for chat and code work.",
+  "description": "Output styles that make Claude write clearly, for everyone.",
   "author": {
     "name": "Stefano Baghino",
     "url": "https://github.com/stefanobaghino"

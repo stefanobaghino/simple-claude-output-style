@@ -1,6 +1,28 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "customManagers:githubActionsVersions"
+  ],
+  "schedule": ["before 6am on monday"],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Group all non-major updates into one weekly PR",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "non-major dependencies"
+    },
+    {
+      "description": "spaCy and its model wheel must move together by hand; the model URL in [tool.uv.sources] is outside Renovate",
+      "matchPackageNames": ["spacy", "en-core-web-sm"],
+      "enabled": false
+    },
+    {
+      "description": "The harness targets Python 3.13; take patch updates only",
+      "matchManagers": ["pyenv"],
+      "allowedVersions": "<3.14"
+    }
   ]
 }

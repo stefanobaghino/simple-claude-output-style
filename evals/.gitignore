@@ -1,3 +1,6 @@
+# Scratch space of an interrupted pair run
+runs/*/.workdir/
+
 # Python
 __pycache__/
 *.py[cod]

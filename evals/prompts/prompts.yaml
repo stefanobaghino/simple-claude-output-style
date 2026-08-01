@@ -1,0 +1,315 @@
+# The prompt set for answer-pair generation.
+#
+# Contract:
+# - Each prompt has a unique id, a task type, and a text.
+# - The task types are the 4 types that the styles target:
+#   explanation, code-review, summarization, and debugging.
+# - Each prompt is self-contained. The code to review, the text to
+#   summarize, and the error output to debug are inline. An answer
+#   needs no tools and no repository.
+#
+# Changes to this file change the measurement. The provenance of each
+# run records the sha256 of this file.
+
+prompts:
+  - id: explanation-01
+    type: explanation
+    text: |
+      Explain how a hash map handles collisions. Cover the two common
+      strategies and the trade-off between them. The reader is a junior
+      developer.
+
+  - id: explanation-02
+    type: explanation
+    text: |
+      Explain the difference between optimistic locking and pessimistic
+      locking in a database. Give one concrete example for each, and
+      state when each approach fits.
+
+  - id: explanation-03
+    type: explanation
+    text: |
+      Explain what TCP slow start does and why it exists. The reader
+      knows what TCP is but has never read about congestion control.
+
+  - id: explanation-04
+    type: explanation
+    text: |
+      Explain the difference between a process and a thread. Then
+      explain when a program benefits from more processes instead of
+      more threads, and why.
+
+  - id: explanation-05
+    type: explanation
+    text: |
+      Explain what a memory leak is in a garbage-collected language,
+      and how a leak can still happen even though a garbage collector
+      runs. Give two common causes.
+
+  - id: code-review-01
+    type: code-review
+    text: |
+      Review this Python function and point out every problem you find:
+
+      ```python
+      def add_user(name, roles=[], db=None):
+          try:
+              roles.append("member")
+              db.insert({"name": name, "roles": roles})
+              return True
+          except:
+              return False
+      ```
+
+  - id: code-review-02
+    type: code-review
+    text: |
+      Review this JavaScript function and point out every problem you
+      find:
+
+      ```javascript
+      async function loadProfile(userId) {
+        let profile;
+        fetch(`/api/users/${userId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            profile = data;
+          });
+        return profile.name.toUpperCase();
+      }
+      ```
+
+  - id: code-review-03
+    type: code-review
+    text: |
+      Review this Python function and point out every problem you find:
+
+      ```python
+      def find_orders(cursor, customer_name, status):
+          query = (
+              "SELECT * FROM orders WHERE customer = '"
+              + customer_name
+              + "' AND status = '" + status + "'"
+          )
+          cursor.execute(query)
+          return cursor.fetchall()
+      ```
+
+  - id: code-review-04
+    type: code-review
+    text: |
+      Review this Python class and point out every problem you find. The
+      class is used from several threads at once:
+
+      ```python
+      class Counter:
+          def __init__(self):
+              self.value = 0
+
+          def increment(self):
+              current = self.value
+              self.value = current + 1
+
+          def reset(self):
+              self.value = 0
+      ```
+
+  - id: code-review-05
+    type: code-review
+    text: |
+      Review this shell script and point out every problem you find:
+
+      ```sh
+      #!/bin/sh
+      BACKUP_DIR=$1
+      cd $BACKUP_DIR
+      rm -rf *.tmp
+      for f in $(ls *.log); do
+        gzip $f
+      done
+      echo Cleaned $BACKUP_DIR
+      ```
+
+  - id: summarization-01
+    type: summarization
+    text: |
+      Summarize this changelog as release notes for end users. Keep only
+      what a user of the application would care about:
+
+      - Bumped internal build tooling to v12.
+      - Fixed a crash when the settings dialog was opened while a file
+        upload was in progress.
+      - Refactored the session module into three smaller modules.
+      - Added keyboard shortcuts for the ten most used actions, shown in
+        the tooltips of the corresponding buttons.
+      - Reduced cold start time by roughly 40% by deferring plugin
+        initialization.
+      - Updated internal telemetry batching from 30s to 60s intervals.
+      - The export dialog now remembers the last used folder.
+
+  - id: summarization-02
+    type: summarization
+    text: |
+      Summarize this incident report into the three most important
+      takeaways for the engineering team:
+
+      On Tuesday at 09:14 UTC, the checkout service started returning
+      errors for roughly 12% of requests. The on-call engineer was paged
+      at 09:21. The errors traced back to a database connection pool
+      that was exhausted. A deployment the evening before had lowered
+      the pool size from 50 to 5 connections. The value came from a
+      configuration template that was copied from the staging
+      environment. Staging uses smaller values on purpose. The rollback
+      finished at 09:48 and error rates returned to normal. The
+      configuration review checklist did not include pool sizes, and the
+      staging template and the production template live in the same
+      directory with similar names.
+
+  - id: summarization-03
+    type: summarization
+    text: |
+      Summarize this design proposal in one paragraph for a manager who
+      has two minutes:
+
+      We propose moving image thumbnail generation out of the upload
+      request path and into a background queue. Today, thumbnails are
+      generated synchronously during upload, which adds 800ms to 3s to
+      each request and ties up web workers. Under the proposal, the
+      upload endpoint stores the original image and enqueues a job.
+      A worker pool generates the thumbnails and updates the record.
+      Until the job completes, clients receive a placeholder URL. The
+      change needs a new queue topic, a worker deployment, and a
+      placeholder asset. The main risk is a visible delay before
+      thumbnails appear under heavy load, which we mitigate with queue
+      autoscaling. We estimate two weeks of work for one engineer.
+
+  - id: summarization-04
+    type: summarization
+    text: |
+      Turn this bug report into a ticket: write a one-line title and a
+      numbered list of reproduction steps:
+
+      I was using the app yesterday evening on my laptop (Firefox,
+      latest version I think) and I wanted to export my monthly report
+      like I always do. So I went to the reports page, clicked on
+      March, and then clicked the export button, the PDF one, not the
+      CSV one which works fine by the way. Nothing happened at first,
+      so I clicked it a few more times, and then I got four identical
+      error banners at once saying "export failed" with no other
+      information. The CSV export of the same report works. My
+      colleague sees the same thing on her machine with Chrome.
+
+  - id: summarization-05
+    type: summarization
+    text: |
+      Summarize these meeting notes into a list of action items, each
+      with an owner:
+
+      Sprint planning, Monday. Present: Ada, Ben, Chen. Ada walked
+      through the migration plan for the payments database and said the
+      dry run needs to happen before Thursday. Ben raised that the
+      staging environment is still on the old schema and offered to
+      update it by Wednesday. Chen asked whether the mobile team was
+      informed about the API deprecation, nobody was sure, Ada said she
+      would check with their lead. Ben will also prepare the runbook
+      for the migration night. Chen continues with the search indexing
+      work and expects a demo by Friday.
+
+  - id: debugging-01
+    type: debugging
+    text: |
+      This Python code fails. Explain the cause and how to fix it:
+
+      ```python
+      config = {"host": "localhost", "port": 8080}
+
+      def get_url(cfg):
+          return f"http://{cfg['host']}:{cfg['Port']}/api"
+
+      print(get_url(config))
+      ```
+
+      ```
+      Traceback (most recent call last):
+        File "app.py", line 6, in <module>
+          print(get_url(config))
+        File "app.py", line 4, in get_url
+          return f"http://{cfg['host']}:{cfg['Port']}/api"
+      KeyError: 'Port'
+      ```
+
+  - id: debugging-02
+    type: debugging
+    text: |
+      This JavaScript code throws. Explain the cause and how to fix it:
+
+      ```javascript
+      class Timer {
+        constructor() {
+          this.seconds = 0;
+        }
+        start() {
+          setInterval(function () {
+            this.seconds += 1;
+            console.log(this.seconds);
+          }, 1000);
+        }
+      }
+      new Timer().start();
+      ```
+
+      The console prints `NaN` on every tick.
+
+  - id: debugging-03
+    type: debugging
+    text: |
+      This Python function returns the wrong result. Explain the cause
+      and how to fix it:
+
+      ```python
+      def moving_sum(values, window):
+          """Sum of each window of the given size."""
+          sums = []
+          for i in range(len(values) - window):
+              sums.append(sum(values[i : i + window]))
+          return sums
+
+      print(moving_sum([1, 2, 3, 4], 2))
+      ```
+
+      Expected `[3, 5, 7]`, got `[3, 5]`.
+
+  - id: debugging-04
+    type: debugging
+    text: |
+      This Python code fails on one specific input file. Explain the
+      likely cause and how to fix it:
+
+      ```python
+      def count_lines(path):
+          with open(path, encoding="ascii") as f:
+              return sum(1 for _ in f)
+      ```
+
+      ```
+      UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3 in
+      position 512: ordinal not in range(128)
+      ```
+
+  - id: debugging-05
+    type: debugging
+    text: |
+      A test passes when it runs alone and fails when the whole suite
+      runs. Explain the likely cause and how to fix it:
+
+      ```python
+      DEFAULT_TAGS = ["draft"]
+
+      def make_post(title, tags=DEFAULT_TAGS):
+          tags.append("post")
+          return {"title": title, "tags": tags}
+
+      def test_make_post_adds_post_tag():
+          post = make_post("hello")
+          assert post["tags"] == ["draft", "post"]
+      ```

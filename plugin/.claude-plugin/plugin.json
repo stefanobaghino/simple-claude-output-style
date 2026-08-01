@@ -1,13 +1,13 @@
 {
   "name": "simple-output-styles",
-  "displayName": "Simple output style",
-  "description": "An output style with clear and simple writing rules, adapted from ASD-STE100 Issue 9 for chat and code work.",
+  "displayName": "Simple output styles",
+  "description": "Output styles with clear and simple writing rules, adapted from ASD-STE100 Issue 9 and the Federal Plain Language Guidelines for chat and code work.",
   "author": {
     "name": "Stefano Baghino",
     "url": "https://github.com/stefanobaghino"
   },
   "repository": "https://github.com/stefanobaghino/simple-output-styles",
   "license": "0BSD",
-  "keywords": ["output-style", "simplified-technical-english", "ste", "writing"],
+  "keywords": ["output-style", "simplified-technical-english", "ste", "plain-language", "writing"],
   "outputStyles": "./output-styles/"
 }

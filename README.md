@@ -1,10 +1,13 @@
 # Make Claude write clearly, for everyone
 
-*An output style for Claude Code.*
+*Output styles for Claude Code.*
 
-This plugin adds one output style: **technical-simplified**. The style gives Claude a small set of strict writing rules. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The output becomes clear, simple, and unambiguous, also for non-native readers.
+This plugin adds two output styles:
 
-The style applies to chat answers, code comments, commit messages, PR text, and documentation. The style keeps the default coding instructions of Claude Code.
+- **technical-simplified** — strict writing rules from ASD-STE100 Issue 9. The output becomes clear, simple, and unambiguous, also for non-native readers.
+- **plain-language** — reader-first writing rules from the Federal Plain Language Guidelines. The output becomes clear at the first read, with a natural tone.
+
+Each style applies to chat answers, code comments, commit messages, PR text, and documentation. Each style keeps the default coding instructions of Claude Code.
 
 ## How to install the plugin
 
@@ -20,9 +23,11 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
    /plugin install simple-output-styles
    ```
 
-3. Open `/config`, then select **Output style** > **technical-simplified**.
+3. Open `/config`, then select **Output style** > **technical-simplified** or **plain-language**.
 
-## What the style does
+## What the styles do
+
+**technical-simplified** is the strict style:
 
 - The style uses one term per concept and the simplest word that keeps the meaning.
 - It permits only the modal verbs "can", "must", and "will".
@@ -30,11 +35,21 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 - It limits sentences to 20 words for instructions and 25 words for descriptions.
 - It removes contractions, Latin abbreviations, and ambiguous pronouns.
 
-See [plugin/output-styles/technical-simplified.md](plugin/output-styles/technical-simplified.md) for the full rules.
+**plain-language** is the natural style:
+
+- The style puts the answer first and one idea in each sentence.
+- It addresses the reader as "you" and uses the active voice and the present tense.
+- It picks familiar words, removes hidden verbs, and limits abbreviations.
+- It reserves "must" for obligations and never uses "shall".
+- It permits contractions where they sound natural.
+
+See [plugin/output-styles/technical-simplified.md](plugin/output-styles/technical-simplified.md) and [plugin/output-styles/plain-language.md](plugin/output-styles/plain-language.md) for the full rules.
 
 ## Attribution and disclaimer
 
 This project is an independent adaptation of the writing rules of ASD-STE100 Issue 9. It restates the rules in its own words. It does not reproduce the text, the examples, or the dictionary of the specification.
+
+The plain-language style adapts the [Federal Plain Language Guidelines](https://digital.gov/guides/plain-language), a work of the United States government in the public domain. This project is not affiliated with the US government.
 
 "ASD-STE100 Simplified Technical English" is a registered trademark of the Aerospace, Security and Defence Industries Association of Europe (ASD). This project uses the name only to refer to the specification. ASD and the STEMG are not affiliated with this project, and they do not endorse or certify this project.
 

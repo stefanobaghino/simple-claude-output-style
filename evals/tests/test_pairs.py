@@ -33,7 +33,12 @@ def stream_output(output_style="default", answer="ok", is_error=False):
         "type": "result",
         "is_error": is_error,
         "result": answer,
-        "usage": {"output_tokens": 7},
+        "usage": {
+            "output_tokens": 7,
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 2,
+            "cache_read_input_tokens": 1,
+        },
         "modelUsage": {"claude-sonnet-5": {}},
         "duration_ms": 100,
     }
@@ -117,6 +122,9 @@ def test_generate_parses_the_stream(tmp_path):
     assert result.output_style == "test-plugin:plain-language"
     assert result.resolved_model == "claude-sonnet-5"
     assert result.output_tokens == 7
+    assert result.input_tokens == 3
+    assert result.cache_creation_input_tokens == 2
+    assert result.cache_read_input_tokens == 1
     assert result.plugins == ("simple-output-styles",)
 
 
@@ -185,6 +193,11 @@ def test_cli_produces_a_complete_run(project):
         ("explanation-01", "alpha"),
         ("debugging-01", "alpha"),
     }
+    assert all(
+        (a["input_tokens"], a["cache_creation_input_tokens"], a["cache_read_input_tokens"])
+        == (3, 2, 1)
+        for a in answers
+    )
     provenance = json.loads((out / "provenance.json").read_text())
     assert provenance["styles"]["alpha"]["sha256"]
     report = (out / "report.md").read_text()

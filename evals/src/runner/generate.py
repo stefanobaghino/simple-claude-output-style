@@ -52,6 +52,9 @@ class Generation:
     plugins: tuple[str, ...]
     claude_code_version: str
     output_tokens: int
+    input_tokens: int
+    cache_creation_input_tokens: int
+    cache_read_input_tokens: int
     duration_ms: int
 
 
@@ -109,7 +112,7 @@ def generate(
     """Generate one answer and check that the intended style was active."""
     argv = build_argv(prompt, model, style, plugin_dir)
     stdout = run(argv, workdir)
-    init, result = _parse_events(stdout)
+    init, result = parse_events(stdout)
 
     expected_style = style_reference(plugin_dir, style) if style is not None else "default"
     active_style = init.get("output_style")
@@ -129,11 +132,14 @@ def generate(
         plugins=tuple(sorted(p["name"] for p in init.get("plugins", []))),
         claude_code_version=str(init.get("claude_code_version", "")),
         output_tokens=int(usage.get("output_tokens", 0)),
+        input_tokens=int(usage.get("input_tokens", 0)),
+        cache_creation_input_tokens=int(usage.get("cache_creation_input_tokens", 0)),
+        cache_read_input_tokens=int(usage.get("cache_read_input_tokens", 0)),
         duration_ms=int(result.get("duration_ms", 0)),
     )
 
 
-def _parse_events(stdout: str) -> tuple[dict, dict]:
+def parse_events(stdout: str) -> tuple[dict, dict]:
     """Extract the init event and the result event from stream-json output."""
     init: dict | None = None
     result: dict | None = None

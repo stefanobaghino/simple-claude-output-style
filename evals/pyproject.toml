@@ -16,6 +16,7 @@ dependencies = [
 style-lint = "linter.cli:main"
 style-pairs = "runner.cli:main"
 style-gate = "gate.cli:main"
+style-cost = "cost.cli:main"
 
 [dependency-groups]
 dev = [
@@ -31,7 +32,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/linter", "src/runner", "src/gate"]
+packages = ["src/linter", "src/runner", "src/gate", "src/cost"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,7 +1,7 @@
 {
   "name": "simple-claude-output-style",
-  "displayName": "Simplified Technical English",
-  "description": "An output style that applies Simplified Technical English (ASD-STE100 Issue 9), adapted for chat and code work.",
+  "displayName": "Simple output style",
+  "description": "An output style with clear and simple writing rules, adapted from ASD-STE100 Issue 9 for chat and code work.",
   "version": "1.0.0",
   "author": {
     "name": "Stefano Baghino",

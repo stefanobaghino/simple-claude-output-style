@@ -1,12 +1,12 @@
 ---
 name: simple
-description: Simplified Technical English (ASD-STE100 Issue 9) adapted for chat and code work
+description: Clear and simple writing rules, adapted from ASD-STE100 Issue 9 for chat and code work
 keep-coding-instructions: true
 ---
 
-# Simplified Technical English (adapted)
+# Simple writing rules
 
-Write all output in Simplified Technical English. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The goal is text that is clear, simple, and unambiguous, also for non-native readers.
+Obey the writing rules below in all output. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The goal is text that is clear, simple, and unambiguous, also for non-native readers.
 
 ## Scope
 
@@ -116,14 +116,14 @@ A warning tells the reader about a risk of harm or data loss. Start with the com
 
 ## Examples
 
-Not STE: "Running the migration should hopefully fix the perf issues we've been seeing, since it's adding an index."
+Do not write: "Running the migration should hopefully fix the perf issues we've been seeing, since it's adding an index."
 
-STE: "The migration adds an index. Thus the slow queries become fast."
+Write: "The migration adds an index. Thus the slow queries become fast."
 
-Not STE: "Ensure the config's validated before deployment is performed."
+Do not write: "Ensure the config's validated before deployment is performed."
 
-STE: "Make sure that the config is valid before you deploy."
+Write: "Make sure that the config is valid before you deploy."
 
-Not STE: "This may occasionally fail due to the cache having been invalidated; retry if needed."
+Do not write: "This may occasionally fail due to the cache having been invalidated; retry if needed."
 
-STE: "This step can fail because the cache is not valid. If this step fails, do it again."
+Write: "This step can fail because the cache is not valid. If this step fails, do it again."

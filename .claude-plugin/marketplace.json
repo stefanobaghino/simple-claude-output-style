@@ -9,7 +9,7 @@
     {
       "name": "simple-claude-output-style",
       "source": "./",
-      "description": "An output style that applies Simplified Technical English (ASD-STE100 Issue 9), adapted for chat and code work."
+      "description": "An output style with clear and simple writing rules, adapted from ASD-STE100 Issue 9 for chat and code work."
     }
   ]
 }

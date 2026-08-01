@@ -25,7 +25,7 @@ Each style keeps the default coding instructions of Claude Code.
 
 3. Open `/config`, then select **Output style** and pick a style.
 
-## Attribution and disclaimer
+## Sources and disclaimers
 
 ### plain-language
 

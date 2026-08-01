@@ -1,0 +1,15 @@
+{
+  "name": "simple-claude-output-style",
+  "owner": {
+    "name": "Stefano Baghino",
+    "url": "https://github.com/stefanobaghino"
+  },
+  "description": "A Claude Code output style for Simplified Technical English.",
+  "plugins": [
+    {
+      "name": "ste",
+      "source": "./",
+      "description": "An output style that applies Simplified Technical English (ASD-STE100 Issue 9), adapted for chat and code work."
+    }
+  ]
+}

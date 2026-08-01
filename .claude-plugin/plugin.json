@@ -1,0 +1,13 @@
+{
+  "name": "ste",
+  "displayName": "Simplified Technical English",
+  "description": "An output style that applies Simplified Technical English (ASD-STE100 Issue 9), adapted for chat and code work.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Stefano Baghino",
+    "url": "https://github.com/stefanobaghino"
+  },
+  "repository": "https://github.com/stefanobaghino/simple-claude-output-style",
+  "keywords": ["output-style", "simplified-technical-english", "ste", "writing"],
+  "outputStyles": "./output-styles/"
+}

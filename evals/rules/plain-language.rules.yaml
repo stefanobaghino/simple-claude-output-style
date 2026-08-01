@@ -1,0 +1,49 @@
+# Rule data for the plain-language output style.
+#
+# The style file lives at plugin/output-styles/plain-language.md.
+#
+# Documented exclusions. These rules of the style need judgment or work on
+# the whole document, so the linter does not check them, and the fidelity
+# score does not cover them: audience fit, answer-first organization, topic
+# sentences, paragraph length, familiar words, filler words, jargon, hidden
+# verbs, noun strings, the abbreviation budget per document, active voice,
+# present tense, one idea per sentence, exceptions to exceptions, emphasis,
+# ALL CAPS, and link text.
+#
+# The style permits contractions and the modal verbs "must", "may", and
+# "should". Thus the contraction, semicolon, and sentence-length checks stay
+# off, and the modal ban covers only "shall". This rule set conflicts with
+# the technical-simplified rule set on purpose.
+#
+# Format: see rules/technical-simplified.rules.yaml.
+
+style: plain-language
+
+modals:
+  banned: [shall]
+  permitted: [must, may, should]
+
+latin_abbreviations:
+  - avoid: "e.g."
+    write: "for example"
+  - avoid: "i.e."
+    write: "that is"
+  - avoid: "etc."
+    write: "and so on, or stop the list"
+  - avoid: "et al."
+    write: "and others"
+  - avoid: "cf."
+    write: "compare"
+  - avoid: "viz."
+    write: "namely"
+
+patterns:
+  - id: and-or
+    regex: '\band/or\b'
+    message: 'Do not write "and/or". Write "either X or Y, or both".'
+  - id: double-negative
+    regex: '\bno (?:fewer|less) than\b'
+    message: 'Do not use a double negative. Write "at least".'
+  - id: double-negative
+    regex: '\bnot un(?:common|usual|likely)\b'
+    message: 'Do not use a double negative. State the idea in positive form.'

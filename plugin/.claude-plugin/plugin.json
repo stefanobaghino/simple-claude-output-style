@@ -1,5 +1,5 @@
 {
-  "name": "simple-claude-output-style",
+  "name": "simple-output-styles",
   "displayName": "Simple output style",
   "description": "An output style with clear and simple writing rules, adapted from ASD-STE100 Issue 9 for chat and code work.",
   "author": {

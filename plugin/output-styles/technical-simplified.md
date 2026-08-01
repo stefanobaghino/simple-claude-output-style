@@ -1,5 +1,5 @@
 ---
-name: simple
+name: technical-simplified
 description: Clear and simple writing rules, adapted from ASD-STE100 Issue 9 for chat and code work
 keep-coding-instructions: true
 ---

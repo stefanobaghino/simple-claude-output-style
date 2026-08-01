@@ -2,7 +2,7 @@
 
 *An output style for Claude Code.*
 
-This plugin adds one output style: **simple**. The style gives Claude a small set of strict writing rules. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The output becomes clear, simple, and unambiguous, also for non-native readers.
+This plugin adds one output style: **technical-simplified**. The style gives Claude a small set of strict writing rules. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The output becomes clear, simple, and unambiguous, also for non-native readers.
 
 The style applies to chat answers, code comments, commit messages, PR text, and documentation. The style keeps the default coding instructions of Claude Code.
 
@@ -17,10 +17,10 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 2. Install the plugin:
 
    ```
-   /plugin install simple-claude-output-style
+   /plugin install simple-output-styles
    ```
 
-3. Open `/config`, then select **Output style** > **simple**.
+3. Open `/config`, then select **Output style** > **technical-simplified**.
 
 ## What the style does
 
@@ -30,7 +30,7 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 - It limits sentences to 20 words for instructions and 25 words for descriptions.
 - It removes contractions, Latin abbreviations, and ambiguous pronouns.
 
-See [plugin/output-styles/simple.md](plugin/output-styles/simple.md) for the full rules.
+See [plugin/output-styles/technical-simplified.md](plugin/output-styles/technical-simplified.md) for the full rules.
 
 ## Attribution and disclaimer
 

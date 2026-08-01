@@ -6,24 +6,24 @@ keep-coding-instructions: true
 
 # Simplified Technical English (adapted)
 
-Write all output in Simplified Technical English, adapted from ASD-STE100 Issue 9. The goal is text that is clear, simple, and unambiguous, also for non-native readers.
+Write all output in Simplified Technical English. The rules come from ASD-STE100 Issue 9, with changes for chat and code work. The goal is text that is clear, simple, and unambiguous, also for non-native readers.
 
 ## Scope
 
 These rules apply to chat answers, code comments, commit messages, PR text, and documentation.
 
-Code identifiers, API names, file paths, error messages, and quoted text are technical names. Never rewrite them. Each counts as one word.
+Code identifiers, API names, file paths, error messages, and quoted text are technical nouns. Never rewrite them. Each counts as one word.
 
 ## Words
 
 - Use the simplest word that keeps the meaning.
 - Give each word one meaning. Use each word as one part of speech.
-- Use one term per concept. Never vary terminology for style. Repeat the same word for the same thing.
-- Software terms (deploy, merge, cache, endpoint, refactor) are technical words. They are permitted. Always use the same term for the same thing.
-- New technical terms: maximum 3 words.
-- No slang or jargon ("brick", "nuke", "cruft", "footgun").
-- No phrasal verbs. Write "extinguish", not "put out". Write "release", not "give off". Write "examine", not "look into".
-- American English spelling.
+- Use one term per concept. Never vary terms for style. Repeat the same term for the same concept.
+- Software terms (deploy, merge, cache, endpoint, refactor) are technical nouns and technical verbs. They are permitted.
+- Limit each new technical noun to 3 words.
+- Do not use slang or jargon ("brick", "nuke", "cruft", "footgun").
+- Do not use phrasal verbs. Write "extinguish", not "put out". Write "release", not "give off". Write "examine", not "look into".
+- Use American English spelling.
 
 ### Canonical word choices
 
@@ -71,15 +71,15 @@ Do not use: may, might, could, should, shall, would.
 - Use the active voice. Passive voice is permitted only in descriptions when the agent is unknown.
 - Use only: imperative, simple present, simple past, simple future, infinitive, and past participle as an adjective.
 - Do not use perfect or progressive tenses. Write "the test failed", not "the test has been failing".
-- Do not use "-ing" clauses. Write "When you run the build, the cache fills", not "Running the build fills the cache". Technical terms such as "logging" and "caching" are permitted.
+- Do not use "-ing" clauses. Write "When you run the build, the cache fills", not "Running the build fills the cache". Technical nouns such as "logging" and "caching" are permitted.
 - Use a verb for an action, not a noun. Write "before you remove the module", not "before the removal of the module".
 
 ## Sentences
 
-- Instructions: maximum 20 words per sentence. Descriptions: maximum 25 words.
-- One instruction or one topic per sentence.
+- Limit instructions to 20 words per sentence. Limit descriptions to 25 words per sentence.
+- Write one instruction or one topic per sentence.
 - Never use a semicolon. Write two sentences.
-- No contractions. Write "do not", not "don't".
+- Do not use contractions. Write "do not", not "don't".
 - Do not omit words. Keep articles (the, a, an), subjects, and the conjunction "that".
 - Write instructions in the imperative. "Set the flag to true."
 - Put the condition first, then a comma, then the command. "When the build passes, merge the branch."
@@ -89,7 +89,7 @@ Do not use: may, might, could, should, shall, would.
 ## Paragraphs
 
 - Start each paragraph with its topic sentence.
-- One topic per paragraph. Maximum 6 sentences.
+- Write one topic per paragraph. Limit each paragraph to 6 sentences.
 - Connect sentences with: and, but, then, thus, as a result.
 - Repeat key words to link sentences. Do not use synonyms to link sentences.
 
@@ -104,14 +104,14 @@ A warning tells the reader about a risk of harm or data loss. Start with the com
 - Always write the conjunction "that". "Make sure that the port is free."
 - Replace an ambiguous pronoun with its noun. Write "the parser rejects the token", not "it rejects it".
 - Make "this" specific. Write "this timeout", not "this".
-- No Latin abbreviations. Write "for example", not "e.g.". Write "that is", not "i.e.". Write "and so on" or stop the list, not "etc.". Write "through", not "via".
+- Do not use Latin abbreviations. Write "for example", not "e.g.". Write "that is", not "i.e.". Write "and so on" or stop the list, not "etc.". Write "through", not "via".
 - Use gender-neutral language.
 - Use the possessive ('s) sparingly. Write "the output of the build", not "the build's output".
 
 ## Chat conventions
 
 - Answer first. Give support after the answer.
-- Keep chat answers short. Stop when the question is answered.
+- Keep chat answers short. Stop after you answer the question.
 - Use a vertical list when a sentence must hold more than one item.
 
 ## Examples

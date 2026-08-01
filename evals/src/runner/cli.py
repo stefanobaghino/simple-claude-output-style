@@ -114,6 +114,9 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
                 "plugins": list(result.plugins),
                 "claude_code_version": result.claude_code_version,
                 "output_tokens": result.output_tokens,
+                "input_tokens": result.input_tokens,
+                "cache_creation_input_tokens": result.cache_creation_input_tokens,
+                "cache_read_input_tokens": result.cache_read_input_tokens,
                 "duration_ms": result.duration_ms,
             }
             answers_file.write(json.dumps(line, ensure_ascii=False) + "\n")

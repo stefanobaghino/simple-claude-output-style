@@ -5,7 +5,7 @@ This directory holds the evaluation harness for the output styles in
 the marketplace serves only the `plugin/` directory, so installers never
 receive the harness.
 
-The harness has three components. The first is a deterministic linter.
+The harness has four components. The first is a deterministic linter.
 It checks a Markdown text against the writing rules of a style and
 reports each violation, plus a rate per 100 sentences. The second is a
 pair runner. It produces, per prompt, one answer per style and one
@@ -14,7 +14,10 @@ answers with their provenance. The third is a fidelity gate. It checks
 each styled answer of a run with the rules of its style and marks each
 pair as pass or fail, because a non-compliant answer does not represent
 its style. The judged measurements read only the pairs with a true
-`pass` mark; the token-cost measurement reads all pairs. See the
+`pass` mark; the token-cost measurement reads all pairs. The fourth is
+a token-cost report. It states two numbers per style: the fixed input
+overhead of the style block per request, and the distribution of the
+ratio of styled answer length to unstyled answer length. See the
 tracking issue in this repository for the other planned components.
 
 ## Rule files
@@ -40,6 +43,7 @@ uv run pytest
 uv run style-lint FILE.md --rules rules/technical-simplified.rules.yaml
 uv run style-pairs
 uv run style-gate runs/<date>
+uv run style-cost runs/<date> [--probe]
 ```
 
 The linter exits with code 1 when it finds a violation.
@@ -62,6 +66,20 @@ gate is a pure function of the answers, the rules, and the policy. Exit
 codes: 0 when every pair passes and no warnings exist, 1 when pairs
 fail or warnings exist, 2 when the run cannot be gated.
 
+The cost report reads all pairs of a run and writes the cost files into
+the run directory. The answer-length part is offline: the ratio of a
+pair is the output-token count of the styled answer divided by the
+output-token count of the unstyled answer, reported as a distribution
+and per task type. The input-overhead part needs a live measurement,
+because a stored run holds no input-token data for it: `--probe` runs
+one minimal call per arm and takes the difference in input context
+tokens between a styled call and an unstyled call. Both probe arms load
+the plugin, so the difference isolates the style block; the probe data
+lands in `cost-probe.json`, and a later `style-cost` call without
+`--probe` reuses it. Exit codes: 0 when both numbers exist and no
+warnings exist, 1 when warnings exist (for example, the overhead is not
+measured), 2 when the run cannot be reported.
+
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,
@@ -75,6 +93,9 @@ runs/<YYYY-MM-DD>/
   fidelity.jsonl    # one line per (answer, rule set), with the pass or fail mark
   fidelity.json     # gate provenance and the per-style summary
   fidelity.md       # thresholds, marks, per-rule table, baseline comparison
+  cost-probe.json   # probe provenance and the measured input overhead per style
+  cost.json         # answer-length ratios and input overhead, machine-readable
+  cost.md           # the token-cost report for a human
 ```
 
 A pair is not stored twice: it is the line for `(prompt, style)` plus

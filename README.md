@@ -29,3 +29,11 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 - It removes contractions, Latin abbreviations, and ambiguous pronouns.
 
 See [output-styles/ste.md](output-styles/ste.md) for the full rules.
+
+## Attribution and disclaimer
+
+This project is an independent adaptation of the writing rules of ASD-STE100 Issue 9. It restates the rules in its own words. It does not reproduce the text, the examples, or the dictionary of the specification.
+
+"ASD-STE100 Simplified Technical English" is a registered trademark of the Aerospace, Security and Defence Industries Association of Europe (ASD). This project uses the name only to refer to the standard. ASD and the STEMG are not affiliated with this project, and they do not endorse or certify it.
+
+This plugin does not make the output of Claude compliant with ASD-STE100. To read the full standard, download the official specification free of charge from [asd-ste100.org](https://www.asd-ste100.org/).

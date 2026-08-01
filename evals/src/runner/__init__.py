@@ -5,6 +5,6 @@ unstyled answer, under identical conditions, and stores the answers
 with their provenance.
 """
 
-from .generate import Generation, GenerationError, build_argv, generate
+from .generate import Generation, GenerationError, build_argv, generate, style_reference
 
-__all__ = ["Generation", "GenerationError", "build_argv", "generate"]
+__all__ = ["Generation", "GenerationError", "build_argv", "generate", "style_reference"]

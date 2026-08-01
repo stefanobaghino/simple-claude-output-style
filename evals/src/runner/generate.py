@@ -55,6 +55,19 @@ class Generation:
     duration_ms: int
 
 
+def style_reference(plugin_dir: Path, style: str) -> str:
+    """The plugin-qualified name that activates a plugin output style.
+
+    The bare style name does not resolve: the CLI echoes it in the init
+    event without injecting the style, and the answer comes out
+    unstyled. Only the "<plugin>:<style>" form injects the style.
+    """
+    manifest = json.loads(
+        (plugin_dir / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )
+    return f"{manifest['name']}:{style}"
+
+
 def build_argv(prompt: str, model: str, style: str | None, plugin_dir: Path | None) -> list[str]:
     """Build the claude invocation for one answer.
 
@@ -68,7 +81,7 @@ def build_argv(prompt: str, model: str, style: str | None, plugin_dir: Path | No
     if style is not None:
         if plugin_dir is None:
             raise ValueError("a styled answer needs the plugin directory")
-        settings["outputStyle"] = style
+        settings["outputStyle"] = style_reference(plugin_dir, style)
         argv += ["--plugin-dir", str(plugin_dir)]
     argv += ["--settings", json.dumps(settings)]
     argv += list(ISOLATION_FLAGS)
@@ -98,7 +111,7 @@ def generate(
     stdout = run(argv, workdir)
     init, result = _parse_events(stdout)
 
-    expected_style = style if style is not None else "default"
+    expected_style = style_reference(plugin_dir, style) if style is not None else "default"
     active_style = init.get("output_style")
     if active_style != expected_style:
         raise GenerationError(

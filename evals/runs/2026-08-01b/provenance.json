@@ -1,5 +1,5 @@
 {
-  "date": "2026-08-01T18:36:44+00:00",
+  "date": "2026-08-01T19:08:04+00:00",
   "prompt_set": {
     "path": "prompts/prompts.yaml",
     "sha256": "cbba00b37d427654d3e9e0689db48016a72c23b4d72823d89bc176b114d73150"
@@ -33,16 +33,16 @@
     }
   },
   "repo": {
-    "commit": "1da5535b09b349bca25629311329d928e1737303",
-    "dirty": false
+    "commit": "e35296a2103f2ba6db69f1a5706b5640504a2f7f",
+    "dirty": true
   },
   "styles": {
     "plain-language": {
-      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/plain-language.md",
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/.claude/worktrees/fidelity-gate/plugin/output-styles/plain-language.md",
       "sha256": "d9acbffcfb85937603524c3defc7491f91e86f24fcc679ec1247313b80bcbc04"
     },
     "technical-simplified": {
-      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/technical-simplified.md",
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/.claude/worktrees/fidelity-gate/plugin/output-styles/technical-simplified.md",
       "sha256": "69bf572f15b1b570bd8ace5e93960150ec5f0096f0b71b9f42f8833ccaa4f089"
     }
   },

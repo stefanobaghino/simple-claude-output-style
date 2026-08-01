@@ -1,6 +1,6 @@
 # Run report
 
-- Date: 2026-08-01T18:36:44+00:00
+- Date: 2026-08-01T19:08:04+00:00
 - Model requested: sonnet
 - Prompts: 20
 - Styles: plain-language, technical-simplified
@@ -18,8 +18,8 @@
 | Arm | Output tokens | Mean words per answer |
 |---|---|---|
 | unstyled | 9156 | 188 |
-| plain-language | 10645 | 188 |
-| technical-simplified | 10117 | 190 |
+| plain-language | 7935 | 184 |
+| technical-simplified | 8083 | 154 |
 
 ## Environment
 
@@ -27,7 +27,9 @@
 - Models observed: claude-haiku-4-5-20251001, claude-sonnet-5
 - Plugin sets observed:
   - allium, playwright, rust-analyzer-lsp, simple-output-styles, typescript-lsp
+  - playwright, rust-analyzer-lsp, simple-output-styles, typescript-lsp
 
 ## Warnings
 
-- none
+- The repository was dirty during the run. The style hashes in the provenance are authoritative, the commit is not.
+- The answers come from more than one plugin environment.

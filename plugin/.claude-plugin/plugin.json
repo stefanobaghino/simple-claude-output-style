@@ -6,7 +6,7 @@
     "name": "Stefano Baghino",
     "url": "https://github.com/stefanobaghino"
   },
-  "repository": "https://github.com/stefanobaghino/simple-claude-output-style",
+  "repository": "https://github.com/stefanobaghino/simple-output-styles",
   "license": "0BSD",
   "keywords": ["output-style", "simplified-technical-english", "ste", "writing"],
   "outputStyles": "./output-styles/"

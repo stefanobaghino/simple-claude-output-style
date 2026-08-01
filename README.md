@@ -11,7 +11,7 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 1. Add the marketplace:
 
    ```
-   /plugin marketplace add stefanobaghino/simple-claude-output-style
+   /plugin marketplace add stefanobaghino/claude-plugins
    ```
 
 2. Install the plugin:
@@ -30,7 +30,7 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 - It limits sentences to 20 words for instructions and 25 words for descriptions.
 - It removes contractions, Latin abbreviations, and ambiguous pronouns.
 
-See [output-styles/simple.md](output-styles/simple.md) for the full rules.
+See [plugin/output-styles/simple.md](plugin/output-styles/simple.md) for the full rules.
 
 ## Attribution and disclaimer
 

@@ -1,5 +1,5 @@
 {
-  "name": "ste",
+  "name": "simple-claude-output-style",
   "displayName": "Simplified Technical English",
   "description": "An output style that applies Simplified Technical English (ASD-STE100 Issue 9), adapted for chat and code work.",
   "version": "1.0.0",

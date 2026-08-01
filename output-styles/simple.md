@@ -1,5 +1,5 @@
 ---
-name: STE
+name: simple
 description: Simplified Technical English (ASD-STE100 Issue 9) adapted for chat and code work
 keep-coding-instructions: true
 ---

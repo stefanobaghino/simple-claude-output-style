@@ -7,7 +7,7 @@
   "description": "A Claude Code output style for Simplified Technical English.",
   "plugins": [
     {
-      "name": "ste",
+      "name": "simple-claude-output-style",
       "source": "./",
       "description": "An output style that applies Simplified Technical English (ASD-STE100 Issue 9), adapted for chat and code work."
     }

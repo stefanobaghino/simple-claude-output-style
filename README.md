@@ -1,6 +1,6 @@
 # Simplified Technical English for Claude Code
 
-This plugin adds one output style: **STE**. The style makes Claude write in Simplified Technical English, adapted from ASD-STE100 Issue 9. The output becomes clear, simple, and unambiguous, also for non-native readers.
+This plugin adds one output style: **simple**. The style makes Claude write in Simplified Technical English, adapted from ASD-STE100 Issue 9. The output becomes clear, simple, and unambiguous, also for non-native readers.
 
 The style applies to chat answers, code comments, commit messages, PR text, and documentation. It keeps the standard coding instructions of Claude Code.
 
@@ -15,10 +15,10 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 2. Install the plugin:
 
    ```
-   /plugin install ste@simple-claude-output-style
+   /plugin install simple-claude-output-style
    ```
 
-3. Open `/config`, then select **Output style** > **STE**.
+3. Open `/config`, then select **Output style** > **simple**.
 
 ## What the style does
 
@@ -28,7 +28,7 @@ The style applies to chat answers, code comments, commit messages, PR text, and 
 - It limits sentences to 20 words for instructions and 25 words for descriptions.
 - It removes contractions, Latin abbreviations, and ambiguous pronouns.
 
-See [output-styles/ste.md](output-styles/ste.md) for the full rules.
+See [output-styles/simple.md](output-styles/simple.md) for the full rules.
 
 ## Attribution and disclaimer
 

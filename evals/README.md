@@ -43,6 +43,32 @@ so the policy must not change the rule-file hashes in the provenance.
 The thresholds differ per style, because the rule counts differ and
 thus the rates are not comparable across styles.
 
+## How to add a style
+
+A style has two parts: the plugin serves the style text, and the
+harness measures the style. Add both parts:
+
+1. Add the style text as `plugin/output-styles/<style>.md`. The file
+   name before `.md` is the style name.
+2. Add the style to the table in the top-level `README.md`, with the
+   original source and the needed disclaimers.
+3. Add the rule file `rules/<style>.rules.yaml`. Every harness tool
+   discovers the styles from the rule files, so a style without a rule
+   file is invisible to the harness. Document the exclusions of the
+   style in the header comment, as the section above describes.
+4. Add a provisional threshold for the style in `rules/gate.yaml`. A
+   new style has no measured rates, so calibrate the threshold against
+   the first run, as the header comment of `rules/gate.yaml` describes.
+   The calibration run carries a one-time asterisk, because the same
+   data sets the threshold and takes the test.
+5. Produce a new pair run with `uv run style-pairs`, then gate the run,
+   then produce the reports. Do not extend an old run, because the
+   provenance of a run records the styles of the run.
+6. Run the drift sessions with `uv run style-drift --generate`.
+
+The tests need no change for a new style, because the tests use
+synthetic rules.
+
 ## How to run
 
 The harness uses [uv](https://docs.astral.sh/uv/). From this directory:

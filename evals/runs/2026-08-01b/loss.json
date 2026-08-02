@@ -1,0 +1,849 @@
+{
+  "date": "2026-08-01T22:12:26+00:00",
+  "run": "2026-08-01b",
+  "judge": {
+    "model": "opus",
+    "judged_date": "2026-08-01T21:55:23+00:00",
+    "claude_version": "2.1.220 (Claude Code)"
+  },
+  "pairs": {
+    "plain-language": [
+      "code-review-01",
+      "code-review-02",
+      "code-review-03",
+      "code-review-04",
+      "code-review-05",
+      "debugging-01",
+      "debugging-02",
+      "debugging-03",
+      "debugging-04",
+      "debugging-05",
+      "explanation-01",
+      "explanation-02",
+      "explanation-03",
+      "explanation-04",
+      "explanation-05",
+      "summarization-01",
+      "summarization-02",
+      "summarization-03",
+      "summarization-04",
+      "summarization-05"
+    ],
+    "technical-simplified": [
+      "code-review-01",
+      "code-review-02",
+      "code-review-03",
+      "code-review-04",
+      "code-review-05",
+      "debugging-01",
+      "debugging-02",
+      "debugging-03",
+      "debugging-04",
+      "debugging-05",
+      "explanation-01",
+      "explanation-02",
+      "explanation-04",
+      "explanation-05",
+      "summarization-01",
+      "summarization-03",
+      "summarization-04",
+      "summarization-05"
+    ]
+  },
+  "checks": {
+    "completeness": {
+      "judged": true,
+      "per_style": {
+        "plain-language": {
+          "median": 0.786,
+          "pairs": {
+            "code-review-01": {
+              "facts": 29,
+              "survived": 22,
+              "fraction": 0.759,
+              "lost": [
+                "`roles` is often the caller's own list object rather than a copy.",
+                "`roles.append(\"member\")` mutates the caller's list in place.",
+                "The in-place mutation surprises the caller when their list changes after calling `add_user`.",
+                "The function has no docstring and no type hints.",
+                "The expected interface of `db` (that it must have `.insert`) is undocumented.",
+                "The suggested fix copies `roles` with `list(roles)` and appends `\"member\"` only if not already present.",
+                "The suggested fix drops the silent failure mode and lets real errors propagate to the caller."
+              ]
+            },
+            "code-review-02": {
+              "facts": 20,
+              "survived": 14,
+              "fraction": 0.7,
+              "lost": [
+                "Without a `.catch()`, a failed network request or a throwing `res.json()` results in a silently unhandled promise rejection.",
+                "An unhandled promise rejection crashes the process in strict environments.",
+                "The `async` keyword is pointless as the function is written.",
+                "The function always returns a resolved promise wrapping the error thrown by `undefined.name.toUpperCase()`.",
+                "API error responses or an empty body are cases where `data` may lack a `name` property.",
+                "The fixed version throws an `Error` with message `Failed to load profile: ${res.status}` when `res.ok` is false."
+              ]
+            },
+            "code-review-03": {
+              "facts": 20,
+              "survived": 11,
+              "fraction": 0.55,
+              "lost": [
+                "The function has no error handling.",
+                "`cursor.execute` can raise exceptions, for example on a bad connection or a malformed query.",
+                "Exceptions from `cursor.execute` propagate raw to the call site with no handling.",
+                "The lack of error handling is not necessarily wrong.",
+                "`status` presumably comes from a small fixed set of values such as `\"pending\"` and `\"shipped\"`.",
+                "Nothing in the function enforces that `status` belongs to the expected set of values.",
+                "Typos or unexpected `status` values fail silently by returning zero rows rather than raising a clear error.",
+                "`?` placeholders should be used instead of `%s` if the driver is sqlite3.",
+                "`%s` placeholders are used by DB-API drivers such as psycopg2 and mysql-connector."
+              ]
+            },
+            "code-review-04": {
+              "facts": 22,
+              "survived": 17,
+              "fraction": 0.773,
+              "lost": [
+                "CPython has a GIL.",
+                "The GIL only guarantees that each individual bytecode operation is atomic.",
+                "The GIL does not make the whole read-then-write sequence atomic.",
+                "Writing the increment as `current + 1` is needlessly roundabout.",
+                "The stylistic point about `current + 1` is cosmetic compared to the threading bug."
+              ]
+            },
+            "code-review-05": {
+              "facts": 34,
+              "survived": 24,
+              "fraction": 0.706,
+              "lost": [
+                "`$1` and `$BACKUP_DIR` are unquoted in the script.",
+                "On most shells, `cd \"\"` goes to `$HOME` or fails silently.",
+                "Passing an unmatched glob literally to a command is a classic footgun pattern in general.",
+                "Unmatched globs could match unintended files if `nullglob` or `nocaseglob` behavior differs.",
+                "If no `.log` files exist, `ls *.log` prints an error to stderr.",
+                "The script uses `sh` but relies on GNU-isms.",
+                "Nothing stops the script from running under a shell where `$(ls ...)` behaves more surprisingly.",
+                "The script performs destructive operations with no dry-run or confirmation.",
+                "Compressing `.log` files with gzip overwrites the originals and is irreversible.",
+                "The suggested fix prints a usage message to stderr and exits with status 1 when the argument is missing or not a directory."
+              ]
+            },
+            "debugging-01": {
+              "facts": 8,
+              "survived": 8,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "debugging-02": {
+              "facts": 14,
+              "survived": 11,
+              "fraction": 0.786,
+              "lost": [
+                "In a class, where `this` is `undefined`, the code would actually throw `TypeError: Cannot read properties of undefined`.",
+                "Calling `.bind(this)` on the callback function is an alternative fix.",
+                "Capturing `const self = this;` outside the callback and using `self.seconds` inside it is an alternative fix."
+              ]
+            },
+            "debugging-03": {
+              "facts": 7,
+              "survived": 6,
+              "fraction": 0.857,
+              "lost": [
+                "With `len(values)=4` and `window=2`, the windows are `[1,2]`, `[2,3]`, and `[3,4]`."
+              ]
+            },
+            "debugging-04": {
+              "facts": 17,
+              "survived": 11,
+              "fraction": 0.647,
+              "lost": [
+                "A file might be Latin-1 or use mixed encodings rather than UTF-8.",
+                "When the encoding cannot be guaranteed, one option is to detect the encoding first.",
+                "chardet and charset-normalizer are libraries that can detect a file's encoding.",
+                "errors=\"replace\" silently alters bad bytes.",
+                "errors=\"replace\" should only be used if exact byte fidelity does not matter.",
+                "Exact byte fidelity does not matter for a line-count use case."
+              ]
+            },
+            "debugging-05": {
+              "facts": 10,
+              "survived": 9,
+              "fraction": 0.9,
+              "lost": [
+                "The fixed make_post sets tags to a copy of DEFAULT_TAGS, via list(DEFAULT_TAGS), when tags is None."
+              ]
+            },
+            "explanation-01": {
+              "facts": 36,
+              "survived": 24,
+              "fraction": 0.667,
+              "lost": [
+                "A hash map stores entries by computing hash(key) % capacity to pick a bucket index.",
+                "The collection in a chaining bucket is usually a linked list, sometimes a tree.",
+                "Chaining insert hashes the key, goes to the bucket, and appends the entry, or updates it if the key already exists.",
+                "Chaining delete hashes the key, finds the entry in the list, and removes it.",
+                "Quadratic hashing and double hashing are probing sequences that give better distribution than linear probing.",
+                "Chaining has poor cache behavior because list nodes are scattered in memory.",
+                "Open addressing has good cache behavior because data is contiguous in the array.",
+                "Open addressing is more memory-efficient and cache-friendly than chaining.",
+                "Open addressing is favored in performance-critical or memory-constrained contexts.",
+                "Python's dict uses open addressing.",
+                "Many C++ hash table implementations use open addressing.",
+                "Open addressing implementations typically resize at around 70% full."
+              ]
+            },
+            "explanation-02": {
+              "facts": 24,
+              "survived": 19,
+              "fraction": 0.792,
+              "lost": [
+                "An example optimistic locking schema is a `products` table with a `version` integer column.",
+                "An example optimistic update is `UPDATE products SET stock = 5, version = version + 1 WHERE id = 42 AND version = 3;`.",
+                "If another transaction already bumped `version` to 4, the example update affects 0 rows.",
+                "An example pessimistic locking sequence is `BEGIN; SELECT balance FROM accounts WHERE id = 42 FOR UPDATE;` followed by `UPDATE accounts SET balance = balance - 100 WHERE id = 42; COMMIT;`.",
+                "Pessimistic locking fits when transactions are short-lived."
+              ]
+            },
+            "explanation-03": {
+              "facts": 38,
+              "survived": 26,
+              "fraction": 0.684,
+              "lost": [
+                "Congestion can cascade because dropped packets trigger retransmissions.",
+                "Retransmissions add more traffic to an already-overloaded network, making congestion worse.",
+                "During congestion collapse, throughput crashed because senders kept retransmitting into a saturated network.",
+                "The initial cwnd was historically 1 segment.",
+                "Current RFC guidance sets a typical initial cwnd of 4-10 segments.",
+                "In slow start, cwnd is increased by one segment's worth for each ACK received.",
+                "Because each ACK'd segment adds a full segment to the window, the congestion window roughly doubles every round-trip time.",
+                "Slow start's initial window is small in contrast to sending as much as the receiver's advertised window would allow.",
+                "In congestion avoidance, cwnd grows linearly rather than exponentially.",
+                "Linear growth in congestion avoidance is more cautious than exponential growth.",
+                "When loss is detected, cwnd is cut back.",
+                "When loss is detected, ssthresh is set based on where the loss occurred, so subsequent slow start or recovery is less aggressive."
+              ]
+            },
+            "explanation-04": {
+              "facts": 46,
+              "survived": 31,
+              "fraction": 0.674,
+              "lost": [
+                "A process has its own file descriptors.",
+                "A process has its own OS resources.",
+                "The shared address space of threads includes the heap, globals, and open file descriptors.",
+                "Each thread has its own stack.",
+                "Each thread has its own register state.",
+                "Processing untrusted input is an example of work where a worker might crash or hang.",
+                "Calling a flaky library is an example of work where a worker might crash or hang.",
+                "Separate processes can run under different namespaces.",
+                "Containers are an example of processes running under different namespaces.",
+                "sudo subprocesses are an example of processes running under different users or permissions.",
+                "Threads cannot run under different users, permissions, or namespaces because they share the parent's security context.",
+                "No shared memory means no data races on that memory.",
+                "IPC has its own complexity.",
+                "Threads are preferable when memory footprint matters.",
+                "N threads are far cheaper than N processes in memory footprint."
+              ]
+            },
+            "explanation-05": {
+              "facts": 14,
+              "survived": 13,
+              "fraction": 0.929,
+              "lost": [
+                "A registry reference also keeps alive anything the registered object closes over."
+              ]
+            },
+            "summarization-01": {
+              "facts": 8,
+              "survived": 8,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "summarization-02": {
+              "facts": 14,
+              "survived": 11,
+              "fraction": 0.786,
+              "lost": [
+                "A copy-paste from staging silently dropped the production pool size from 50 to 5 connections.",
+                "The reduction in production pool size was a 10x reduction.",
+                "A recommended prevention is to add pool size and other critical infrastructure parameters to the review checklist."
+              ]
+            },
+            "summarization-03": {
+              "facts": 13,
+              "survived": 13,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "summarization-04": {
+              "facts": 13,
+              "survived": 13,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "summarization-05": {
+              "facts": 9,
+              "survived": 9,
+              "fraction": 1.0,
+              "lost": []
+            }
+          }
+        },
+        "technical-simplified": {
+          "median": 0.859,
+          "pairs": {
+            "code-review-01": {
+              "facts": 29,
+              "survived": 24,
+              "fraction": 0.828,
+              "lost": [
+                "Duplicate roles aren't checked.",
+                "The function has no docstring and no type hints.",
+                "The expected interface of `db` (that it must have `.insert`) is undocumented.",
+                "The suggested fix copies `roles` with `list(roles)` and appends `\"member\"` only if not already present.",
+                "The suggested fix avoids duplicate roles."
+              ]
+            },
+            "code-review-02": {
+              "facts": 20,
+              "survived": 13,
+              "fraction": 0.65,
+              "lost": [
+                "Without a `.catch()`, a failed network request or a throwing `res.json()` results in a silently unhandled promise rejection.",
+                "An unhandled promise rejection crashes the process in strict environments.",
+                "The `async` keyword is pointless as the function is written.",
+                "The function always returns a resolved promise wrapping the error thrown by `undefined.name.toUpperCase()`.",
+                "There is no null or shape check on `data`.",
+                "Even once awaited, there is no guarantee that `data` has a `name` property.",
+                "API error responses or an empty body are cases where `data` may lack a `name` property."
+              ]
+            },
+            "code-review-03": {
+              "facts": 20,
+              "survived": 9,
+              "fraction": 0.45,
+              "lost": [
+                "SQL injection is the most critical issue in the function.",
+                "The impact of the SQL injection can be worse than reading or manipulating rows, depending on the database permissions.",
+                "The function has no error handling.",
+                "`cursor.execute` can raise exceptions, for example on a bad connection or a malformed query.",
+                "Exceptions from `cursor.execute` propagate raw to the call site with no handling.",
+                "The lack of error handling is not necessarily wrong.",
+                "`status` presumably comes from a small fixed set of values such as `\"pending\"` and `\"shipped\"`.",
+                "Typos or unexpected `status` values fail silently by returning zero rows rather than raising a clear error.",
+                "The fixed version uses the query `\"SELECT * FROM orders WHERE customer = %s AND status = %s\"` and passes `(customer_name, status)` as parameters to `cursor.execute`.",
+                "`?` placeholders should be used instead of `%s` if the driver is sqlite3.",
+                "`%s` placeholders are used by DB-API drivers such as psycopg2 and mysql-connector."
+              ]
+            },
+            "code-review-04": {
+              "facts": 22,
+              "survived": 20,
+              "fraction": 0.909,
+              "lost": [
+                "Writing the increment as `current + 1` is needlessly roundabout.",
+                "The stylistic point about `current + 1` is cosmetic compared to the threading bug."
+              ]
+            },
+            "code-review-05": {
+              "facts": 34,
+              "survived": 25,
+              "fraction": 0.735,
+              "lost": [
+                "`rm -rf *.tmp` is dangerous and silent.",
+                "If `cd` failed or `$BACKUP_DIR` was wrong, `rm -rf *.tmp` deletes `.tmp` files from an arbitrary directory with no confirmation or logging of what was removed.",
+                "Passing an unmatched glob literally to a command is a classic footgun pattern in general.",
+                "Unmatched globs could match unintended files if `nullglob` or `nocaseglob` behavior differs.",
+                "The script uses `sh` but relies on GNU-isms.",
+                "Nothing stops the script from running under a shell where `$(ls ...)` behaves more surprisingly.",
+                "The script performs destructive operations with no dry-run or confirmation.",
+                "Compressing `.log` files with gzip overwrites the originals and is irreversible.",
+                "The suggested fix prints a usage message to stderr and exits with status 1 when the argument is missing or not a directory."
+              ]
+            },
+            "debugging-01": {
+              "facts": 8,
+              "survived": 8,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "debugging-02": {
+              "facts": 14,
+              "survived": 9,
+              "fraction": 0.643,
+              "lost": [
+                "In strict mode or class bodies, `this` inside such a plain-function callback is `undefined`.",
+                "Neither `undefined` nor the global object has a `seconds` property.",
+                "In a class, where `this` is `undefined`, the code would actually throw `TypeError: Cannot read properties of undefined`.",
+                "Calling `.bind(this)` on the callback function is an alternative fix.",
+                "Capturing `const self = this;` outside the callback and using `self.seconds` inside it is an alternative fix."
+              ]
+            },
+            "debugging-03": {
+              "facts": 7,
+              "survived": 7,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "debugging-04": {
+              "facts": 17,
+              "survived": 12,
+              "fraction": 0.706,
+              "lost": [
+                "A file might be Latin-1 or use mixed encodings rather than UTF-8.",
+                "chardet and charset-normalizer are libraries that can detect a file's encoding.",
+                "errors=\"replace\" silently alters bad bytes.",
+                "errors=\"replace\" should only be used if exact byte fidelity does not matter.",
+                "Exact byte fidelity does not matter for a line-count use case."
+              ]
+            },
+            "debugging-05": {
+              "facts": 10,
+              "survived": 9,
+              "fraction": 0.9,
+              "lost": [
+                "The fixed make_post sets tags to a copy of DEFAULT_TAGS, via list(DEFAULT_TAGS), when tags is None."
+              ]
+            },
+            "explanation-01": {
+              "facts": 36,
+              "survived": 24,
+              "fraction": 0.667,
+              "lost": [
+                "The collection in a chaining bucket is usually a linked list, sometimes a tree.",
+                "Chaining insert hashes the key, goes to the bucket, and appends the entry, or updates it if the key already exists.",
+                "Chaining delete hashes the key, finds the entry in the list, and removes it.",
+                "Quadratic hashing and double hashing are probing sequences that give better distribution than linear probing.",
+                "In open addressing, deletion cannot simply clear the slot because that would break probing for later entries.",
+                "Open addressing deletion usually leaves a tombstone marker instead of clearing the slot.",
+                "Deletion is simple in chaining.",
+                "Deletion in open addressing needs tombstones or rehashing.",
+                "Java's HashMap uses chaining.",
+                "Python's dict uses open addressing.",
+                "Many C++ hash table implementations use open addressing.",
+                "Open addressing implementations typically resize at around 70% full."
+              ]
+            },
+            "explanation-02": {
+              "facts": 24,
+              "survived": 15,
+              "fraction": 0.625,
+              "lost": [
+                "An example optimistic locking schema is a `products` table with a `version` integer column.",
+                "An example optimistic update is `UPDATE products SET stock = 5, version = version + 1 WHERE id = 42 AND version = 3;`.",
+                "If another transaction already bumped `version` to 4, the example update affects 0 rows.",
+                "The application detects the 0-row update result and retries.",
+                "Optimistic locking fits when throughput matters more than avoiding retries.",
+                "Optimistic locking fits when the resource is held for a long time, such as a user editing a document over minutes.",
+                "Holding a real database lock for the entire duration of a long-held resource would be wasteful.",
+                "Pessimistic locking fits when retry logic would be expensive or unsafe to get right.",
+                "Inventory decrements with hard limits are an example where retry logic would be expensive or unsafe to get right."
+              ]
+            },
+            "explanation-04": {
+              "facts": 46,
+              "survived": 27,
+              "fraction": 0.587,
+              "lost": [
+                "A process has its own file descriptors.",
+                "A process has its own OS resources.",
+                "Pipes are a form of IPC.",
+                "Sockets are a form of IPC.",
+                "Shared memory segments are a form of IPC.",
+                "The shared address space of threads includes the heap, globals, and open file descriptors.",
+                "Each thread has its own stack.",
+                "Each thread has its own register state.",
+                "Processing untrusted input is an example of work where a worker might crash or hang.",
+                "Calling a flaky library is an example of work where a worker might crash or hang.",
+                "Separate processes can run under different namespaces.",
+                "Containers are an example of processes running under different namespaces.",
+                "Browser tabs are an example of processes running under different permissions or namespaces.",
+                "sudo subprocesses are an example of processes running under different users or permissions.",
+                "Separate processes map naturally onto components that need to be restarted, deployed, or scaled independently.",
+                "A supervisor restarting a crashed worker is an example of independent lifecycle management.",
+                "Killing or restarting a single thread cleanly is much harder than doing so for a process.",
+                "IPC has its own complexity.",
+                "Isolation includes crash containment, security, and independent scaling."
+              ]
+            },
+            "explanation-05": {
+              "facts": 14,
+              "survived": 13,
+              "fraction": 0.929,
+              "lost": [
+                "A registry reference also keeps alive anything the registered object closes over."
+              ]
+            },
+            "summarization-01": {
+              "facts": 8,
+              "survived": 8,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "summarization-03": {
+              "facts": 13,
+              "survived": 13,
+              "fraction": 1.0,
+              "lost": []
+            },
+            "summarization-04": {
+              "facts": 13,
+              "survived": 12,
+              "fraction": 0.923,
+              "lost": [
+                "Clicking \"Export as PDF\" produces repeated \"export failed\" error banners."
+              ]
+            },
+            "summarization-05": {
+              "facts": 9,
+              "survived": 8,
+              "fraction": 0.889,
+              "lost": [
+                "Ada is assigned to run the payments DB migration dry run."
+              ]
+            }
+          }
+        }
+      }
+    },
+    "hedging": {
+      "judged": true,
+      "per_style": {
+        "plain-language": {
+          "median": 0.333,
+          "pairs": {
+            "code-review-01": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 1,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-03": {
+              "claims": 3,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 2,
+              "survival": 0.0,
+              "lost": [
+                "`SELECT *` pulls columns the caller may not need."
+              ]
+            },
+            "code-review-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-05": {
+              "claims": 3,
+              "hedged": 1,
+              "certain": 2,
+              "absent": 0,
+              "survival": 0.333,
+              "lost": [
+                "If `cd $BACKUP_DIR` fails, the script keeps going and runs `rm -rf *.tmp` in whatever directory it happens to be in \u2014 potentially the wrong place entirely.",
+                "If run with no argument, `BACKUP_DIR` is empty and `cd \"\"` (on most shells) goes to `$HOME` or fails silently, then `rm -rf *.tmp` runs somewhere unintended."
+              ]
+            },
+            "debugging-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-04": {
+              "claims": 2,
+              "hedged": 2,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "debugging-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            }
+          }
+        },
+        "technical-simplified": {
+          "median": 0.0,
+          "pairs": {
+            "code-review-01": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 0,
+              "survival": 0.0,
+              "lost": [
+                "Since `roles` is often the caller's own list object rather than a copy, `roles.append(\"member\")` mutates it in place, surprising the caller when their list changes after calling `add_user`."
+              ]
+            },
+            "code-review-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-03": {
+              "claims": 3,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 2,
+              "survival": 0.0,
+              "lost": [
+                "`SELECT *` pulls columns the caller may not need."
+              ]
+            },
+            "code-review-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-05": {
+              "claims": 3,
+              "hedged": 0,
+              "certain": 3,
+              "absent": 0,
+              "survival": 0.0,
+              "lost": [
+                "If `cd $BACKUP_DIR` fails, the script keeps going and runs `rm -rf *.tmp` in whatever directory it happens to be in \u2014 potentially the wrong place entirely.",
+                "If run with no argument, `BACKUP_DIR` is empty and `cd \"\"` (on most shells) goes to `$HOME` or fails silently, then `rm -rf *.tmp` runs somewhere unintended.",
+                "If no `*.tmp` files exist, most shells will pass the literal string `*.tmp` to `rm`, which fails harmlessly here but is a classic footgun pattern that could match unintended files if `nullglob`/`nocaseglob` behavior differs."
+              ]
+            },
+            "debugging-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-04": {
+              "claims": 2,
+              "hedged": 1,
+              "certain": 1,
+              "absent": 0,
+              "survival": 0.5,
+              "lost": [
+                "The non-ASCII byte 0xc3 in the file is likely part of a UTF-8 encoded character, such as an accented letter."
+              ]
+            },
+            "debugging-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "warnings": [
+    "technical-simplified/explanation-03: the pair failed the gate, excluded",
+    "technical-simplified/summarization-02: the pair failed the gate, excluded"
+  ]
+}

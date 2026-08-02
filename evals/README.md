@@ -5,7 +5,7 @@ This directory holds the evaluation harness for the output styles in
 the marketplace serves only the `plugin/` directory, so installers never
 receive the harness.
 
-The harness has five components. The first is a deterministic linter.
+The harness has six components. The first is a deterministic linter.
 It checks a Markdown text against the writing rules of a style and
 reports each violation, plus a rate per 100 sentences. The second is a
 pair runner. It produces, per prompt, one answer per style and one
@@ -20,7 +20,10 @@ overhead of the style block per request, and the distribution of the
 ratio of styled answer length to unstyled answer length. The fifth is
 a reader-value report. It compares, per gated pair, the styled answer
 with the unstyled answer on three reader-facing checks, as win, loss,
-or tie. See the tracking issue in this repository for the other
+or tie. The sixth is a content-loss report. It measures, per gated
+pair, the fraction of the facts of the unstyled answer that survive
+in the styled answer, and each uncertain claim that lost its
+uncertainty. See the tracking issue in this repository for the other
 planned components.
 
 ## Rule files
@@ -48,6 +51,7 @@ uv run style-pairs
 uv run style-gate runs/<date>
 uv run style-cost runs/<date> [--probe]
 uv run style-value runs/<date> [--judge]
+uv run style-loss runs/<date> [--judge]
 ```
 
 The linter exits with code 1 when it finds a violation.
@@ -102,6 +106,21 @@ codes: 0 when the checks are scored and no warnings exist, 1 when
 warnings exist (for example, a check without judge data), 2 when the
 run cannot be scored.
 
+The content-loss report also reads only the gated pairs. Two checks
+measure what the rewrite loses: completeness (the judge lists the
+facts of the unstyled answer, then checks each fact against the
+styled answer) and hedging survival (the judge lists the uncertain
+claims of the unstyled answer, then judges whether the styled answer
+keeps, hardens, or drops each claim). A claim that hardens becomes a
+false certainty, which is worse than a lost fact. No judge call sees
+both answers of a pair: the extracted items travel between the calls,
+never the source text. The judge model must differ from the writer
+model of the run. `--judge` runs the live calls and appends the raw
+outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
+the same invocation runs again. Without `--judge` the tool rescores
+the stored raw data offline. The exit codes equal the exit codes of
+`style-value`.
+
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,
@@ -121,6 +140,9 @@ runs/<YYYY-MM-DD>/
   value-raw.jsonl   # judge provenance plus one line per raw judge call
   value.json        # win/loss/tie per check and per style, machine-readable
   value.md          # the reader-value report for a human
+  loss-raw.jsonl    # judge provenance plus one line per raw judge call
+  loss.json         # fact and hedge survival per style, machine-readable
+  loss.md           # the content-loss report for a human
 ```
 
 A pair is not stored twice: it is the line for `(prompt, style)` plus

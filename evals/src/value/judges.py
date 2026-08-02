@@ -4,13 +4,14 @@ Every judge call goes through the same CLI path as the runner, but a
 judge never loads the plugin and always runs with the default output
 style. A judge prompt carries one bare text: no style name, no arm
 label, and never both answers of a pair. Thus a judge cannot know
-which answer is styled. The caller keeps the arm bookkeeping in the
-raw rows, outside every judge prompt.
+which answer is styled. The comprehension questions come from the
+shared facts of the pair, and only the fact strings travel between
+the calls, never a second answer text. The caller keeps the arm
+bookkeeping in the raw rows, outside every judge prompt.
 
-Each completed call goes to the sink as one raw row, keyed by check,
-role, and the sha256 of the text under test. A later run reuses every
-key that the stored rows already hold, so an interrupted run resumes
-without loss.
+Each completed call goes to the sink as one raw row. A later run
+reuses every key that the stored rows already hold, so an interrupted
+run resumes without loss.
 """
 
 from __future__ import annotations
@@ -34,15 +35,25 @@ from runner.provenance import claude_version
 
 CHECKS = ("comprehension", "paraphrase", "roundtrip")
 
-QUESTIONS_PROMPT = """\
-You write a comprehension quiz. Below is a task that was given to a
-writer. Write {n} short factual questions that any good answer to the
-task must cover, each with a short reference answer. Ask about the
-subject of the task, not about the wording of the task. Output only a
-JSON array of objects with the keys "question" and "reference".
+COMPREHENSION_DESIGN = "shared-facts-v2"
+"""The design tag of the comprehension check, stored in the meta row.
 
-Task:
-{task}"""
+A raw file without the tag holds first-design rows: questions written
+from the task prompt alone, one reader call per text. The scorer
+reads the tag to pick the matched scoring path.
+"""
+
+FACTS_FLOOR = 3
+"""A pair with fewer shared facts is skipped: too few for a quiz."""
+
+QUESTIONS_FROM_FACTS_PROMPT = """\
+You write a quiz from an answer key. Below is a numbered list of
+facts. For each fact, write one short question whose correct answer
+is that fact. The question must not contain its answer. Output only
+a JSON array of strings, one question per fact, in order.
+
+Facts:
+{facts}"""
 
 READER_PROMPT = """\
 Answer the questions below with only the text as your source. Do not
@@ -146,15 +157,23 @@ def parse_bools(output: str, n: int) -> list[bool] | None:
     return value
 
 
+def select_facts(facts: list[str], cap: int) -> list[str]:
+    """At most cap facts, spaced evenly over the list, in stored order."""
+    if len(facts) <= cap:
+        return list(facts)
+    step = len(facts) / cap
+    return [facts[int(index * step)] for index in range(cap)]
+
+
 def build_meta(
     *,
     reader_model: str,
     grader_model: str,
     questions_n: int,
     paraphrases_k: int,
+    replicates: int,
     language: str,
     answers_sha256: str,
-    prompts_sha256: str | None,
 ) -> dict:
     return {
         "type": "meta",
@@ -163,10 +182,11 @@ def build_meta(
         "models": {"reader": reader_model, "grader": grader_model},
         "questions": questions_n,
         "paraphrases": paraphrases_k,
+        "replicates": replicates,
+        "comprehension_design": COMPREHENSION_DESIGN,
         "language": language,
         "flags": list(ISOLATION_FLAGS),
         "answers_sha256": answers_sha256,
-        "prompts_sha256": prompts_sha256,
     }
 
 
@@ -254,99 +274,133 @@ def _grade_items(questions: list[dict], answers: list[str]) -> str:
 
 def _judge_comprehension(
     session: JudgeSession,
-    texts: list[dict],
-    prompts_by_id: dict[str, str],
+    pairs: dict[str, list[str]],
+    answers: dict[tuple[str, str | None], dict],
+    facts_by_pair: dict[tuple[str, str], list[str]],
     grader_model: str,
     reader_model: str,
-    questions_n: int,
+    questions_cap: int,
+    replicates: int,
 ) -> None:
-    questions_by_prompt: dict[str, list[dict]] = {}
-    for prompt_id in sorted({text["prompt_id"] for text in texts}):
-        questions = session.structured(
-            validate=parse_questions,
-            key=f"comprehension:questions:{prompt_id}",
-            check="comprehension",
-            role="questions",
-            model=grader_model,
-            prompt=QUESTIONS_PROMPT.format(n=questions_n, task=prompts_by_id[prompt_id]),
-            prompt_id=prompt_id,
-            answer_sha256=None,
-        )
-        if questions is None:
-            session.warnings.append(
-                f"{prompt_id}: the question writer returned no usable questions, "
-                "so comprehension skips the prompt"
-            )
-            continue
-        questions_by_prompt[prompt_id] = questions
+    """One quiz per pair, from the shared facts, read by both answers.
 
-    for text in texts:
-        questions = questions_by_prompt.get(text["prompt_id"])
-        if questions is None:
-            continue
-        answers = session.structured(
-            validate=partial(parse_strings, n=len(questions)),
-            key=f"comprehension:reader:{text['sha256']}",
-            check="comprehension",
-            role="reader",
-            model=reader_model,
-            prompt=READER_PROMPT.format(
-                text=text["text"],
-                questions=_numbered([question["question"] for question in questions]),
-            ),
-            prompt_id=text["prompt_id"],
-            answer_sha256=text["sha256"],
-        )
-        if answers is None:
-            session.warnings.append(
-                f"{text['prompt_id']}: the reader returned no usable answers for the text "
-                f"{text['sha256'][:12]}, so comprehension skips the text"
+    A pair without an entry in facts_by_pair was warned about by the
+    caller and is skipped here. The reference answer of a question is
+    the fact that produced the question.
+    """
+    for style in sorted(pairs):
+        for prompt_id in pairs[style]:
+            survivors = facts_by_pair.get((style, prompt_id))
+            if survivors is None:
+                continue
+            if len(survivors) < FACTS_FLOOR:
+                session.warnings.append(
+                    f"{style}/{prompt_id}: the pair has {len(survivors)} shared facts, "
+                    f"fewer than the floor of {FACTS_FLOOR}, so comprehension skips the pair"
+                )
+                continue
+            facts = select_facts(survivors, questions_cap)
+            questions = session.structured(
+                validate=partial(parse_strings, n=len(facts)),
+                key=f"comprehension:v2:questions:{style}:{prompt_id}",
+                check="comprehension",
+                role="questions",
+                model=grader_model,
+                prompt=QUESTIONS_FROM_FACTS_PROMPT.format(facts=_numbered(facts)),
+                prompt_id=prompt_id,
+                answer_sha256=None,
             )
-            continue
-        grades = session.structured(
-            validate=partial(parse_bools, n=len(questions)),
-            key=f"comprehension:grades:{text['sha256']}",
-            check="comprehension",
-            role="grades",
-            model=grader_model,
-            prompt=GRADES_PROMPT.format(items=_grade_items(questions, answers)),
-            prompt_id=text["prompt_id"],
-            answer_sha256=text["sha256"],
-        )
-        if grades is None:
-            session.warnings.append(
-                f"{text['prompt_id']}: the grader returned no usable grades for the text "
-                f"{text['sha256'][:12]}, so comprehension skips the text"
-            )
+            if questions is None:
+                session.warnings.append(
+                    f"{style}/{prompt_id}: the question writer returned no usable "
+                    "questions, so comprehension skips the pair"
+                )
+                continue
+            references = [
+                {"question": question, "reference": fact}
+                for question, fact in zip(questions, facts, strict=True)
+            ]
+            for arm, arm_key in (("styled", (prompt_id, style)), ("unstyled", (prompt_id, None))):
+                text = answers[arm_key]
+                for replicate in range(replicates):
+                    replies = session.structured(
+                        validate=partial(parse_strings, n=len(facts)),
+                        key=f"comprehension:v2:reader:{style}:{prompt_id}:{arm}:{replicate}",
+                        check="comprehension",
+                        role="reader",
+                        model=reader_model,
+                        prompt=READER_PROMPT.format(
+                            text=text["text"], questions=_numbered(questions)
+                        ),
+                        prompt_id=prompt_id,
+                        answer_sha256=text["sha256"],
+                        index=replicate,
+                    )
+                    if replies is None:
+                        session.warnings.append(
+                            f"{prompt_id}: the reader returned no usable answers for the "
+                            f"text {text['sha256'][:12]}, so comprehension skips the "
+                            "replicate"
+                        )
+                        continue
+                    grades = session.structured(
+                        validate=partial(parse_bools, n=len(facts)),
+                        key=f"comprehension:v2:grades:{style}:{prompt_id}:{arm}:{replicate}",
+                        check="comprehension",
+                        role="grades",
+                        model=grader_model,
+                        prompt=GRADES_PROMPT.format(items=_grade_items(references, replies)),
+                        prompt_id=prompt_id,
+                        answer_sha256=text["sha256"],
+                        index=replicate,
+                    )
+                    if grades is None:
+                        session.warnings.append(
+                            f"{prompt_id}: the grader returned no usable grades for the "
+                            f"text {text['sha256'][:12]}, so comprehension skips the "
+                            "replicate"
+                        )
 
 
 def run_judges(
     *,
     texts: list[dict],
-    prompts_by_id: dict[str, str] | None,
+    pairs: dict[str, list[str]],
+    answers: dict[tuple[str, str | None], dict],
+    facts_by_pair: dict[tuple[str, str], list[str]],
     checks: list[str],
     reader_model: str,
     grader_model: str,
     questions_n: int,
     paraphrases_k: int,
+    replicates: int,
     language: str,
     rows: dict[str, dict],
     sink: RowSink,
     workdir: Path,
     run: Runner = subprocess_runner,
 ) -> list[str]:
-    """Run the judge calls for every text and return the warnings.
+    """Run the judge calls for every pair and return the warnings.
 
-    Each text is one dict with prompt_id, sha256, and text. The rows
-    mapping is read for reuse and extended in place; every new row
-    also goes to the sink.
+    The texts list holds the unique texts for the per-text checks:
+    one dict with prompt_id, sha256, and text per unique sha256. The
+    comprehension check works per pair instead, with the shared facts
+    from facts_by_pair. The rows mapping is read for reuse and
+    extended in place; every new row also goes to the sink.
     """
     session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
 
     if "comprehension" in checks:
-        if prompts_by_id is None:
-            raise ValueError("the comprehension check needs the prompt texts")
-        _judge_comprehension(session, texts, prompts_by_id, grader_model, reader_model, questions_n)
+        _judge_comprehension(
+            session,
+            pairs,
+            answers,
+            facts_by_pair,
+            grader_model,
+            reader_model,
+            questions_n,
+            replicates,
+        )
 
     if "paraphrase" in checks:
         for text in texts:

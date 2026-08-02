@@ -122,19 +122,30 @@ The reader-value report reads only the pairs whose styled answer
 passes the gate, because rule obedience alone can produce compliant,
 useless text, and this report measures whether a reader gains
 anything. Three checks compare the two answers of a pair: weak-reader
-comprehension (a weaker model answers questions about one answer text,
-and a grader marks the answers), ambiguity through paraphrase
+comprehension (a weaker model answers quiz questions from one answer
+text, and a grader marks every reply), ambiguity through paraphrase
 (independent restatements of one answer text, scored by their mutual
 agreement), and translation round-trip (one answer text goes to
-another language and back, scored by the lexical loss). Every judge
-call sees one bare text without a style name or an arm label, and the
-judge models must differ from the writer model of the run. `--judge`
-runs the live calls and appends the raw outputs to `value-raw.jsonl`;
-an interrupted judge run resumes when the same invocation runs again.
-Without `--judge` the tool rescores the stored raw data offline. Exit
-codes: 0 when the checks are scored and no warnings exist, 1 when
-warnings exist (for example, a check without judge data), 2 when the
-run cannot be scored.
+another language and back, scored by the lexical loss). The
+comprehension questions come from the shared facts of the pair. The
+completeness check of the content-loss report extracted these facts
+from the unstyled answer and marked them as present in the styled
+answer. Thus the questions probe only material that both answers
+contain, and the score measures extraction, not coverage. The check
+reads the facts from `loss-raw.jsonl`: run `style-loss <run> --judge`
+before the first `style-value <run> --judge`. Each answer gets
+several reader replicates. The pair outcome is the plurality over
+the replicate outcomes, and the report states the replicate
+agreement next to a buried-fact rate (a styled "NOT IN TEXT" reply
+to a shared fact). Every judge call sees one bare text without a
+style name or an arm label, and the judge models must differ from
+the writer model of the run. `--judge` runs the live calls and
+appends the raw outputs to `value-raw.jsonl`; an interrupted judge
+run resumes when the same invocation runs again. Without `--judge`
+the tool rescores the stored raw data offline. Exit codes: 0 when
+the checks are scored and no warnings exist, 1 when warnings exist
+(for example, a check without judge data), 2 when the run cannot be
+scored.
 
 The content-loss report also reads only the gated pairs. Two checks
 measure what the rewrite loses: completeness (the judge lists the

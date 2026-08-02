@@ -15,17 +15,20 @@ import shutil
 import sys
 from pathlib import Path
 
-import yaml
-
 from gate.cli import load_answers
 from runner.generate import GenerationError, Runner, subprocess_runner
 from runner.provenance import sha256_of
 
-from .analysis import score_checks, select_pairs
+from .analysis import score_checks, select_pairs, shared_facts
 from .judges import CHECKS, build_meta, run_judges
 from .report import build_value_report, build_value_summary
 
 META_MATCH_KEYS = ("models", "questions", "paraphrases", "language", "answers_sha256")
+
+# The keys that the shared-facts redesign added to the meta row. A
+# stored meta row without them gets an upgraded meta row appended;
+# a stored value that differs is a hard mismatch.
+META_UPGRADE_KEYS = ("comprehension_design", "replicates")
 
 
 def _fail(message: str) -> SystemExit:
@@ -63,11 +66,6 @@ def load_raw(path: Path) -> tuple[dict | None, dict[str, dict]]:
         else:
             rows[row["key"]] = row
     return meta, rows
-
-
-def load_prompts(path: Path) -> dict[str, str]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return {prompt["id"]: prompt["text"] for prompt in data["prompts"]}
 
 
 def answer_index(answers: list[dict]) -> dict[tuple[str, str | None], dict]:
@@ -114,47 +112,60 @@ def _check_writer_constraint(
 def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) -> tuple[dict, list]:
     """Run the live judge calls. Returns the meta row and the warnings."""
     warnings = _check_writer_constraint(_provenance(run_dir), args.model_reader, args.model_grader)
-    checks = args.check_list
+    checks = list(args.check_list)
+    answers_sha256 = sha256_of(run_dir / "answers.jsonl")
 
-    prompts_by_id = None
-    prompts_sha = None
+    facts_by_pair: dict[tuple[str, str], list[str]] = {}
     if "comprehension" in checks:
-        prompts_path = Path(args.prompts)
-        if not prompts_path.exists():
-            raise _fail(f"{prompts_path}: no prompt file; the comprehension check needs it")
-        prompts_by_id = load_prompts(prompts_path)
-        prompts_sha = sha256_of(prompts_path)
-        recorded = (_provenance(run_dir) or {}).get("prompt_set", {}).get("sha256")
-        if recorded and recorded != prompts_sha:
-            warnings.append("the prompt file differs from the prompt file of the run")
-        needed = {prompt_id for ids in pairs.values() for prompt_id in ids}
-        missing = sorted(needed - set(prompts_by_id))
-        if missing:
-            raise _fail(f"{prompts_path}: no prompt text for {', '.join(missing)}")
+        loss_meta, loss_rows = load_raw(run_dir / "loss-raw.jsonl")
+        if loss_meta is None:
+            warnings.append(
+                "no loss data for the comprehension questions, so comprehension is "
+                f"not judged; run style-loss {run_dir} --judge first"
+            )
+            checks.remove("comprehension")
+        elif loss_meta.get("answers_sha256") != answers_sha256:
+            warnings.append(
+                "loss-raw.jsonl comes from other answers, so comprehension is not "
+                f"judged; run style-loss {run_dir} --judge again"
+            )
+            checks.remove("comprehension")
+        else:
+            facts_by_pair, fact_warnings = shared_facts(pairs, index, loss_rows)
+            warnings += fact_warnings
 
     meta = build_meta(
         reader_model=args.model_reader,
         grader_model=args.model_grader,
         questions_n=args.questions,
         paraphrases_k=args.paraphrases,
+        replicates=args.replicates,
         language=args.language,
-        answers_sha256=sha256_of(run_dir / "answers.jsonl"),
-        prompts_sha256=prompts_sha,
+        answers_sha256=answers_sha256,
     )
+    meta_upgraded = False
     if meta_stored is not None:
         mismatched = [key for key in META_MATCH_KEYS if meta_stored.get(key) != meta[key]]
+        mismatched += [
+            key for key in META_UPGRADE_KEYS if key in meta_stored and meta_stored[key] != meta[key]
+        ]
         if mismatched:
             raise _fail(
                 f"value-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
                 "remove the file to judge again from scratch"
             )
-        meta = meta_stored
+        absent = [key for key in META_UPGRADE_KEYS if key not in meta_stored]
+        if absent:
+            meta = {**meta_stored, **{key: meta[key] for key in absent}}
+            meta_upgraded = True
+        else:
+            meta = meta_stored
 
     raw_path = run_dir / "value-raw.jsonl"
     workdir = run_dir / ".judge-workdir"
     workdir.mkdir(exist_ok=True)
     with raw_path.open("a", encoding="utf-8") as raw_file:
-        if meta_stored is None:
+        if meta_stored is None or meta_upgraded:
             raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
             raw_file.flush()
 
@@ -165,12 +176,15 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
         try:
             warnings += run_judges(
                 texts=_texts(pairs, index),
-                prompts_by_id=prompts_by_id,
+                pairs=pairs,
+                answers=index,
+                facts_by_pair=facts_by_pair,
                 checks=checks,
                 reader_model=meta["models"]["reader"],
                 grader_model=meta["models"]["grader"],
                 questions_n=meta["questions"],
                 paraphrases_k=meta["paraphrases"],
+                replicates=meta["replicates"],
                 language=meta["language"],
                 rows=rows,
                 sink=sink,
@@ -191,23 +205,25 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             "Check whether the styled answer beats the unstyled answer for "
             "a reader, as win, loss, or tie per gated pair: weak-reader "
             "comprehension, ambiguity through paraphrase, and translation "
-            "round-trip. The judges never see a style name and differ from "
-            "the writer of the answers."
+            "round-trip. The comprehension questions come from the facts "
+            "that both answers share, stored in loss-raw.jsonl, so run "
+            "style-loss --judge first. The judges never see a style name "
+            "and differ from the writer of the answers."
         ),
     )
     parser.add_argument("run_dir", help="the run directory with answers.jsonl and fidelity.jsonl")
     parser.add_argument("--judge", action="store_true", help="run the live judge calls first")
     parser.add_argument("--model-reader", default="haiku", help="the weak-reader model")
     parser.add_argument("--model-grader", default="opus", help="the question and grading model")
-    parser.add_argument("--questions", type=int, default=5, help="questions per prompt")
+    parser.add_argument("--questions", type=int, default=5, help="questions per pair (cap)")
     parser.add_argument("--paraphrases", type=int, default=3, help="restatements per answer")
+    parser.add_argument("--replicates", type=int, default=3, help="reader calls per answer")
     parser.add_argument("--language", default="Italian", help="the round-trip language")
     parser.add_argument(
         "--checks",
         default=",".join(CHECKS),
         help="comma-separated subset of the checks to judge",
     )
-    parser.add_argument("--prompts", default="prompts/prompts.yaml", help="the prompt file")
     args = parser.parse_args(argv)
 
     args.check_list = [check for check in args.checks.split(",") if check]
@@ -233,7 +249,14 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     elif meta is None:
         raise _fail(f"{raw_path}: no judge data; run style-value {run_dir} --judge")
 
-    result = score_checks(pairs=pairs, answers=index, rows=rows, paraphrases_k=meta["paraphrases"])
+    result = score_checks(
+        pairs=pairs,
+        answers=index,
+        rows=rows,
+        paraphrases_k=meta["paraphrases"],
+        comprehension_design=meta.get("comprehension_design"),
+        replicates=meta.get("replicates", 1),
+    )
     warnings = pair_warnings + judge_warnings + result.warnings
     summary = build_value_summary(
         run_name=run_dir.name, meta=meta, pairs=pairs, checks=result.checks, warnings=warnings

@@ -19,6 +19,21 @@ CHECK_TITLES = {
     "roundtrip": "Translation round-trip",
 }
 
+COMPREHENSION_V2_INTRO = (
+    "The questions come from the shared facts of the pair: the facts "
+    "that the loss judge extracted from the unstyled answer and found "
+    "present in the styled answer. A grader call turns each fact into "
+    "one question, and the fact is the reference answer. The weak "
+    "reader answers the questions from one answer text, once per "
+    "replicate, and the grader marks every reply. Each styled "
+    "replicate meets each unstyled replicate as a win, a loss, or a "
+    "tie, and the pair outcome is the strict plurality, else a tie. "
+    "The agreement is the plurality share, and the buried-fact rate "
+    'counts styled "NOT IN TEXT" replies to a shared fact. The check '
+    "measures extraction over shared material. Absence belongs to the "
+    "content-loss report. Higher is better."
+)
+
 CHECK_INTROS = {
     "comprehension": (
         "The grader model writes questions with reference answers from the "
@@ -59,6 +74,8 @@ def build_value_summary(
             "models": meta["models"],
             "questions": meta["questions"],
             "paraphrases": meta["paraphrases"],
+            "replicates": meta.get("replicates"),
+            "comprehension_design": meta.get("comprehension_design"),
             "language": meta["language"],
             "judged_date": meta["date"],
             "claude_version": meta.get("claude_version"),
@@ -70,14 +87,28 @@ def build_value_summary(
 
 
 def _check_section(name: str, check: dict, run_name: str) -> list[str]:
-    lines = [f"## {CHECK_TITLES[name]}", "", CHECK_INTROS[name], ""]
+    v2 = check.get("design") is not None
+    intro = COMPREHENSION_V2_INTRO if v2 else CHECK_INTROS[name]
+    lines = [f"## {CHECK_TITLES[name]}", "", intro, ""]
     if not check["judged"]:
         lines += [f"The check is not judged. Run `style-value {run_name} --judge`.", ""]
         return lines
 
-    lines += ["| Style | Wins | Losses | Ties |", "|---|---|---|---|"]
-    for style, stats in check["per_style"].items():
-        lines.append(f"| {style} | {stats['wins']} | {stats['losses']} | {stats['ties']} |")
+    if v2:
+        lines += [
+            "| Style | Wins | Losses | Ties | Mean delta | Agreement | Buried-fact rate |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for style, stats in check["per_style"].items():
+            lines.append(
+                f"| {style} | {stats['wins']} | {stats['losses']} | {stats['ties']} | "
+                f"{stats['mean_delta']} | {stats['mean_agreement']} | "
+                f"{stats['buried_fact_rate']} |"
+            )
+    else:
+        lines += ["| Style | Wins | Losses | Ties |", "|---|---|---|---|"]
+        for style, stats in check["per_style"].items():
+            lines.append(f"| {style} | {stats['wins']} | {stats['losses']} | {stats['ties']} |")
     lines.append("")
 
     if name == "comprehension":
@@ -92,16 +123,26 @@ def _check_section(name: str, check: dict, run_name: str) -> list[str]:
         lines.append("")
 
     for style, stats in check["per_style"].items():
-        lines += [
-            f"### {style}",
-            "",
-            "| Pair | Styled | Unstyled | Result |",
-            "|---|---|---|---|",
-        ]
-        lines += [
-            f"| {prompt_id} | {scores['styled']} | {scores['unstyled']} | {scores['result']} |"
-            for prompt_id, scores in stats["pairs"].items()
-        ]
+        lines += [f"### {style}", ""]
+        if v2:
+            lines += [
+                "| Pair | Questions | Styled | Unstyled | Agreement | Result |",
+                "|---|---|---|---|---|---|",
+            ]
+            lines += [
+                f"| {prompt_id} | {scores['questions']} | {scores['styled']} | "
+                f"{scores['unstyled']} | {scores['agreement']} | {scores['result']} |"
+                for prompt_id, scores in stats["pairs"].items()
+            ]
+        else:
+            lines += [
+                "| Pair | Styled | Unstyled | Result |",
+                "|---|---|---|---|",
+            ]
+            lines += [
+                f"| {prompt_id} | {scores['styled']} | {scores['unstyled']} | {scores['result']} |"
+                for prompt_id, scores in stats["pairs"].items()
+            ]
         lines.append("")
     return lines
 
@@ -121,8 +162,13 @@ def build_value_report(summary: dict) -> str:
         (
             f"Judges: reader {judges['models']['reader']}, "
             f"grader {judges['models']['grader']}. "
-            f"Comprehension uses {judges['questions']} questions per prompt, "
-            f"ambiguity uses {judges['paraphrases']} restatements per answer, "
+            + (
+                f"Comprehension asks up to {judges['questions']} questions per pair, "
+                f"with {judges['replicates']} reader replicates per answer, "
+                if judges.get("comprehension_design")
+                else f"Comprehension uses {judges['questions']} questions per prompt, "
+            )
+            + f"ambiguity uses {judges['paraphrases']} restatements per answer, "
             f"and the round-trip goes through {judges['language']}. "
             f"Judged on {judges['judged_date']}."
         ),

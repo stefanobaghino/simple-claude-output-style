@@ -8,9 +8,12 @@ loss, or a tie for the styled answer.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 
-from .judges import CHECKS, parse_bools, parse_questions
+from loss.judges import parse_string_list
+
+from .judges import CHECKS, COMPREHENSION_DESIGN, parse_bools, parse_questions, parse_strings
 from .similarity import mean_pairwise_f1, unigram_f1
 
 TIE_EPSILON = 0.02
@@ -64,11 +67,145 @@ def select_pairs(
     return {style: sorted(ids) for style, ids in pairs.items()}, warnings
 
 
+def shared_facts(
+    pairs: dict[str, list[str]],
+    answers: dict[tuple[str, str | None], dict],
+    loss_rows: dict[str, dict],
+) -> tuple[dict[tuple[str, str], list[str]], list[str]]:
+    """The facts of each pair that survive in the styled answer.
+
+    The completeness check of the content-loss report extracted the
+    facts from the unstyled answer and judged each fact against the
+    styled answer. The row keys carry the answer hashes, so a stale
+    row never matches a current pair.
+    """
+    facts_by_pair: dict[tuple[str, str], list[str]] = {}
+    warnings: list[str] = []
+    for style in sorted(pairs):
+        for prompt_id in pairs[style]:
+            unstyled_sha = answers[(prompt_id, None)]["sha256"]
+            styled_sha = answers[(prompt_id, style)]["sha256"]
+            facts_row = loss_rows.get(f"completeness:facts:{unstyled_sha}")
+            check_row = loss_rows.get(f"completeness:check:{styled_sha}")
+            if facts_row is None or check_row is None:
+                warnings.append(
+                    f"{style}/{prompt_id}: loss-raw.jsonl holds no completeness rows "
+                    "for the pair, so comprehension skips the pair; run style-loss "
+                    "--judge first"
+                )
+                continue
+            facts = parse_string_list(facts_row["output"])
+            marks = None if facts is None else parse_bools(check_row["output"], len(facts))
+            if facts is None or marks is None:
+                warnings.append(
+                    f"{style}/{prompt_id}: the completeness rows of the pair do not "
+                    "parse, so comprehension skips the pair"
+                )
+                continue
+            facts_by_pair[(style, prompt_id)] = [
+                fact for fact, mark in zip(facts, marks, strict=True) if mark
+            ]
+    return facts_by_pair, warnings
+
+
 def _outcome(styled: float, unstyled: float, higher_wins: bool, tie_epsilon: float) -> str:
     delta = styled - unstyled
     if abs(delta) <= tie_epsilon:
         return "tie"
     return "win" if (delta > 0) == higher_wins else "loss"
+
+
+def _score_comprehension_v2(
+    *,
+    pairs: dict[str, list[str]],
+    rows: dict[str, dict],
+    replicates: int,
+    warnings: list[str],
+) -> dict:
+    """Score the shared-facts comprehension rows, pair by pair.
+
+    Per pair, every styled replicate meets every unstyled replicate,
+    and each meeting is a win, a loss, or a tie under the exact-tie
+    rule. The pair outcome is the strict plurality of the meetings,
+    else a tie. The agreement of a pair is the plurality share. The
+    buried-fact rate counts styled "NOT IN TEXT" replies: the reader
+    missed a fact that the loss judge found present.
+    """
+    if not any(key.startswith("comprehension:v2:") for key in rows):
+        warnings.append("the comprehension check has no judge data: run style-value with --judge")
+        return {"judged": False, "design": COMPREHENSION_DESIGN, "per_style": None}
+    per_style: dict[str, dict] = {}
+    for style in sorted(pairs):
+        tally = {"win": 0, "loss": 0, "tie": 0}
+        pair_scores: dict[str, dict] = {}
+        deltas: list[float] = []
+        agreements: list[float] = []
+        buried = 0
+        styled_replies = 0
+        for prompt_id in pairs[style]:
+            questions_row = rows.get(f"comprehension:v2:questions:{style}:{prompt_id}")
+            questions = parse_string_list(questions_row["output"]) if questions_row else None
+            if not questions:
+                warnings.append(
+                    f"{style}/{prompt_id}: the comprehension check has no usable "
+                    "questions for the pair, so the pair is unscored"
+                )
+                continue
+            n = len(questions)
+            scores: dict[str, list[float]] = {"styled": [], "unstyled": []}
+            for arm, values in scores.items():
+                for replicate in range(replicates):
+                    key = f"comprehension:v2:grades:{style}:{prompt_id}:{arm}:{replicate}"
+                    row = rows.get(key)
+                    grades = parse_bools(row["output"], n) if row else None
+                    if grades is not None:
+                        values.append(sum(grades) / n)
+            for replicate in range(replicates):
+                key = f"comprehension:v2:reader:{style}:{prompt_id}:styled:{replicate}"
+                row = rows.get(key)
+                replies = parse_strings(row["output"], n) if row else None
+                if replies is not None:
+                    styled_replies += n
+                    buried += sum(1 for reply in replies if reply == "NOT IN TEXT")
+            missing = [arm for arm, values in scores.items() if not values]
+            if missing:
+                warnings.append(
+                    f"{style}/{prompt_id}: the comprehension check has no usable score "
+                    f"for the {' and the '.join(missing)} answer, so the pair is unscored"
+                )
+                continue
+            outcomes = Counter(
+                _outcome(styled, unstyled, True, 0.0)
+                for styled in scores["styled"]
+                for unstyled in scores["unstyled"]
+            )
+            ranked = outcomes.most_common()
+            result = ranked[0][0]
+            if len(ranked) > 1 and ranked[1][1] == ranked[0][1]:
+                result = "tie"
+            agreement = ranked[0][1] / sum(outcomes.values())
+            styled_mean = sum(scores["styled"]) / len(scores["styled"])
+            unstyled_mean = sum(scores["unstyled"]) / len(scores["unstyled"])
+            tally[result] += 1
+            deltas.append(styled_mean - unstyled_mean)
+            agreements.append(agreement)
+            pair_scores[prompt_id] = {
+                "styled": round(styled_mean, 3),
+                "unstyled": round(unstyled_mean, 3),
+                "questions": n,
+                "agreement": round(agreement, 3),
+                "result": result,
+            }
+        per_style[style] = {
+            "wins": tally["win"],
+            "losses": tally["loss"],
+            "ties": tally["tie"],
+            "mean_delta": round(sum(deltas) / len(deltas), 3) if deltas else None,
+            "mean_agreement": round(sum(agreements) / len(agreements), 3) if agreements else None,
+            "buried_fact_rate": round(buried / styled_replies, 3) if styled_replies else None,
+            "pairs": pair_scores,
+        }
+    return {"judged": True, "design": COMPREHENSION_DESIGN, "per_style": per_style}
 
 
 def score_checks(
@@ -77,12 +214,16 @@ def score_checks(
     answers: dict[tuple[str, str | None], dict],
     rows: dict[str, dict],
     paraphrases_k: int,
+    comprehension_design: str | None = None,
+    replicates: int = 1,
 ) -> ValueResult:
     """Score every check for every pair.
 
     The answers mapping goes from (prompt_id, style or None) to a dict
     with text and sha256. The rows mapping is the raw judge data keyed
-    by call key.
+    by call key. The comprehension_design value comes from the meta
+    row: None selects the first-design scorer, so an old run stays
+    rescoreable.
     """
     warnings: list[str] = []
     checks_out: dict[str, dict] = {}
@@ -128,6 +269,11 @@ def score_checks(
     }
 
     for check in CHECKS:
+        if check == "comprehension" and comprehension_design == COMPREHENSION_DESIGN:
+            checks_out[check] = _score_comprehension_v2(
+                pairs=pairs, rows=rows, replicates=replicates, warnings=warnings
+            )
+            continue
         if not any(row.get("check") == check for row in rows.values()):
             checks_out[check] = {"judged": False, "per_style": None}
             warnings.append(f"the {check} check has no judge data: run style-value with --judge")

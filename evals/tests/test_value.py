@@ -4,6 +4,7 @@ canned stream-json output."""
 
 import hashlib
 import json
+import re
 from functools import partial
 from pathlib import Path
 
@@ -11,7 +12,8 @@ import pytest
 
 from runner.provenance import sha256_of
 from value import cli, extract_json, judge_argv, score_checks, select_pairs
-from value.judges import JudgeSession, parse_bools
+from value.analysis import shared_facts
+from value.judges import JudgeSession, parse_bools, select_facts
 from value.similarity import mean_pairwise_f1, unigram_f1
 
 STYLED_TEXT = "The quick brown fox jumps."
@@ -43,9 +45,10 @@ def stream(result_text, output_style="default"):
 class FakeJudgeRunner:
     """Routes each judge prompt to a canned reply.
 
-    The unstyled turtle text plays the weaker arm: its reader misses a
-    question, its restatements differ, and its round-trip loses words.
-    Every other text is judged faithful, so its styled pair wins.
+    The unstyled turtle text plays the weaker arm: its reader misses
+    the last question, its restatements differ, and its round-trip
+    loses words. Every other text is judged faithful, so its styled
+    pair wins. The quiz replies match the item count of the prompt.
     """
 
     def __init__(self):
@@ -57,18 +60,25 @@ class FakeJudgeRunner:
         prompt = argv[argv.index("-p") + 1]
         return stream(self.reply(prompt))
 
+    @staticmethod
+    def _numbered_count(prompt):
+        return len(re.findall(r"(?m)^\d+\. ", prompt))
+
     def reply(self, prompt):
-        if prompt.startswith("You write a comprehension quiz"):
-            return json.dumps(
-                [
-                    {"question": "Q1", "reference": "R1"},
-                    {"question": "Q2", "reference": "R2"},
-                ]
-            )
+        if prompt.startswith("You write a quiz from an answer key"):
+            n = self._numbered_count(prompt)
+            return json.dumps([f"Q{number}" for number in range(1, n + 1)])
         if prompt.startswith("Answer the questions"):
-            return '["A1", "NOT IN TEXT"]' if "turtle" in prompt else '["A1", "A2"]'
+            n = self._numbered_count(prompt)
+            answers = [f"A{number}" for number in range(1, n + 1)]
+            if "turtle" in prompt:
+                answers[-1] = "NOT IN TEXT"
+            return json.dumps(answers)
         if prompt.startswith("Grade the quiz answers"):
-            return "[true, false]" if "Answer: NOT IN TEXT" in prompt else "[true, true]"
+            grades = [True] * prompt.count("Question:")
+            if "Answer: NOT IN TEXT" in prompt:
+                grades[-1] = False
+            return json.dumps(grades)
         if prompt.startswith("Restate the text"):
             if "turtle" in prompt:
                 self.turtle_restatements += 1
@@ -138,6 +148,45 @@ def test_extract_json_is_lenient():
     assert extract_json("no json here") is None
 
 
+def test_select_facts_spaces_evenly_and_keeps_the_order():
+    facts = [str(number) for number in range(13)]
+    assert select_facts(facts, 5) == ["0", "2", "5", "7", "10"]
+    assert select_facts(["a", "b"], 5) == ["a", "b"]
+
+
+def test_shared_facts_takes_only_the_facts_that_survive():
+    pairs = {"alpha": ["p-01"]}
+    answers = {
+        ("p-01", "alpha"): {"text": "s", "sha256": "S"},
+        ("p-01", None): {"text": "u", "sha256": "U"},
+    }
+    loss_rows = {
+        "completeness:facts:U": {"output": '["F1", "F2", "F3"]'},
+        "completeness:check:S": {"output": "[true, false, true]"},
+    }
+    facts, warnings = shared_facts(pairs, answers, loss_rows)
+    assert facts == {("alpha", "p-01"): ["F1", "F3"]}
+    assert warnings == []
+
+
+def test_shared_facts_warns_on_missing_and_unparsable_rows():
+    pairs = {"alpha": ["p-01", "p-02"]}
+    answers = {
+        ("p-01", "alpha"): {"text": "s1", "sha256": "S1"},
+        ("p-01", None): {"text": "u1", "sha256": "U1"},
+        ("p-02", "alpha"): {"text": "s2", "sha256": "S2"},
+        ("p-02", None): {"text": "u2", "sha256": "U2"},
+    }
+    loss_rows = {
+        "completeness:facts:U2": {"output": '["F1"]'},
+        "completeness:check:S2": {"output": "no json here"},
+    }
+    facts, warnings = shared_facts(pairs, answers, loss_rows)
+    assert facts == {}
+    assert any("alpha/p-01: loss-raw.jsonl holds no completeness rows" in w for w in warnings)
+    assert any("alpha/p-02: the completeness rows of the pair do not parse" in w for w in warnings)
+
+
 def pair_fixture(styled_score_rows):
     """A one-pair scoring input with hand-built raw rows."""
     answers = {
@@ -186,6 +235,89 @@ def test_comprehension_scoring_marks_win_loss_and_tie():
 def test_a_missing_grade_leaves_the_pair_unscored():
     pairs, answers, rows = pair_fixture({"comprehension:grades:S": grades_row([True, True])})
     result = score_checks(pairs=pairs, answers=answers, rows=rows, paraphrases_k=3)
+    assert result.checks["comprehension"]["per_style"]["alpha"]["pairs"] == {}
+    assert any("no usable score for the unstyled answer" in w for w in result.warnings)
+
+
+def v2_fixture(styled_reps, unstyled_reps, styled_replies=()):
+    """A one-pair scoring input with hand-built shared-facts rows."""
+    rows = {
+        "comprehension:v2:questions:alpha:p-01": {
+            "check": "comprehension",
+            "output": '["Q1", "Q2"]',
+        }
+    }
+    for replicate, grades in enumerate(styled_reps):
+        rows[f"comprehension:v2:grades:alpha:p-01:styled:{replicate}"] = grades_row(grades)
+    for replicate, grades in enumerate(unstyled_reps):
+        rows[f"comprehension:v2:grades:alpha:p-01:unstyled:{replicate}"] = grades_row(grades)
+    for replicate, replies in enumerate(styled_replies):
+        rows[f"comprehension:v2:reader:alpha:p-01:styled:{replicate}"] = {
+            "check": "comprehension",
+            "output": json.dumps(replies),
+        }
+    answers = {
+        ("p-01", "alpha"): {"text": "styled text", "sha256": "S"},
+        ("p-01", None): {"text": "unstyled text", "sha256": "U"},
+    }
+    return {"alpha": ["p-01"]}, answers, rows
+
+
+def score_v2(pairs, answers, rows):
+    return score_checks(
+        pairs=pairs,
+        answers=answers,
+        rows=rows,
+        paraphrases_k=3,
+        comprehension_design="shared-facts-v2",
+        replicates=3,
+    )
+
+
+def test_v2_scoring_takes_the_plurality_of_the_replicate_outcomes():
+    pairs, answers, rows = v2_fixture(
+        styled_reps=([True, True], [True, True], [True, False]),
+        unstyled_reps=([True, False], [True, False], [True, False]),
+    )
+    result = score_v2(pairs, answers, rows)
+    stats = result.checks["comprehension"]["per_style"]["alpha"]
+    pair = stats["pairs"]["p-01"]
+    assert pair["result"] == "win"
+    assert pair["agreement"] == 0.667
+    assert pair["questions"] == 2
+    assert pair["styled"] == 0.833
+    assert pair["unstyled"] == 0.5
+    assert stats["mean_delta"] == 0.333
+    assert stats["mean_agreement"] == 0.667
+    assert result.checks["comprehension"]["design"] == "shared-facts-v2"
+
+
+def test_v2_scoring_without_a_strict_plurality_is_a_tie():
+    pairs, answers, rows = v2_fixture(
+        styled_reps=([True, True], [True, False], [False, False]),
+        unstyled_reps=([True, False], [True, False], [True, False]),
+    )
+    result = score_v2(pairs, answers, rows)
+    pair = result.checks["comprehension"]["per_style"]["alpha"]["pairs"]["p-01"]
+    assert pair["result"] == "tie"
+    assert pair["agreement"] == 0.333
+
+
+def test_v2_scoring_counts_the_buried_facts():
+    reps = ([True, True], [True, True], [True, True])
+    pairs, answers, rows = v2_fixture(
+        styled_reps=reps,
+        unstyled_reps=reps,
+        styled_replies=(["A1", "NOT IN TEXT"], ["A1", "A2"], ["NOT IN TEXT", "NOT IN TEXT"]),
+    )
+    result = score_v2(pairs, answers, rows)
+    stats = result.checks["comprehension"]["per_style"]["alpha"]
+    assert stats["buried_fact_rate"] == 0.5
+
+
+def test_v2_scoring_without_a_replicate_side_leaves_the_pair_unscored():
+    pairs, answers, rows = v2_fixture(styled_reps=([True, True],), unstyled_reps=())
+    result = score_v2(pairs, answers, rows)
     assert result.checks["comprehension"]["per_style"]["alpha"]["pairs"] == {}
     assert any("no usable score for the unstyled answer" in w for w in result.warnings)
 
@@ -289,6 +421,29 @@ def make_project(tmp_path, styled_answers=None):
         )
     write_jsonl(run_dir / "answers.jsonl", answers)
     write_jsonl(run_dir / "fidelity.jsonl", fidelity)
+    loss_rows = [
+        {
+            "type": "meta",
+            "model": "opus",
+            "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
+        },
+        {
+            "type": "call",
+            "key": f"completeness:facts:{sha(UNSTYLED_TEXT)}",
+            "check": "completeness",
+            "output": '["F1", "F2", "F3"]',
+        },
+    ]
+    loss_rows += [
+        {
+            "type": "call",
+            "key": f"completeness:check:{sha(text)}",
+            "check": "completeness",
+            "output": "[true, true, true]",
+        }
+        for text in styled_answers.values()
+    ]
+    write_jsonl(run_dir / "loss-raw.jsonl", loss_rows)
     provenance = {
         "conditions": {"model_requested": "sonnet"},
         "prompt_set": {"sha256": sha256_of(prompts_path)},
@@ -303,7 +458,7 @@ def project(tmp_path):
 
 
 def run_cli(project, *extra, run=None):
-    argv = [str(project / "run"), "--prompts", str(project / "prompts.yaml"), *extra]
+    argv = [str(project / "run"), *extra]
     return cli.main(argv, run=run or FakeJudgeRunner())
 
 
@@ -311,19 +466,25 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert run_cli(project, "--judge") == 0
     summary = json.loads((project / "run" / "value.json").read_text())
     assert summary["pairs"] == {"alpha": ["explanation-01"]}
+    assert summary["judges"]["replicates"] == 3
+    assert summary["judges"]["comprehension_design"] == "shared-facts-v2"
     for check in ("comprehension", "paraphrase", "roundtrip"):
         stats = summary["checks"][check]["per_style"]["alpha"]
         assert (stats["wins"], stats["losses"], stats["ties"]) == (1, 0, 0)
     assert summary["checks"]["comprehension"]["per_style"]["alpha"]["pairs"]["explanation-01"] == {
         "styled": 1.0,
-        "unstyled": 0.5,
+        "unstyled": 0.667,
+        "questions": 3,
+        "agreement": 1.0,
         "result": "win",
     }
+    assert summary["checks"]["comprehension"]["per_style"]["alpha"]["buried_fact_rate"] == 0.0
     assert summary["warnings"] == []
     report = (project / "run" / "value.md").read_text()
-    assert report.count("| alpha | 1 | 0 | 0 |") == 3
+    assert report.count("| alpha | 1 | 0 | 0 |\n") == 2
+    assert "| alpha | 1 | 0 | 0 | 0.333 | 1.0 | 0.0 |" in report
     assert "- alpha: the styled answer holds (1 wins, 0 losses, 0 ties)." in report
-    assert "| explanation-01 | 1.0 | 0.5 | win |" in report
+    assert "| explanation-01 | 3 | 1.0 | 0.667 | 1.0 | win |" in report
     out = capsys.readouterr().out
     assert "alpha: comprehension 1-0-0, paraphrase 1-0-0, roundtrip 1-0-0 (win-loss-tie)" in out
 
@@ -367,6 +528,71 @@ def test_cli_meta_mismatch_exits_2(project):
     with pytest.raises(SystemExit) as error:
         run_cli(project, "--judge", "--questions", "7")
     assert error.value.code == 2
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge", "--replicates", "5")
+    assert error.value.code == 2
+
+
+def test_cli_meta_upgrade_appends_a_row(project):
+    run_dir = project / "run"
+    old_meta = {
+        "type": "meta",
+        "date": "2026-01-01T00:00:00+00:00",
+        "claude_version": "1.0.0",
+        "models": {"reader": "haiku", "grader": "opus"},
+        "questions": 5,
+        "paraphrases": 3,
+        "language": "Italian",
+        "flags": [],
+        "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
+        "prompts_sha256": "abc",
+    }
+    write_jsonl(run_dir / "value-raw.jsonl", [old_meta])
+    assert run_cli(project, "--judge") == 0
+    metas = [
+        row
+        for line in (run_dir / "value-raw.jsonl").read_text().splitlines()
+        if (row := json.loads(line)).get("type") == "meta"
+    ]
+    assert len(metas) == 2
+    assert "comprehension_design" not in metas[0]
+    assert metas[1]["comprehension_design"] == "shared-facts-v2"
+    assert metas[1]["replicates"] == 3
+    assert metas[1]["date"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_cli_without_loss_data_skips_comprehension(project):
+    (project / "run" / "loss-raw.jsonl").unlink()
+    assert run_cli(project, "--judge") == 1
+    summary = json.loads((project / "run" / "value.json").read_text())
+    assert summary["checks"]["comprehension"]["judged"] is False
+    assert summary["checks"]["paraphrase"]["judged"] is True
+    assert any("run style-loss" in w for w in summary["warnings"])
+
+
+def test_cli_stale_loss_data_skips_comprehension(project):
+    loss_path = project / "run" / "loss-raw.jsonl"
+    rows = [json.loads(line) for line in loss_path.read_text().splitlines()]
+    rows[0]["answers_sha256"] = "stale"
+    write_jsonl(loss_path, rows)
+    assert run_cli(project, "--judge") == 1
+    summary = json.loads((project / "run" / "value.json").read_text())
+    assert summary["checks"]["comprehension"]["judged"] is False
+    assert any("comes from other answers" in w for w in summary["warnings"])
+
+
+def test_cli_a_pair_below_the_facts_floor_is_skipped(project):
+    loss_path = project / "run" / "loss-raw.jsonl"
+    rows = [json.loads(line) for line in loss_path.read_text().splitlines()]
+    for row in rows:
+        if row.get("type") == "call":
+            is_facts = row["key"].startswith("completeness:facts:")
+            row["output"] = '["F1"]' if is_facts else "[true]"
+    write_jsonl(loss_path, rows)
+    assert run_cli(project, "--judge") == 1
+    summary = json.loads((project / "run" / "value.json").read_text())
+    assert any("fewer than the floor of 3" in w for w in summary["warnings"])
+    assert summary["checks"]["comprehension"]["judged"] is False
 
 
 def test_cli_judge_model_must_differ_from_the_writer(project):
@@ -393,8 +619,10 @@ def test_cli_shares_the_unstyled_arm_between_styles(tmp_path):
     runner = FakeJudgeRunner()
     assert run_cli(project, "--judge", run=runner) == 0
     turtle_calls = [argv for argv in runner.calls if "turtle" in argv[argv.index("-p") + 1]]
-    # One reader, three restatements, one translation: judged once, not per style.
-    assert len(turtle_calls) == 5
+    # Three restatements and one translation judge the turtle once, not
+    # per style. The comprehension readers read it per pair: two styles
+    # times three replicates.
+    assert len(turtle_calls) == 4 + 2 * 3
     summary = json.loads((project / "run" / "value.json").read_text())
     assert sorted(summary["pairs"]) == ["alpha", "beta"]
 

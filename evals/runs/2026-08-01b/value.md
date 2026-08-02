@@ -7,68 +7,68 @@ Each judge call sees one bare text: no style name, no arm label,
 and never both answers. Thus a judge cannot know which answer is
 styled. The judge models differ from the writer of the answers.
 
-Judges: reader haiku, grader opus. Comprehension uses 5 questions per prompt, ambiguity uses 3 restatements per answer, and the round-trip goes through Italian. Judged on 2026-08-01T20:09:19+00:00.
+Judges: reader haiku, grader opus. Comprehension asks up to 5 questions per pair, with 3 reader replicates per answer, ambiguity uses 3 restatements per answer, and the round-trip goes through Italian. Judged on 2026-08-01T20:09:19+00:00.
 
 ## Comprehension (weak reader)
 
-The grader model writes questions with reference answers from the task prompt alone, so the questions cannot favor an arm. The weak reader answers the questions from one answer text only, and the grader marks each reader answer against the reference. The score is the fraction of questions correct: an answer that drops content loses questions, so a short answer wins only when the content survives. Higher is better.
+The questions come from the shared facts of the pair: the facts that the loss judge extracted from the unstyled answer and found present in the styled answer. A grader call turns each fact into one question, and the fact is the reference answer. The weak reader answers the questions from one answer text, once per replicate, and the grader marks every reply. Each styled replicate meets each unstyled replicate as a win, a loss, or a tie, and the pair outcome is the strict plurality, else a tie. The agreement is the plurality share, and the buried-fact rate counts styled "NOT IN TEXT" replies to a shared fact. The check measures extraction over shared material. Absence belongs to the content-loss report. Higher is better.
 
-| Style | Wins | Losses | Ties |
-|---|---|---|---|
-| plain-language | 2 | 6 | 12 |
-| technical-simplified | 1 | 6 | 11 |
+| Style | Wins | Losses | Ties | Mean delta | Agreement | Buried-fact rate |
+|---|---|---|---|---|---|---|
+| plain-language | 0 | 7 | 13 | -0.123 | 0.95 | 0.06 |
+| technical-simplified | 1 | 5 | 12 | -0.056 | 0.883 | 0.048 |
 
 The styled answer must not score worse than the unstyled answer.
-- plain-language: the styled answer scores worse (2 wins, 6 losses, 12 ties).
-- technical-simplified: the styled answer scores worse (1 wins, 6 losses, 11 ties).
+- plain-language: the styled answer scores worse (0 wins, 7 losses, 13 ties).
+- technical-simplified: the styled answer scores worse (1 wins, 5 losses, 12 ties).
 
 ### plain-language
 
-| Pair | Styled | Unstyled | Result |
-|---|---|---|---|
-| code-review-01 | 0.8 | 1.0 | loss |
-| code-review-02 | 0.6 | 0.8 | loss |
-| code-review-03 | 0.6 | 0.8 | loss |
-| code-review-04 | 0.4 | 0.6 | loss |
-| code-review-05 | 0.8 | 0.8 | tie |
-| debugging-01 | 0.4 | 0.6 | loss |
-| debugging-02 | 0.6 | 0.6 | tie |
-| debugging-03 | 0.6 | 0.6 | tie |
-| debugging-04 | 0.8 | 0.8 | tie |
-| debugging-05 | 0.6 | 0.6 | tie |
-| explanation-01 | 0.8 | 0.8 | tie |
-| explanation-02 | 1.0 | 1.0 | tie |
-| explanation-03 | 0.6 | 0.8 | loss |
-| explanation-04 | 1.0 | 0.8 | win |
-| explanation-05 | 0.8 | 0.8 | tie |
-| summarization-01 | 0.8 | 0.8 | tie |
-| summarization-02 | 0.8 | 0.6 | win |
-| summarization-03 | 1.0 | 1.0 | tie |
-| summarization-04 | 0.8 | 0.8 | tie |
-| summarization-05 | 1.0 | 1.0 | tie |
+| Pair | Questions | Styled | Unstyled | Agreement | Result |
+|---|---|---|---|---|---|
+| code-review-01 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| code-review-02 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| code-review-03 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| code-review-04 | 5 | 0.6 | 1.0 | 1.0 | loss |
+| code-review-05 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| debugging-01 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| debugging-02 | 5 | 0.933 | 1.0 | 0.667 | tie |
+| debugging-03 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| debugging-04 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| debugging-05 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| explanation-01 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| explanation-02 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| explanation-03 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| explanation-04 | 5 | 0.267 | 1.0 | 1.0 | loss |
+| explanation-05 | 5 | 0.933 | 1.0 | 0.667 | tie |
+| summarization-01 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| summarization-02 | 5 | 0.933 | 1.0 | 0.667 | tie |
+| summarization-03 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| summarization-04 | 5 | 0.667 | 1.0 | 1.0 | loss |
+| summarization-05 | 5 | 1.0 | 1.0 | 1.0 | tie |
 
 ### technical-simplified
 
-| Pair | Styled | Unstyled | Result |
-|---|---|---|---|
-| code-review-01 | 1.0 | 1.0 | tie |
-| code-review-02 | 0.6 | 0.8 | loss |
-| code-review-03 | 0.6 | 0.8 | loss |
-| code-review-04 | 0.6 | 0.6 | tie |
-| code-review-05 | 0.8 | 0.8 | tie |
-| debugging-01 | 0.4 | 0.6 | loss |
-| debugging-02 | 0.6 | 0.6 | tie |
-| debugging-03 | 0.8 | 0.6 | win |
-| debugging-04 | 0.8 | 0.8 | tie |
-| debugging-05 | 0.6 | 0.6 | tie |
-| explanation-01 | 0.6 | 0.8 | loss |
-| explanation-02 | 1.0 | 1.0 | tie |
-| explanation-04 | 0.6 | 0.8 | loss |
-| explanation-05 | 0.8 | 0.8 | tie |
-| summarization-01 | 0.8 | 0.8 | tie |
-| summarization-03 | 1.0 | 1.0 | tie |
-| summarization-04 | 0.6 | 0.8 | loss |
-| summarization-05 | 1.0 | 1.0 | tie |
+| Pair | Questions | Styled | Unstyled | Agreement | Result |
+|---|---|---|---|---|---|
+| code-review-01 | 5 | 0.933 | 1.0 | 0.667 | tie |
+| code-review-02 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| code-review-03 | 5 | 0.933 | 1.0 | 0.667 | tie |
+| code-review-04 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| code-review-05 | 5 | 1.0 | 0.867 | 0.667 | win |
+| debugging-01 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| debugging-02 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| debugging-03 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| debugging-04 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| debugging-05 | 5 | 0.867 | 1.0 | 0.667 | loss |
+| explanation-01 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| explanation-02 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| explanation-04 | 5 | 1.0 | 1.0 | 1.0 | tie |
+| explanation-05 | 5 | 0.8 | 1.0 | 1.0 | loss |
+| summarization-01 | 5 | 0.867 | 0.867 | 0.556 | tie |
+| summarization-03 | 5 | 0.933 | 1.0 | 0.667 | tie |
+| summarization-04 | 5 | 0.8 | 0.8 | 1.0 | tie |
+| summarization-05 | 5 | 1.0 | 1.0 | 1.0 | tie |
 
 ## Ambiguity (paraphrase agreement)
 
@@ -188,5 +188,5 @@ One call translates the answer to another language, and a second call translates
 
 - technical-simplified/explanation-03: the pair failed the gate, excluded
 - technical-simplified/summarization-02: the pair failed the gate, excluded
-- plain-language: the styled answer scores worse than the unstyled answer on comprehension (2 wins, 6 losses)
-- technical-simplified: the styled answer scores worse than the unstyled answer on comprehension (1 wins, 6 losses)
+- plain-language: the styled answer scores worse than the unstyled answer on comprehension (0 wins, 7 losses)
+- technical-simplified: the styled answer scores worse than the unstyled answer on comprehension (1 wins, 5 losses)

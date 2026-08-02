@@ -1,0 +1,1251 @@
+{
+  "date": "2026-08-02T07:17:18+00:00",
+  "run": "2026-08-02-drift",
+  "turns": 15,
+  "repeats": 3,
+  "slope_threshold": 0.25,
+  "styles": {
+    "plain-language": {
+      "complete_sessions": 3,
+      "sessions": [
+        {
+          "repeat": 1,
+          "series": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "repeat": 2,
+          "series": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "repeat": 3,
+          "series": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "mean_series": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "slope": 0.0,
+      "intercept": 0.0,
+      "verdict": "flat",
+      "turns": [
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 1,
+          "prompt_id": "explanation-01",
+          "sentences": 17,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "f0938e8d76512cb8b2cb9648c126225c802d1631de65afd2590e757d4ce1147d"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 2,
+          "prompt_id": "code-review-01",
+          "sentences": 24,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "f543aa4e1ede8e135e5a5ce02631fa8cbda0b36e2443964a27a31ab2295a47df"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 3,
+          "prompt_id": "summarization-01",
+          "sentences": 11,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "bd69d9a2b14648c8e0bd13672e0f92c96cc8553ae7abe24117ad970865e4a613"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 4,
+          "prompt_id": "debugging-01",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "31bd2bd03c46d85d0a09d3b872e1858e665401e48d36531d69240feec2639cd4"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 5,
+          "prompt_id": "explanation-02",
+          "sentences": 33,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "2233d9760829bcb46036b24afdacda6e63a8ebcd652f8f7540ba030adabc81e0"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 6,
+          "prompt_id": "code-review-02",
+          "sentences": 17,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "a331d089377b375b61c1352c430bf4d8532997ecab26fd4c927c240d106a7080"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 7,
+          "prompt_id": "summarization-02",
+          "sentences": 10,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "00a4a36211506d7494e3e3089cedc5ad5ef3a40a81fac1a38b36b5c267f85077"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 8,
+          "prompt_id": "debugging-02",
+          "sentences": 10,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "4e4c6d2d90880d7c93253a03d56146b7fb7eeef3885a4637c6c7fe92152866be"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 9,
+          "prompt_id": "explanation-03",
+          "sentences": 14,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "b5447ec8eec3ecef5293151b4fc0415b09091d57c4468a13f8eb515528970c4c"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 10,
+          "prompt_id": "code-review-03",
+          "sentences": 21,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "60930b67b2b9184160977e9f545c99ec317bf435eccbea7c636ef221483836ec"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 11,
+          "prompt_id": "summarization-03",
+          "sentences": 4,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "1eee92ab592c059da4cebcae750ffcde48c65bf7a7f5e739a3e6aa7b793b4005"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 12,
+          "prompt_id": "debugging-03",
+          "sentences": 8,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "2bc723efd40307e88dc6183fb4b166a9e9202e2d873cf447577d5444f1c577fa"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 13,
+          "prompt_id": "explanation-04",
+          "sentences": 20,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "6ab0c5ffa7a786fbf3beabe67f150d581872df3dea114d21edd0c1f209629a2f"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 14,
+          "prompt_id": "code-review-04",
+          "sentences": 16,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "ecfeeb2de2abfa273569c9dda8e3f16f3e2173bf22da4d9098f7fa8ffb17e9a0"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 1,
+          "turn": 15,
+          "prompt_id": "summarization-04",
+          "sentences": 12,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "bdc1e93634de429e0fc65bcf07c18661c5cb6245e28a9b6d6d9bd166feba5bff"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 1,
+          "prompt_id": "code-review-02",
+          "sentences": 14,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "6237e15f5e4d04d6c1a994b1285e43eea7f84e4a6a1396a19e03c89ec56e0459"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 2,
+          "prompt_id": "summarization-02",
+          "sentences": 10,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "dc9b77e9e40556d439057dcb56c61c19da09e955118091e094e7957e4a6df2d5"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 3,
+          "prompt_id": "debugging-02",
+          "sentences": 9,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "db1ec81d7c4b33865955b62e27a9ea0e8e13e9f17e9c5551304ed9d4a9dbfda3"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 4,
+          "prompt_id": "explanation-03",
+          "sentences": 21,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "62a749f5c82790e4ebe585ca1fbc97a305b667fd1711b473560201786d26229d"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 5,
+          "prompt_id": "code-review-03",
+          "sentences": 15,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "cbbc334dcc8316d7acd9c7f6a8d287fbcd5c2d3e7131548fb9d39ffe38cd47fe"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 6,
+          "prompt_id": "summarization-03",
+          "sentences": 4,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "0640d17eba6deedb61b6e982aecd1c174d7c86bc82bb05bf7e46f0d72923b572"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 7,
+          "prompt_id": "debugging-03",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "509d4ae6acc2185136cb5c31485e8a79ee7c8953150e88952ec5f9d233b53d69"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 8,
+          "prompt_id": "explanation-04",
+          "sentences": 25,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "a71d824367014cdf3678bbac60c8393e77924dc908979260f065cb8b66516f71"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 9,
+          "prompt_id": "code-review-04",
+          "sentences": 12,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "b7e2e5bd73e26a4e6922d289330f83959ae1cd3b8efa4abe99b613a573d3f5c5"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 10,
+          "prompt_id": "summarization-04",
+          "sentences": 11,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "c5394a46a73bf63af94bd254ce88a849c3a60f943252477637ba3266e43f7471"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 11,
+          "prompt_id": "explanation-01",
+          "sentences": 34,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "668d44302e501f4a908cc5d4698006c234e1754d20b128bdbdf9fafcdffe6a63"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 12,
+          "prompt_id": "code-review-01",
+          "sentences": 17,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "73656d8c5748d1da8a74c69a29ca321e7f841dc495db647b5fb309f7bda77996"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 13,
+          "prompt_id": "summarization-01",
+          "sentences": 7,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "af0f09bb0fcfbcc424855e8a0825d38b4f3aba946cf77e65caf9885e5ca400b5"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 14,
+          "prompt_id": "debugging-01",
+          "sentences": 4,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "f33e79edb77e323f7cef8da593209146f7de1561032aaffad9e17c2ffa0eaea0"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 2,
+          "turn": 15,
+          "prompt_id": "explanation-02",
+          "sentences": 28,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "16ea1195d150a4104a514759a42272f0e320f89ca92d8c530d34a6f04a58bd16"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 1,
+          "prompt_id": "summarization-03",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "0d1ccc7287dc56b1137b7be250bcc27b60ad857b92c7dd9c89575f50fe501aea"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 2,
+          "prompt_id": "debugging-03",
+          "sentences": 5,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "b5ea2ab622ae85a52995725e101b18f55cf459467c2e7c1e458cdcc76c5b4b21"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 3,
+          "prompt_id": "explanation-04",
+          "sentences": 16,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "2b4f568b8a470925213daa36828d234ee8ea8428c14ba5f369ad78581c890044"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 4,
+          "prompt_id": "code-review-04",
+          "sentences": 15,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "d65776d41a46d8e9a69177d05115224654c4655af614d1c8cb051f89ce1a7642"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 5,
+          "prompt_id": "summarization-04",
+          "sentences": 11,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "d6517d14848c77d1d633dadfe2a1d9743e64d8cd7d5bd51c74d496b8743f490a"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 6,
+          "prompt_id": "explanation-01",
+          "sentences": 19,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "39352109fc193cc144d3c0a534f2b9c8aceb91ee1f91a92bd5bf152ba94b0489"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 7,
+          "prompt_id": "code-review-01",
+          "sentences": 22,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "497040575e4675c80bdedd59cf2544389e2dd587a1291b10109f55ee32a8c22d"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 8,
+          "prompt_id": "summarization-01",
+          "sentences": 7,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "0aab144b0bc5900c4d56ceda20ee7b7423cc7da4665e0c517027fcde56ed37e0"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 9,
+          "prompt_id": "debugging-01",
+          "sentences": 4,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "7feff82f3da9508ef85e112b890c925f5adc91c3bc5b2f624e4764e77e1cb046"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 10,
+          "prompt_id": "explanation-02",
+          "sentences": 22,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "84cd9e385d2fa45037a1c6ee63c70fbbf36201e25055169b6fba9c29e881b96b"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 11,
+          "prompt_id": "code-review-02",
+          "sentences": 14,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "079fc76280a2a7119d05bb71aa1ff15e0c89610b5c452e9653be90f3ab138af3"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 12,
+          "prompt_id": "summarization-02",
+          "sentences": 11,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "9c974fc886c9486516f851224afb31bcbbb1c91a124371ddec97fc9c3c5927f7"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 13,
+          "prompt_id": "debugging-02",
+          "sentences": 10,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "b1221e85e8e79b29e82d797e693d7fd595bef0016f272a46e987d2405af334c3"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 14,
+          "prompt_id": "explanation-03",
+          "sentences": 12,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "1f182c1fc0a83f626e67abba1f59e3ba794ec3eb6ab4cdc32ae5ef4ef52818df"
+        },
+        {
+          "style": "plain-language",
+          "repeat": 3,
+          "turn": 15,
+          "prompt_id": "code-review-03",
+          "sentences": 15,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "0f35f87b561f5dfead685fc73546706eade617dd41c52c43d3ee3bd854effb91"
+        }
+      ]
+    },
+    "technical-simplified": {
+      "complete_sessions": 3,
+      "sessions": [
+        {
+          "repeat": 1,
+          "series": [
+            5.88,
+            14.29,
+            0.0,
+            0.0,
+            12.0,
+            0.0,
+            0.0,
+            0.0,
+            20.0,
+            17.65,
+            75.0,
+            0.0,
+            22.73,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "repeat": 2,
+          "series": [
+            4.76,
+            0.0,
+            13.33,
+            8.7,
+            0.0,
+            14.29,
+            0.0,
+            13.33,
+            10.0,
+            8.33,
+            20.0,
+            13.64,
+            0.0,
+            0.0,
+            20.69
+          ]
+        },
+        {
+          "repeat": 3,
+          "series": [
+            11.11,
+            0.0,
+            12.5,
+            6.25,
+            0.0,
+            17.65,
+            0.0,
+            0.0,
+            0.0,
+            9.09,
+            7.14,
+            0.0,
+            0.0,
+            23.81,
+            6.67
+          ]
+        }
+      ],
+      "mean_series": [
+        7.25,
+        4.76,
+        8.61,
+        4.98,
+        4.0,
+        10.65,
+        0.0,
+        4.44,
+        10.0,
+        11.69,
+        34.05,
+        4.55,
+        7.58,
+        7.94,
+        9.12
+      ],
+      "slope": 0.455,
+      "intercept": 4.998,
+      "verdict": "growing",
+      "turns": [
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 1,
+          "prompt_id": "explanation-01",
+          "sentences": 17,
+          "violations": 1,
+          "by_rule": {
+            "banned-word": 1
+          },
+          "rate": 5.88,
+          "answer_sha256": "ba2514f29eb20fe813d80860de95df5aeea16cceef35653eb6db49b058ce3d19"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 2,
+          "prompt_id": "code-review-01",
+          "sentences": 21,
+          "violations": 3,
+          "by_rule": {
+            "banned-modal": 3
+          },
+          "rate": 14.29,
+          "answer_sha256": "7965a7ff90971e3afbffd9af5bee4e33e3f5634a8ca11e73694dde72e0cf03a7"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 3,
+          "prompt_id": "summarization-01",
+          "sentences": 9,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "24d416d8af2047a08f3bab37e03d30f35dc31cf78c80db66c99218d462196b99"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 4,
+          "prompt_id": "debugging-01",
+          "sentences": 3,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "c91e5a8c110f3cdee688c6a4be175d3da27fb1685459df72396160006136d362"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 5,
+          "prompt_id": "explanation-02",
+          "sentences": 25,
+          "violations": 3,
+          "by_rule": {
+            "banned-word": 3
+          },
+          "rate": 12.0,
+          "answer_sha256": "c0cfecd36342386684c284afb8eceb52d569e6bbb2edfdcb6ce8eaa35fce269f"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 6,
+          "prompt_id": "code-review-02",
+          "sentences": 15,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "6349bca02cef3d1cfe511a96752ddfda65050d34348487d3acbdad134bdef315"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 7,
+          "prompt_id": "summarization-02",
+          "sentences": 11,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "36cccb9184aa1aa6e5d481e000e96faa7ae3d97cb7ca9346a70af48988eb9e5a"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 8,
+          "prompt_id": "debugging-02",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "808e139751db2268cc87a4f7d57419ce730ce3a98e57ebf993e2c6cfe8e8144d"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 9,
+          "prompt_id": "explanation-03",
+          "sentences": 20,
+          "violations": 4,
+          "by_rule": {
+            "banned-word": 4
+          },
+          "rate": 20.0,
+          "answer_sha256": "0fc926cc11937fdb3f2943c1e450ac5dad14454be72cfaa7a5846fb500483a0a"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 10,
+          "prompt_id": "code-review-03",
+          "sentences": 17,
+          "violations": 3,
+          "by_rule": {
+            "banned-modal": 2,
+            "banned-word": 1
+          },
+          "rate": 17.65,
+          "answer_sha256": "f328c99ae21e52013254d14048f829a32439c45d696686c63de6041e5e74c582"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 11,
+          "prompt_id": "summarization-03",
+          "sentences": 4,
+          "violations": 3,
+          "by_rule": {
+            "banned-word": 1,
+            "sentence-length": 2
+          },
+          "rate": 75.0,
+          "answer_sha256": "933fb3c4f72d800d3ab0bb383234d375166187d0be5aeeedb9410dd31bed4e51"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 12,
+          "prompt_id": "debugging-03",
+          "sentences": 5,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "545c5a7f0ef21b1dead6ebfbdc2c3679811ecd77648a90189f0d7948878115fc"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 13,
+          "prompt_id": "explanation-04",
+          "sentences": 22,
+          "violations": 5,
+          "by_rule": {
+            "banned-word": 1,
+            "sentence-length": 4
+          },
+          "rate": 22.73,
+          "answer_sha256": "7804890406a86a3343409067f1b8bd7d09bd1f3f742a89d73fb464039f67238f"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 14,
+          "prompt_id": "code-review-04",
+          "sentences": 15,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "90a70083b15949338e92dd707b89c6ec241a7a26f0c437bfba6b848dc6f737f1"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 1,
+          "turn": 15,
+          "prompt_id": "summarization-04",
+          "sentences": 13,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "98bbc908504633cfa038157192ab7917e7d6739f9c03c327cbbf796795d23ad0"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 1,
+          "prompt_id": "code-review-02",
+          "sentences": 21,
+          "violations": 1,
+          "by_rule": {
+            "banned-word": 1
+          },
+          "rate": 4.76,
+          "answer_sha256": "5a8b1563a4ab15bda5f5fe0eb614f1b85baa73dbe2ba2e58913e51b7c4efa764"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 2,
+          "prompt_id": "summarization-02",
+          "sentences": 11,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "d2d5ffa621d5b88759de577b026c7b155a70040936c217d27989dea72e5e7edc"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 3,
+          "prompt_id": "debugging-02",
+          "sentences": 15,
+          "violations": 2,
+          "by_rule": {
+            "banned-modal": 2
+          },
+          "rate": 13.33,
+          "answer_sha256": "e19ea5b046d3703c78ba62d9a7e40cb2d300894d226ac7062edb9de8d823a254"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 4,
+          "prompt_id": "explanation-03",
+          "sentences": 23,
+          "violations": 2,
+          "by_rule": {
+            "banned-word": 2
+          },
+          "rate": 8.7,
+          "answer_sha256": "ee6cb1548e1f2e48eea13b6ef061a9eef5d66eb3234f4959ac2b5670f163946c"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 5,
+          "prompt_id": "code-review-03",
+          "sentences": 18,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "835c0bc415fa6d813893356d2b342da9891356bf2d10c399825a334ce184fea4"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 6,
+          "prompt_id": "summarization-03",
+          "sentences": 7,
+          "violations": 1,
+          "by_rule": {
+            "banned-word": 1
+          },
+          "rate": 14.29,
+          "answer_sha256": "979d84beb7442dddf96f9fe9eb0b57daddaad82cacc0559201fb51052a3afddd"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 7,
+          "prompt_id": "debugging-03",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "e50c41b88f8dcb41eacde5eb25a9e37042664c971b68ceffed904a073ff925d9"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 8,
+          "prompt_id": "explanation-04",
+          "sentences": 30,
+          "violations": 4,
+          "by_rule": {
+            "sentence-length": 4
+          },
+          "rate": 13.33,
+          "answer_sha256": "1f554e2b64fbc3da3f3fdc8ddb87a6e031178346441b0339b41325b7e38274ae"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 9,
+          "prompt_id": "code-review-04",
+          "sentences": 20,
+          "violations": 2,
+          "by_rule": {
+            "banned-word": 2
+          },
+          "rate": 10.0,
+          "answer_sha256": "4a9b2494be461e4712f17b78a39ed6913d8f5e570c5693dfc8b31a2c93c03f24"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 10,
+          "prompt_id": "summarization-04",
+          "sentences": 12,
+          "violations": 1,
+          "by_rule": {
+            "banned-word": 1
+          },
+          "rate": 8.33,
+          "answer_sha256": "1c0848293b6ddb9420a48d91137ed442e0b3a6c51c71cd2967c0fdcf0295df19"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 11,
+          "prompt_id": "explanation-01",
+          "sentences": 30,
+          "violations": 6,
+          "by_rule": {
+            "banned-word": 4,
+            "sentence-length": 2
+          },
+          "rate": 20.0,
+          "answer_sha256": "99a301c12cc082a25f7ead05019dba88b8f436e73528644c48ebb45f90092075"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 12,
+          "prompt_id": "code-review-01",
+          "sentences": 22,
+          "violations": 3,
+          "by_rule": {
+            "banned-modal": 1,
+            "sentence-length": 2
+          },
+          "rate": 13.64,
+          "answer_sha256": "b4c2c3835053218aff2386a53fcbd4da2541a01e183f69b35d3e1985b6df691d"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 13,
+          "prompt_id": "summarization-01",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "17293b4a7c4e94f971b5a3ae82cf5eb4afd2aa92734b65d64c40c3e8ba9d4df4"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 14,
+          "prompt_id": "debugging-01",
+          "sentences": 7,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "1dff110b6bb67d4b3314d40c6e8e4442100641602c7d0e50b1cdf5ca75daebf0"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 2,
+          "turn": 15,
+          "prompt_id": "explanation-02",
+          "sentences": 29,
+          "violations": 6,
+          "by_rule": {
+            "banned-modal": 2,
+            "banned-word": 1,
+            "sentence-length": 3
+          },
+          "rate": 20.69,
+          "answer_sha256": "020eec770c2c3386414d215ca8e250ad216a46b9ee6817a2df5525e3b325c9b0"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 1,
+          "prompt_id": "summarization-03",
+          "sentences": 9,
+          "violations": 1,
+          "by_rule": {
+            "banned-word": 1
+          },
+          "rate": 11.11,
+          "answer_sha256": "cece2d914d884561e9a9b03c12d4d0719574cf061f911e9692c8f04c6b298546"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 2,
+          "prompt_id": "debugging-03",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "e0d25b4eeb8400a81bb1ef59957c13d45000655eadb72f95432397d0dcee85b0"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 3,
+          "prompt_id": "explanation-04",
+          "sentences": 16,
+          "violations": 2,
+          "by_rule": {
+            "sentence-length": 2
+          },
+          "rate": 12.5,
+          "answer_sha256": "d258cf7027731259cda1b419a2ae4017aa9b24414dd15222e841793153731523"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 4,
+          "prompt_id": "code-review-04",
+          "sentences": 16,
+          "violations": 1,
+          "by_rule": {
+            "banned-word": 1
+          },
+          "rate": 6.25,
+          "answer_sha256": "eb80b28ff6cfa3d3519446b7e03fa75184bc59aca2c5aa8428ecde76cc40d8af"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 5,
+          "prompt_id": "summarization-04",
+          "sentences": 11,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "c47637d6ac738ef6ef8b2c88e744cf572e98c061e96b63599e100f1683452164"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 6,
+          "prompt_id": "explanation-01",
+          "sentences": 17,
+          "violations": 3,
+          "by_rule": {
+            "banned-word": 2,
+            "sentence-length": 1
+          },
+          "rate": 17.65,
+          "answer_sha256": "498214595a5db4e83fd3cd20ada2b6a7188823eabe3dab01024694818c649d43"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 7,
+          "prompt_id": "code-review-01",
+          "sentences": 22,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "2373679472704ed368e94dac2918262021280dab3ea845c77d04535729e00f70"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 8,
+          "prompt_id": "summarization-01",
+          "sentences": 6,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "82568777bc5056b7d45ccbda23d8b41cce42083e14ccbc0600073de3ccf15f3a"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 9,
+          "prompt_id": "debugging-01",
+          "sentences": 5,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "68b015806418ae3a292a6d0820a520feb9b61e52107384048eb32225fb9c76b8"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 10,
+          "prompt_id": "explanation-02",
+          "sentences": 22,
+          "violations": 2,
+          "by_rule": {
+            "banned-word": 2
+          },
+          "rate": 9.09,
+          "answer_sha256": "9498906622234e3756bc50b8a2e696e79346496e8f1a2ffa6123f7a35955f2b1"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 11,
+          "prompt_id": "code-review-02",
+          "sentences": 14,
+          "violations": 1,
+          "by_rule": {
+            "sentence-length": 1
+          },
+          "rate": 7.14,
+          "answer_sha256": "39f3477004ccca51a593a3a16644f63402d43f93ecb79894199645e0aed9e1eb"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 12,
+          "prompt_id": "summarization-02",
+          "sentences": 10,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "b4419ebb03fe59d9f038205aa5283fbd671583e9189126d3ed0717894b79a596"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 13,
+          "prompt_id": "debugging-02",
+          "sentences": 8,
+          "violations": 0,
+          "by_rule": {},
+          "rate": 0.0,
+          "answer_sha256": "5f39b899c27888305931516ffefea631778cace40c5670bca9aa1f9475cc634a"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 14,
+          "prompt_id": "explanation-03",
+          "sentences": 21,
+          "violations": 5,
+          "by_rule": {
+            "banned-word": 4,
+            "sentence-length": 1
+          },
+          "rate": 23.81,
+          "answer_sha256": "d4203a4cd9caba9d7ccdfff77fb31210816969b3b5db78fa3dae04531fe2eb1c"
+        },
+        {
+          "style": "technical-simplified",
+          "repeat": 3,
+          "turn": 15,
+          "prompt_id": "code-review-03",
+          "sentences": 15,
+          "violations": 1,
+          "by_rule": {
+            "sentence-length": 1
+          },
+          "rate": 6.67,
+          "answer_sha256": "f18596531a4dc767e0b4b70516c6cd6092b44d277deae912f560d8f095ae61cb"
+        }
+      ]
+    }
+  },
+  "rules": {
+    "plain-language": {
+      "file": "rules/plain-language.rules.yaml",
+      "sha256": "b2175b219907fcf815762e53fd9c4ac11f86901b6bce590224aeb6d5db6485a8"
+    },
+    "technical-simplified": {
+      "file": "rules/technical-simplified.rules.yaml",
+      "sha256": "f7120e410a1863e07bda72bd5b0fe07c7ca0cbad642c9a093681e86497025fdd"
+    }
+  },
+  "linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  },
+  "run_linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  },
+  "warnings": []
+}

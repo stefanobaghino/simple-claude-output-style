@@ -5,7 +5,7 @@ This directory holds the evaluation harness for the output styles in
 the marketplace serves only the `plugin/` directory, so installers never
 receive the harness.
 
-The harness has six components. The first is a deterministic linter.
+The harness has seven components. The first is a deterministic linter.
 It checks a Markdown text against the writing rules of a style and
 reports each violation, plus a rate per 100 sentences. The second is a
 pair runner. It produces, per prompt, one answer per style and one
@@ -23,7 +23,10 @@ with the unstyled answer on three reader-facing checks, as win, loss,
 or tie. The sixth is a content-loss report. It measures, per gated
 pair, the fraction of the facts of the unstyled answer that survive
 in the styled answer, and each uncertain claim that lost its
-uncertainty. See the tracking issue in this repository for the other
+uncertainty. The seventh is a drift report. It runs a scripted long
+session per style, several times, lints every turn, and shows the
+violation rate over turn positions with a verdict per style: flat or
+growing. See the tracking issue in this repository for the other
 planned components.
 
 ## Rule files
@@ -52,6 +55,7 @@ uv run style-gate runs/<date>
 uv run style-cost runs/<date> [--probe]
 uv run style-value runs/<date> [--judge]
 uv run style-loss runs/<date> [--judge]
+uv run style-drift [--generate] [--out runs/<date>-drift]
 ```
 
 The linter exits with code 1 when it finds a violation.
@@ -121,6 +125,23 @@ the same invocation runs again. Without `--judge` the tool rescores
 the stored raw data offline. The exit codes equal the exit codes of
 `style-value`.
 
+The drift report owns its own run directory, because it measures
+sessions, not pairs. A session is 15 scripted turns in one Claude Code
+session, with the style active: each turn resumes the session of the
+previous turn, so the context grows. The turns reuse 15 of the 20 pair
+prompts, and each repeat rotates the order, so a hard prompt does not
+always sit at the same turn position. The linter checks every turn
+with the rule set of the style. The verdict per style compares the
+slope of the mean rate series against a threshold: "growing" when the
+slope is above the threshold, else "flat". `--generate` runs the
+missing sessions; an interrupted run restarts an incomplete session
+from turn 1. Session persistence stays on for these calls, so session
+files remain under `~/.claude` after a run. Without `--generate` the
+tool rescores the stored session data offline. Exit codes: 0 when
+every session is complete, every verdict is flat, and no warnings
+exist, 1 when a session failed or a verdict is "growing" or warnings
+exist, 2 when the run cannot run or cannot be scored.
+
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,
@@ -143,6 +164,12 @@ runs/<YYYY-MM-DD>/
   loss-raw.jsonl    # judge provenance plus one line per raw judge call
   loss.json         # fact and hedge survival per style, machine-readable
   loss.md           # the content-loss report for a human
+
+runs/<YYYY-MM-DD>-drift/
+  provenance.json   # like the pair runs, plus the session script per repeat
+  sessions.jsonl    # one line per turn, with the session-id chain
+  drift.json        # rate series, slope, and verdict per style, machine-readable
+  drift.md          # the drift report for a human
 ```
 
 A pair is not stored twice: it is the line for `(prompt, style)` plus

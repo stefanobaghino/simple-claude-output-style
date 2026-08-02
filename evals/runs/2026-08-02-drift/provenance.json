@@ -1,0 +1,107 @@
+{
+  "date": "2026-08-02T07:17:13+00:00",
+  "prompt_set": {
+    "path": "prompts/prompts.yaml",
+    "sha256": "cbba00b37d427654d3e9e0689db48016a72c23b4d72823d89bc176b114d73150"
+  },
+  "conditions": {
+    "model_requested": "sonnet",
+    "claude_version": "2.1.220 (Claude Code)",
+    "flags": [
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--max-turns",
+      "1",
+      "--disallowedTools",
+      "*",
+      "--exclude-dynamic-system-prompt-sections",
+      "--strict-mcp-config"
+    ],
+    "settings": {
+      "base": {
+        "disableAllHooks": true
+      },
+      "styled_arm": {
+        "outputStyle": "<style>",
+        "extra_flag": "--plugin-dir"
+      }
+    }
+  },
+  "repo": {
+    "commit": "6b77b4bfc91e942632baff6e432d2478b0037463",
+    "dirty": true
+  },
+  "styles": {
+    "plain-language": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/plain-language.md",
+      "sha256": "d9acbffcfb85937603524c3defc7491f91e86f24fcc679ec1247313b80bcbc04"
+    },
+    "technical-simplified": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/technical-simplified.md",
+      "sha256": "69bf572f15b1b570bd8ace5e93960150ec5f0096f0b71b9f42f8833ccaa4f089"
+    }
+  },
+  "linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  },
+  "drift": {
+    "turns": 15,
+    "repeats": 3,
+    "resume": true,
+    "script": {
+      "1": [
+        "explanation-01",
+        "code-review-01",
+        "summarization-01",
+        "debugging-01",
+        "explanation-02",
+        "code-review-02",
+        "summarization-02",
+        "debugging-02",
+        "explanation-03",
+        "code-review-03",
+        "summarization-03",
+        "debugging-03",
+        "explanation-04",
+        "code-review-04",
+        "summarization-04"
+      ],
+      "2": [
+        "code-review-02",
+        "summarization-02",
+        "debugging-02",
+        "explanation-03",
+        "code-review-03",
+        "summarization-03",
+        "debugging-03",
+        "explanation-04",
+        "code-review-04",
+        "summarization-04",
+        "explanation-01",
+        "code-review-01",
+        "summarization-01",
+        "debugging-01",
+        "explanation-02"
+      ],
+      "3": [
+        "summarization-03",
+        "debugging-03",
+        "explanation-04",
+        "code-review-04",
+        "summarization-04",
+        "explanation-01",
+        "code-review-01",
+        "summarization-01",
+        "debugging-01",
+        "explanation-02",
+        "code-review-02",
+        "summarization-02",
+        "debugging-02",
+        "explanation-03",
+        "code-review-03"
+      ]
+    }
+  }
+}

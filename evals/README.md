@@ -202,3 +202,11 @@ A pair is not stored twice: it is the line for `(prompt, style)` plus
 the line for `(prompt, null)`. The data is plain text in plain git: no
 LFS, and no single file above about 5 MB. Keep raw transcripts out;
 store only what the reports consume.
+
+## Keep this document current
+
+This document is the only description of the harness workflow. A change
+to the harness must update this document in the same PR. The sections
+that go stale are: the component list in the introduction, "How to add
+a style", "How to run", and "Run data". No automated check makes sure that
+the document matches the code, so the reviewer must check it.

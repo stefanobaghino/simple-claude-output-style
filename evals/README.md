@@ -220,6 +220,14 @@ the line for `(prompt, null)`. The data is plain text in plain git: no
 LFS, and no single file above about 5 MB. Keep raw transcripts out;
 store only what the reports consume.
 
+## License
+
+The Apache License 2.0 covers this directory. See [LICENSE](LICENSE). One
+exception exists: the Zero-Clause BSD license of the repository root covers
+the rule files in `rules/`, because a rule file pairs with a style text, and
+a fork of a style needs the matched rule file. The License section of the
+top-level `README.md` states the full split.
+
 ## Keep this document current
 
 This document is the only description of the harness workflow. A change

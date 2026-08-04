@@ -127,6 +127,13 @@ text, and a grader marks every reply), ambiguity through paraphrase
 (independent restatements of one answer text, scored by their mutual
 agreement), and translation round-trip (one answer text goes to
 another language and back, scored by the lexical loss). The
+paraphrase check and the round-trip check build on lexical
+similarity, so a shorter text can score better, because less text
+exists to diverge on. The report thus states, per check and style,
+the length confound: the correlation between the length ratio of a
+pair (styled words over unstyled words) and the styled advantage
+(the score gain of the styled arm). A negative value means that the
+shorter styled answers score better. The
 comprehension questions come from the shared facts of the pair. The
 completeness check of the content-loss report mined these facts in
 both directions, so a shared fact exists in two wordings, and the
@@ -210,7 +217,7 @@ runs/<YYYY-MM-DD>/
   cost.json         # answer-length ratios and input overhead, machine-readable
   cost.md           # the token-cost report for a human
   value-raw.jsonl   # judge provenance plus one line per raw judge call
-  value.json        # win/loss/tie per check and per style, machine-readable
+  value.json        # win/loss/tie and length confound per check and style
   value.md          # the reader-value report for a human
   loss-raw.jsonl    # judge provenance plus one line per raw judge call
   loss.json         # fact and hedge survival per style, machine-readable

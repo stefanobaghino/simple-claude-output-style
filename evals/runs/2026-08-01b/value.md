@@ -79,6 +79,10 @@ Independent reader calls restate one answer text in their own words. The score i
 | plain-language | 13 | 2 | 5 |
 | technical-simplified | 14 | 4 | 0 |
 
+The length confound is the correlation between the length ratio of a pair (styled words over unstyled words) and the styled advantage (the score gain of the styled arm). A negative value means that the shorter styled answers score better.
+- plain-language: Pearson 0.323, Spearman 0.397, over 20 pairs.
+- technical-simplified: Pearson 0.294, Spearman 0.34, over 18 pairs.
+
 ### plain-language
 
 | Pair | Styled | Unstyled | Result |
@@ -135,6 +139,10 @@ One call translates the answer to another language, and a second call translates
 |---|---|---|---|
 | plain-language | 7 | 2 | 11 |
 | technical-simplified | 12 | 4 | 2 |
+
+The length confound is the correlation between the length ratio of a pair (styled words over unstyled words) and the styled advantage (the score gain of the styled arm). A negative value means that the shorter styled answers score better.
+- plain-language: Pearson 0.363, Spearman 0.438, over 20 pairs.
+- technical-simplified: Pearson 0.27, Spearman 0.271, over 18 pairs.
 
 ### plain-language
 

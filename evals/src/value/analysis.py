@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from statistics import StatisticsError, correlation
 
 from loss.judges import parse_string_list
 
 from .judges import CHECKS, parse_bools, parse_questions, parse_strings
-from .similarity import mean_pairwise_f1, unigram_f1
+from .similarity import mean_pairwise_f1, tokens, unigram_f1
 
 TIE_EPSILON = 0.02
 """Two similarity scores closer than this count as a tie."""
@@ -40,6 +41,28 @@ CHECK_RULES = {
 class ValueResult:
     checks: dict[str, dict]
     warnings: list[str]
+
+
+def _length_correlation(samples: list[tuple[float, float]]) -> dict:
+    """Pearson and Spearman between the length ratio and the advantage.
+
+    A lexical check can reward the shorter text, because less text
+    exists to diverge on. Each sample pairs the length ratio of a pair
+    (styled words over unstyled words) with the styled advantage (the
+    unrounded score gain of the styled arm). A negative correlation
+    means that the shorter styled answers score better. A statistic
+    becomes None when it is not computable: fewer than two samples, or
+    a constant input.
+    """
+    result: dict = {"n": len(samples)}
+    ratios = [ratio for ratio, _ in samples]
+    advantages = [advantage for _, advantage in samples]
+    for name, method in (("pearson", "linear"), ("spearman", "ranked")):
+        try:
+            result[name] = round(correlation(ratios, advantages, method=method), 3)
+        except StatisticsError:
+            result[name] = None
+    return result
 
 
 def select_pairs(
@@ -330,9 +353,12 @@ def score_checks(
         for style in sorted(pairs):
             tally = {"win": 0, "loss": 0, "tie": 0}
             pair_scores: dict[str, dict] = {}
+            length_samples: list[tuple[float, float]] = []
             for prompt_id in pairs[style]:
-                styled = scorers[check](prompt_id, answers[(prompt_id, style)])
-                unstyled = scorers[check](prompt_id, answers[(prompt_id, None)])
+                styled_arm = answers[(prompt_id, style)]
+                unstyled_arm = answers[(prompt_id, None)]
+                styled = scorers[check](prompt_id, styled_arm)
+                unstyled = scorers[check](prompt_id, unstyled_arm)
                 missing = [
                     side
                     for side, score in (("styled", styled), ("unstyled", unstyled))
@@ -346,6 +372,11 @@ def score_checks(
                     continue
                 outcome = _outcome(styled, unstyled, rules["higher_wins"], rules["tie_epsilon"])
                 tally[outcome] += 1
+                unstyled_words = len(tokens(unstyled_arm["text"]))
+                if unstyled_words > 0:
+                    ratio = len(tokens(styled_arm["text"])) / unstyled_words
+                    advantage = styled - unstyled if rules["higher_wins"] else unstyled - styled
+                    length_samples.append((ratio, advantage))
                 pair_scores[prompt_id] = {
                     "styled": round(styled, 3),
                     "unstyled": round(unstyled, 3),
@@ -355,6 +386,7 @@ def score_checks(
                 "wins": tally["win"],
                 "losses": tally["loss"],
                 "ties": tally["tie"],
+                "length_correlation": _length_correlation(length_samples),
                 "pairs": pair_scores,
             }
         checks_out[check] = {"judged": True, "per_style": per_style}

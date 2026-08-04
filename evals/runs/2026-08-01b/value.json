@@ -1,5 +1,5 @@
 {
-  "date": "2026-08-04T12:27:04+00:00",
+  "date": "2026-08-04T16:35:47+00:00",
   "run": "2026-08-01b",
   "judges": {
     "models": {
@@ -512,6 +512,11 @@
           "wins": 13,
           "losses": 2,
           "ties": 5,
+          "length_correlation": {
+            "n": 20,
+            "pearson": 0.323,
+            "spearman": 0.397
+          },
           "pairs": {
             "code-review-01": {
               "styled": 0.648,
@@ -619,6 +624,11 @@
           "wins": 14,
           "losses": 4,
           "ties": 0,
+          "length_correlation": {
+            "n": 18,
+            "pearson": 0.294,
+            "spearman": 0.34
+          },
           "pairs": {
             "code-review-01": {
               "styled": 0.621,
@@ -721,6 +731,11 @@
           "wins": 7,
           "losses": 2,
           "ties": 11,
+          "length_correlation": {
+            "n": 20,
+            "pearson": 0.363,
+            "spearman": 0.438
+          },
           "pairs": {
             "code-review-01": {
               "styled": 0.07,
@@ -828,6 +843,11 @@
           "wins": 12,
           "losses": 4,
           "ties": 2,
+          "length_correlation": {
+            "n": 18,
+            "pearson": 0.27,
+            "spearman": 0.271
+          },
           "pairs": {
             "code-review-01": {
               "styled": 0.074,

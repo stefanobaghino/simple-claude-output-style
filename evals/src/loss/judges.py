@@ -1,15 +1,20 @@
 """Run the blind judge calls of the content-loss checks.
 
-Each check has two call shapes. An extraction call sees only the
-unstyled text and lists its facts or its uncertain claims. A check
-call sees only the styled text plus the extracted list. The extracted
-items travel between the calls, never the source text, so no call
-sees both answers of a pair. No prompt names a style or an arm.
+Each check has two call shapes. An extraction call sees one answer
+text and lists its facts or its uncertain claims. A check call sees
+the other answer text plus the extracted list. The extracted items
+travel between the calls, never the source text, so no call sees
+both answers of a pair. No prompt names a style or an arm.
 
-The extraction is keyed by the sha256 of the unstyled text, so two
-styles that share an unstyled answer share the extraction. The rows
-go to the same sink design as the reader-value checks, and a later
-run reuses every stored key.
+The completeness check mines both directions: the facts of the
+unstyled answer are checked against the styled answer, and the facts
+of the styled answer are checked against the unstyled answer. The
+hedging check mines one direction only. An extraction is keyed by the
+sha256 of its source text, and both check directions are keyed by the
+sha256 of the styled text, so two styles that share an unstyled
+answer share the extraction but never a check row. The rows go to the
+same sink design as the reader-value checks, and a later run reuses
+every stored key.
 """
 
 from __future__ import annotations
@@ -24,6 +29,15 @@ from value.judges import JudgeSession, RowSink, extract_json, parse_bools
 
 CHECKS = ("completeness", "hedging")
 VERDICTS = ("hedged", "certain", "absent")
+
+FACT_MINE = "two-way"
+"""The design tag of the fact mine, stored in the meta row.
+
+A raw file without the tag holds a one-way mine: the facts of the
+unstyled answer only. The two-way mine adds the facts of the styled
+answer plus a reverse check against the unstyled answer, so the
+scorer can count the additions of a pair.
+"""
 
 FACTS_PROMPT = """\
 List the distinct factual claims that the text below states. Keep
@@ -92,6 +106,7 @@ def build_meta(*, model: str, answers_sha256: str) -> dict:
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "claude_version": claude_version(),
         "model": model,
+        "fact_mine": FACT_MINE,
         "flags": list(ISOLATION_FLAGS),
         "answers_sha256": answers_sha256,
     }
@@ -113,20 +128,33 @@ def _unstyled_arms(
     return sorted(arms.values())
 
 
+def _styled_arms(
+    pairs: dict[str, list[str]], answers: dict[tuple[str, str | None], dict]
+) -> list[tuple[str, dict]]:
+    """The unique styled arms of the pairs, one per sha256."""
+    arms: dict[str, tuple[str, dict]] = {}
+    for style in sorted(pairs):
+        for prompt_id in pairs[style]:
+            arm = answers[(prompt_id, style)]
+            arms.setdefault(arm["sha256"], (prompt_id, arm))
+    return [arms[sha] for sha in sorted(arms)]
+
+
 def _extract(
     session: JudgeSession,
-    pairs: dict[str, list[str]],
-    answers: dict[tuple[str, str | None], dict],
+    arms: list[tuple[str, dict]],
     *,
     check: str,
     role: str,
     prompt_template: str,
     model: str,
     noun: str,
+    consequence: str | None = None,
 ) -> dict[str, list[str]]:
-    """One extraction call per unique unstyled text. Returns lists by sha."""
+    """One extraction call per unique text. Returns lists by sha."""
     lists: dict[str, list[str]] = {}
-    for prompt_id, arm in _unstyled_arms(pairs, answers):
+    consequence = consequence or f"{check} skips its pairs"
+    for prompt_id, arm in arms:
         items = session.structured(
             validate=parse_string_list,
             key=f"{check}:{role}:{arm['sha256']}",
@@ -140,7 +168,7 @@ def _extract(
         if items is None:
             session.warnings.append(
                 f"{prompt_id}: the {noun} extraction returned no usable list for the text "
-                f"{arm['sha256'][:12]}, so {check} skips its pairs"
+                f"{arm['sha256'][:12]}, so {consequence}"
             )
             continue
         lists[arm["sha256"]] = items
@@ -158,28 +186,41 @@ def _check_pairs(
     validate_factory,
     model: str,
     noun: str,
+    reverse: bool = False,
 ) -> None:
-    """One check call per pair whose unstyled arm has a non-empty list."""
+    """One check call per pair whose source arm has a non-empty list.
+
+    Forward, the styled text is checked against the facts of the
+    unstyled answer. In reverse, the unstyled text is checked against
+    the facts of the styled answer. The key carries the styled sha in
+    both directions, so two styles that share one unstyled answer
+    never share a check row.
+    """
+    role = "reverse" if reverse else "check"
     for style in sorted(pairs):
         for prompt_id in pairs[style]:
-            items = lists.get(answers[(prompt_id, None)]["sha256"])
+            styled = answers[(prompt_id, style)]
+            unstyled = answers[(prompt_id, None)]
+            source, checked = (styled, unstyled) if reverse else (unstyled, styled)
+            items = lists.get(source["sha256"])
             if not items:
                 continue
-            styled = answers[(prompt_id, style)]
             marks = session.structured(
                 validate=validate_factory(len(items)),
-                key=f"{check}:check:{styled['sha256']}",
+                key=f"{check}:{role}:{styled['sha256']}",
                 check=check,
-                role="check",
+                role=role,
                 model=model,
-                prompt=prompt_template.format(text=styled["text"], claims=_numbered(items)),
+                prompt=prompt_template.format(text=checked["text"], claims=_numbered(items)),
                 prompt_id=prompt_id,
-                answer_sha256=styled["sha256"],
+                answer_sha256=checked["sha256"],
             )
             if marks is None:
+                what = f"the {noun} reverse check" if reverse else f"the {noun} check"
+                outcome = "the additions of the pair are" if reverse else "the pair is"
                 session.warnings.append(
-                    f"{prompt_id}: the {noun} check returned no usable marks for the text "
-                    f"{styled['sha256'][:12]}, so the pair is unscored"
+                    f"{prompt_id}: {what} returned no usable marks for the text "
+                    f"{checked['sha256'][:12]}, so {outcome} unscored"
                 )
 
 
@@ -205,8 +246,7 @@ def run_judges(
     if "completeness" in checks:
         facts = _extract(
             session,
-            pairs,
-            answers,
+            _unstyled_arms(pairs, answers),
             check="completeness",
             role="facts",
             prompt_template=FACTS_PROMPT,
@@ -224,12 +264,33 @@ def run_judges(
             model=model,
             noun="fact",
         )
+        styled_facts = _extract(
+            session,
+            _styled_arms(pairs, answers),
+            check="completeness",
+            role="facts",
+            prompt_template=FACTS_PROMPT,
+            model=model,
+            noun="fact",
+            consequence="the additions of its pairs are unscored",
+        )
+        _check_pairs(
+            session,
+            pairs,
+            answers,
+            styled_facts,
+            check="completeness",
+            prompt_template=FACTS_CHECK_PROMPT,
+            validate_factory=lambda n: partial(parse_bools, n=n),
+            model=model,
+            noun="fact",
+            reverse=True,
+        )
 
     if "hedging" in checks:
         claims = _extract(
             session,
-            pairs,
-            answers,
+            _unstyled_arms(pairs, answers),
             check="hedging",
             role="claims",
             prompt_template=CLAIMS_PROMPT,

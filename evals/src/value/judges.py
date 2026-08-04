@@ -5,9 +5,10 @@ judge never loads the plugin and always runs with the default output
 style. A judge prompt carries one bare text: no style name, no arm
 label, and never both answers of a pair. Thus a judge cannot know
 which answer is styled. The comprehension questions come from the
-shared facts of the pair, and only the fact strings travel between
-the calls, never a second answer text. The caller keeps the arm
-bookkeeping in the raw rows, outside every judge prompt.
+shared facts of the pair, in the wordings of both answers, and only
+the fact strings travel between the calls, never a second answer
+text. The caller keeps the arm bookkeeping in the raw rows, outside
+every judge prompt.
 
 Each completed call goes to the sink as one raw row. A later run
 reuses every key that the stored rows already hold, so an interrupted
@@ -35,13 +36,19 @@ from runner.provenance import claude_version
 
 CHECKS = ("comprehension", "paraphrase", "roundtrip")
 
-COMPREHENSION_DESIGN = "shared-facts-v2"
-"""The design tag of the comprehension check, stored in the meta row.
+COMPREHENSION_DESIGNS = (None, "shared-facts-v2", "balanced-facts-v3")
+"""Every comprehension design, oldest first.
 
-A raw file without the tag holds first-design rows: questions written
-from the task prompt alone, one reader call per text. The scorer
-reads the tag to pick the matched scoring path.
+The first design wrote questions from the task prompt alone, one
+reader call per text. The shared-facts design writes the questions
+from the facts that both answers hold, worded by the unstyled answer.
+The balanced design takes the fact wording from both answers, half of
+the cap per side. The scorer reads the stored tag to pick the matched
+scoring path, so every stored run stays rescoreable.
 """
+
+COMPREHENSION_DESIGN = COMPREHENSION_DESIGNS[-1]
+"""The design tag of the current comprehension check, stored in the meta row."""
 
 FACTS_FLOOR = 3
 """A pair with fewer shared facts is skipped: too few for a quiz."""
@@ -165,6 +172,22 @@ def select_facts(facts: list[str], cap: int) -> list[str]:
     return [facts[int(index * step)] for index in range(cap)]
 
 
+def select_balanced(
+    unstyled_facts: list[str], styled_facts: list[str], cap: int
+) -> tuple[list[str], dict[str, int]]:
+    """At most cap facts, half of the cap per wording source.
+
+    The unstyled facts come first. A short side yields its remainder
+    to the other side, and an odd cap gives the unstyled side the
+    extra slot. Returns the facts and the count taken per source.
+    """
+    half = cap // 2
+    take_unstyled = min(len(unstyled_facts), cap - min(len(styled_facts), half))
+    take_styled = min(len(styled_facts), cap - take_unstyled)
+    facts = select_facts(unstyled_facts, take_unstyled) + select_facts(styled_facts, take_styled)
+    return facts, {"unstyled": take_unstyled, "styled": take_styled}
+
+
 def build_meta(
     *,
     reader_model: str,
@@ -214,6 +237,7 @@ class JudgeSession:
         prompt_id: str,
         answer_sha256: str | None,
         index: int | None = None,
+        extra: dict | None = None,
         force: bool = False,
     ) -> dict:
         if not force and key in self.rows:
@@ -243,6 +267,8 @@ class JudgeSession:
             "output_tokens": int((result.get("usage") or {}).get("output_tokens", 0)),
             "duration_ms": int(result.get("duration_ms", 0)),
         }
+        if extra:
+            row.update(extra)
         self.rows[key] = row
         self.sink(row)
         return row
@@ -276,7 +302,7 @@ def _judge_comprehension(
     session: JudgeSession,
     pairs: dict[str, list[str]],
     answers: dict[tuple[str, str | None], dict],
-    facts_by_pair: dict[tuple[str, str], list[str]],
+    facts_by_pair: dict[tuple[str, str], dict[str, list[str]]],
     grader_model: str,
     reader_model: str,
     questions_cap: int,
@@ -285,30 +311,37 @@ def _judge_comprehension(
     """One quiz per pair, from the shared facts, read by both answers.
 
     A pair without an entry in facts_by_pair was warned about by the
-    caller and is skipped here. The reference answer of a question is
-    the fact that produced the question.
+    caller and is skipped here. The facts of a pair come in the two
+    wordings of the answers, and the quiz takes half of its cap from
+    each wording. The reference answer of a question is the fact that
+    produced the question. Both arms answer the same question list,
+    so the question order carries no arm bias.
     """
     for style in sorted(pairs):
         for prompt_id in pairs[style]:
             survivors = facts_by_pair.get((style, prompt_id))
             if survivors is None:
                 continue
-            if len(survivors) < FACTS_FLOOR:
+            total = len(survivors["unstyled"]) + len(survivors["styled"])
+            if total < FACTS_FLOOR:
                 session.warnings.append(
-                    f"{style}/{prompt_id}: the pair has {len(survivors)} shared facts, "
+                    f"{style}/{prompt_id}: the pair has {total} shared facts, "
                     f"fewer than the floor of {FACTS_FLOOR}, so comprehension skips the pair"
                 )
                 continue
-            facts = select_facts(survivors, questions_cap)
+            facts, sources = select_balanced(
+                survivors["unstyled"], survivors["styled"], questions_cap
+            )
             questions = session.structured(
                 validate=partial(parse_strings, n=len(facts)),
-                key=f"comprehension:v2:questions:{style}:{prompt_id}",
+                key=f"comprehension:v3:questions:{style}:{prompt_id}",
                 check="comprehension",
                 role="questions",
                 model=grader_model,
                 prompt=QUESTIONS_FROM_FACTS_PROMPT.format(facts=_numbered(facts)),
                 prompt_id=prompt_id,
                 answer_sha256=None,
+                extra={"sources": sources},
             )
             if questions is None:
                 session.warnings.append(
@@ -325,7 +358,7 @@ def _judge_comprehension(
                 for replicate in range(replicates):
                     replies = session.structured(
                         validate=partial(parse_strings, n=len(facts)),
-                        key=f"comprehension:v2:reader:{style}:{prompt_id}:{arm}:{replicate}",
+                        key=f"comprehension:v3:reader:{style}:{prompt_id}:{arm}:{replicate}",
                         check="comprehension",
                         role="reader",
                         model=reader_model,
@@ -345,7 +378,7 @@ def _judge_comprehension(
                         continue
                     grades = session.structured(
                         validate=partial(parse_bools, n=len(facts)),
-                        key=f"comprehension:v2:grades:{style}:{prompt_id}:{arm}:{replicate}",
+                        key=f"comprehension:v3:grades:{style}:{prompt_id}:{arm}:{replicate}",
                         check="comprehension",
                         role="grades",
                         model=grader_model,
@@ -367,7 +400,7 @@ def run_judges(
     texts: list[dict],
     pairs: dict[str, list[str]],
     answers: dict[tuple[str, str | None], dict],
-    facts_by_pair: dict[tuple[str, str], list[str]],
+    facts_by_pair: dict[tuple[str, str], dict[str, list[str]]],
     checks: list[str],
     reader_model: str,
     grader_model: str,

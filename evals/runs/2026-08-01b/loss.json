@@ -1,5 +1,5 @@
 {
-  "date": "2026-08-01T22:12:26+00:00",
+  "date": "2026-08-04T10:33:02+00:00",
   "run": "2026-08-01b",
   "judge": {
     "model": "opus",
@@ -56,6 +56,7 @@
       "per_style": {
         "plain-language": {
           "median": 0.786,
+          "additions_median": 1.0,
           "pairs": {
             "code-review-01": {
               "facts": 29,
@@ -69,6 +70,16 @@
                 "The expected interface of `db` (that it must have `.insert`) is undocumented.",
                 "The suggested fix copies `roles` with `list(roles)` and appends `\"member\"` only if not already present.",
                 "The suggested fix drops the silent failure mode and lets real errors propagate to the caller."
+              ],
+              "styled_facts": 27,
+              "additions": 6,
+              "added": [
+                "The mutable default argument is the most serious problem in the function",
+                "`except Exception as e` should be used at a minimum instead of a bare `except`",
+                "Logging or re-raising with context should be considered in the exception handler",
+                "The function does not check whether `roles` contains valid values before inserting",
+                "The corrected version catches `Exception as e` and logs the error with `logging.error`",
+                "The corrected version returns `True` on a successful insert and `False` after a caught exception"
               ]
             },
             "code-review-02": {
@@ -82,6 +93,12 @@
                 "The function always returns a resolved promise wrapping the error thrown by `undefined.name.toUpperCase()`.",
                 "API error responses or an empty body are cases where `data` may lack a `name` property.",
                 "The fixed version throws an `Error` with message `Failed to load profile: ${res.status}` when `res.ok` is false."
+              ],
+              "styled_facts": 25,
+              "additions": 2,
+              "added": [
+                "`fetch` rejects only on network failures.",
+                "Callers must wrap the call in a `try`/`catch`."
               ]
             },
             "code-review-03": {
@@ -98,6 +115,14 @@
                 "Typos or unexpected `status` values fail silently by returning zero rows rather than raising a clear error.",
                 "`?` placeholders should be used instead of `%s` if the driver is sqlite3.",
                 "`%s` placeholders are used by DB-API drivers such as psycopg2 and mysql-connector."
+              ],
+              "styled_facts": 20,
+              "additions": 4,
+              "added": [
+                "Naming the exact columns needed is safer than `SELECT *`.",
+                "The function assumes `customer_name` and `status` are always strings.",
+                "If a caller passes `None` or another type, the `+` concatenation fails with a `TypeError`.",
+                "A `TypeError` is not a clear error about bad input."
               ]
             },
             "code-review-04": {
@@ -110,6 +135,11 @@
                 "The GIL does not make the whole read-then-write sequence atomic.",
                 "Writing the increment as `current + 1` is needlessly roundabout.",
                 "The stylistic point about `current + 1` is cosmetic compared to the threading bug."
+              ],
+              "styled_facts": 18,
+              "additions": 1,
+              "added": [
+                "Because `reset` writes a fixed value, it does not have the read-then-write problem on its own."
               ]
             },
             "code-review-05": {
@@ -127,13 +157,28 @@
                 "The script performs destructive operations with no dry-run or confirmation.",
                 "Compressing `.log` files with gzip overwrites the originals and is irreversible.",
                 "The suggested fix prints a usage message to stderr and exits with status 1 when the argument is missing or not a directory."
+              ],
+              "styled_facts": 34,
+              "additions": 6,
+              "added": [
+                "Adding `cd \"$BACKUP_DIR\" || exit 1` makes the script stop when cd fails.",
+                "The shell's own globbing is more reliable than parsing `ls` and does not need an extra process.",
+                "`set -eu` stops the script on the first error or unset variable.",
+                "`${1:?...}` produces a clear error message if no argument is passed.",
+                "The rewrite replaces `rm -rf` with `rm -f` because the targets are plain temp files, not directories.",
+                "If directory removal is needed, `-r` should be kept but only with a solid guard in place."
               ]
             },
             "debugging-01": {
               "facts": 8,
               "survived": 8,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 7,
+              "additions": 1,
+              "added": [
+                "The corrected function get_url(cfg) returns the f-string \"http://{cfg['host']}:{cfg['port']}/api\"."
+              ]
             },
             "debugging-02": {
               "facts": 14,
@@ -143,7 +188,10 @@
                 "In a class, where `this` is `undefined`, the code would actually throw `TypeError: Cannot read properties of undefined`.",
                 "Calling `.bind(this)` on the callback function is an alternative fix.",
                 "Capturing `const self = this;` outside the callback and using `self.seconds` inside it is an alternative fix."
-              ]
+              ],
+              "styled_facts": 14,
+              "additions": 0,
+              "added": []
             },
             "debugging-03": {
               "facts": 7,
@@ -151,7 +199,10 @@
               "fraction": 0.857,
               "lost": [
                 "With `len(values)=4` and `window=2`, the windows are `[1,2]`, `[2,3]`, and `[3,4]`."
-              ]
+              ],
+              "styled_facts": 9,
+              "additions": 0,
+              "added": []
             },
             "debugging-04": {
               "facts": 17,
@@ -164,6 +215,12 @@
                 "errors=\"replace\" silently alters bad bytes.",
                 "errors=\"replace\" should only be used if exact byte fidelity does not matter.",
                 "Exact byte fidelity does not matter for a line-count use case."
+              ],
+              "styled_facts": 11,
+              "additions": 2,
+              "added": [
+                "The byte 0xc3 is the first byte of many UTF-8 characters outside the plain English alphabet.",
+                "errors=\"ignore\" is an alternative to errors=\"replace\"."
               ]
             },
             "debugging-05": {
@@ -172,7 +229,10 @@
               "fraction": 0.9,
               "lost": [
                 "The fixed make_post sets tags to a copy of DEFAULT_TAGS, via list(DEFAULT_TAGS), when tags is None."
-              ]
+              ],
+              "styled_facts": 14,
+              "additions": 0,
+              "added": []
             },
             "explanation-01": {
               "facts": 36,
@@ -191,6 +251,11 @@
                 "Python's dict uses open addressing.",
                 "Many C++ hash table implementations use open addressing.",
                 "Open addressing implementations typically resize at around 70% full."
+              ],
+              "styled_facts": 25,
+              "additions": 1,
+              "added": [
+                "Most language standard libraries use chaining."
               ]
             },
             "explanation-02": {
@@ -203,6 +268,12 @@
                 "If another transaction already bumped `version` to 4, the example update affects 0 rows.",
                 "An example pessimistic locking sequence is `BEGIN; SELECT balance FROM accounts WHERE id = 42 FOR UPDATE;` followed by `UPDATE accounts SET balance = balance - 100 WHERE id = 42; COMMIT;`.",
                 "Pessimistic locking fits when transactions are short-lived."
+              ],
+              "styled_facts": 21,
+              "additions": 2,
+              "added": [
+                "Editing a wiki page is an example of optimistic locking.",
+                "Most web form edits are a case that fits optimistic locking."
               ]
             },
             "explanation-03": {
@@ -222,6 +293,11 @@
                 "Linear growth in congestion avoidance is more cautious than exponential growth.",
                 "When loss is detected, cwnd is cut back.",
                 "When loss is detected, ssthresh is set based on where the loss occurred, so subsequent slow start or recovery is less aggressive."
+              ],
+              "styled_facts": 25,
+              "additions": 1,
+              "added": [
+                "Slow start is used at the start of a connection or after a long pause."
               ]
             },
             "explanation-04": {
@@ -244,6 +320,11 @@
                 "IPC has its own complexity.",
                 "Threads are preferable when memory footprint matters.",
                 "N threads are far cheaper than N processes in memory footprint."
+              ],
+              "styled_facts": 25,
+              "additions": 1,
+              "added": [
+                "Processes cost more to create and switch between than threads do."
               ]
             },
             "explanation-05": {
@@ -252,13 +333,22 @@
               "fraction": 0.929,
               "lost": [
                 "A registry reference also keeps alive anything the registered object closes over."
+              ],
+              "styled_facts": 15,
+              "additions": 2,
+              "added": [
+                "In a garbage-collected language, a garbage collector is a background process.",
+                "A UI component subscribing to an event source is an example of one object registering itself with another."
               ]
             },
             "summarization-01": {
               "facts": 8,
               "survived": 8,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 8,
+              "additions": 0,
+              "added": []
             },
             "summarization-02": {
               "facts": 14,
@@ -268,30 +358,51 @@
                 "A copy-paste from staging silently dropped the production pool size from 50 to 5 connections.",
                 "The reduction in production pool size was a 10x reduction.",
                 "A recommended prevention is to add pool size and other critical infrastructure parameters to the review checklist."
+              ],
+              "styled_facts": 19,
+              "additions": 4,
+              "added": [
+                "The pool size of 5 exhausted the database connection pool.",
+                "The exhausted connection pool broke checkout for about 12% of requests.",
+                "Rollback took 27 minutes after the page.",
+                "Rollback spanned 09:21 to 09:48."
               ]
             },
             "summarization-03": {
               "facts": 13,
               "survived": 13,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 13,
+              "additions": 0,
+              "added": []
             },
             "summarization-04": {
               "facts": 13,
               "survived": 13,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 12,
+              "additions": 2,
+              "added": [
+                "The reproduction steps click Export and then choose PDF.",
+                "Nothing happens on the first click of the PDF export."
+              ]
             },
             "summarization-05": {
               "facts": 9,
               "survived": 9,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 6,
+              "additions": 0,
+              "added": []
             }
           }
         },
         "technical-simplified": {
           "median": 0.859,
+          "additions_median": 1.5,
           "pairs": {
             "code-review-01": {
               "facts": 29,
@@ -303,6 +414,12 @@
                 "The expected interface of `db` (that it must have `.insert`) is undocumented.",
                 "The suggested fix copies `roles` with `list(roles)` and appends `\"member\"` only if not already present.",
                 "The suggested fix avoids duplicate roles."
+              ],
+              "styled_facts": 30,
+              "additions": 2,
+              "added": [
+                "The function has 6 problems.",
+                "The corrected version raises `ValueError(\"name must not be empty\")` when `name` is falsy."
               ]
             },
             "code-review-02": {
@@ -317,6 +434,11 @@
                 "There is no null or shape check on `data`.",
                 "Even once awaited, there is no guarantee that `data` has a `name` property.",
                 "API error responses or an empty body are cases where `data` may lack a `name` property."
+              ],
+              "styled_facts": 16,
+              "additions": 1,
+              "added": [
+                "The function returns no value."
               ]
             },
             "code-review-03": {
@@ -335,6 +457,12 @@
                 "The fixed version uses the query `\"SELECT * FROM orders WHERE customer = %s AND status = %s\"` and passes `(customer_name, status)` as parameters to `cursor.execute`.",
                 "`?` placeholders should be used instead of `%s` if the driver is sqlite3.",
                 "`%s` placeholders are used by DB-API drivers such as psycopg2 and mysql-connector."
+              ],
+              "styled_facts": 18,
+              "additions": 2,
+              "added": [
+                "Retrieving all columns wastes bandwidth.",
+                "The fixed version uses `?` placeholders for the customer and status conditions."
               ]
             },
             "code-review-04": {
@@ -344,6 +472,12 @@
               "lost": [
                 "Writing the increment as `current + 1` is needlessly roundabout.",
                 "The stylistic point about `current + 1` is cosmetic compared to the threading bug."
+              ],
+              "styled_facts": 19,
+              "additions": 2,
+              "added": [
+                "A caller has no way to run several operations together as one atomic unit.",
+                "Read-then-reset is an example of a multi-operation atomic unit the caller cannot perform."
               ]
             },
             "code-review-05": {
@@ -360,13 +494,25 @@
                 "The script performs destructive operations with no dry-run or confirmation.",
                 "Compressing `.log` files with gzip overwrites the originals and is irreversible.",
                 "The suggested fix prints a usage message to stderr and exits with status 1 when the argument is missing or not a directory."
+              ],
+              "styled_facts": 31,
+              "additions": 2,
+              "added": [
+                "The loop still handles the no-matching-`.log`-files case correctly, but the error message is confusing to the user.",
+                "The recommended script uses `cd -- \"$BACKUP_DIR\"` with the variable quoted and `--` before it."
               ]
             },
             "debugging-01": {
               "facts": 8,
               "survived": 8,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 9,
+              "additions": 2,
+              "added": [
+                "The corrected function `get_url(cfg)` returns the f-string `http://{cfg['host']}:{cfg['port']}/api`.",
+                "The function `get_url` takes a single parameter named `cfg`."
+              ]
             },
             "debugging-02": {
               "facts": 14,
@@ -378,13 +524,23 @@
                 "In a class, where `this` is `undefined`, the code would actually throw `TypeError: Cannot read properties of undefined`.",
                 "Calling `.bind(this)` on the callback function is an alternative fix.",
                 "Capturing `const self = this;` outside the callback and using `self.seconds` inside it is an alternative fix."
-              ]
+              ],
+              "styled_facts": 17,
+              "additions": 0,
+              "added": []
             },
             "debugging-03": {
               "facts": 7,
               "survived": 7,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 12,
+              "additions": 3,
+              "added": [
+                "`moving_sum` computes the sum of each window of the given size.",
+                "`moving_sum` builds a list `sums` by appending `sum(values[i : i + window])` for each `i`, and returns it.",
+                "After the fix, the resulting sums are `[3, 5, 7]`."
+              ]
             },
             "debugging-04": {
               "facts": 17,
@@ -396,6 +552,13 @@
                 "errors=\"replace\" silently alters bad bytes.",
                 "errors=\"replace\" should only be used if exact byte fidelity does not matter.",
                 "Exact byte fidelity does not matter for a line-count use case."
+              ],
+              "styled_facts": 11,
+              "additions": 3,
+              "added": [
+                "The file has a non-ASCII byte 0xc3 at position 512.",
+                "UTF-8 is a superset of ASCII.",
+                "Because UTF-8 is a superset of ASCII, the fix works for ASCII files too."
               ]
             },
             "debugging-05": {
@@ -404,7 +567,10 @@
               "fraction": 0.9,
               "lost": [
                 "The fixed make_post sets tags to a copy of DEFAULT_TAGS, via list(DEFAULT_TAGS), when tags is None."
-              ]
+              ],
+              "styled_facts": 16,
+              "additions": 0,
+              "added": []
             },
             "explanation-01": {
               "facts": 36,
@@ -423,6 +589,11 @@
                 "Python's dict uses open addressing.",
                 "Many C++ hash table implementations use open addressing.",
                 "Open addressing implementations typically resize at around 70% full."
+              ],
+              "styled_facts": 26,
+              "additions": 1,
+              "added": [
+                "Rust's HashMap uses open addressing."
               ]
             },
             "explanation-02": {
@@ -439,6 +610,19 @@
                 "Holding a real database lock for the entire duration of a long-held resource would be wasteful.",
                 "Pessimistic locking fits when retry logic would be expensive or unsafe to get right.",
                 "Inventory decrements with hard limits are an example where retry logic would be expensive or unsafe to get right."
+              ],
+              "styled_facts": 24,
+              "additions": 9,
+              "added": [
+                "In the example, a wiki page has a `version` column.",
+                "In the example, User A reads the wiki page at version 5.",
+                "In the example, User B also reads the page at version 5 and saves an edit.",
+                "In the example, the database sets the page version to 6 after User B saves.",
+                "In the example, User A's later save fails because the version in the database is 6, not 5.",
+                "In the example, User A must reload the page and try again.",
+                "Optimistic locking fits web applications with many readers and few conflicting writes.",
+                "In the example, a bank system must transfer money between two accounts.",
+                "In the example, the bank system locks both account rows with `SELECT ... FOR UPDATE`."
               ]
             },
             "explanation-04": {
@@ -465,6 +649,12 @@
                 "Killing or restarting a single thread cleanly is much harder than doing so for a process.",
                 "IPC has its own complexity.",
                 "Isolation includes crash containment, security, and independent scaling."
+              ],
+              "styled_facts": 23,
+              "additions": 2,
+              "added": [
+                "Threads must use locks or other synchronization to protect shared data.",
+                "Each process takes longer to start than a thread."
               ]
             },
             "explanation-05": {
@@ -473,19 +663,30 @@
               "fraction": 0.929,
               "lost": [
                 "A registry reference also keeps alive anything the registered object closes over."
-              ]
+              ],
+              "styled_facts": 13,
+              "additions": 0,
+              "added": []
             },
             "summarization-01": {
               "facts": 8,
               "survived": 8,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 5,
+              "additions": 0,
+              "added": []
             },
             "summarization-03": {
               "facts": 13,
               "survived": 13,
               "fraction": 1.0,
-              "lost": []
+              "lost": [],
+              "styled_facts": 13,
+              "additions": 1,
+              "added": [
+                "A worker pool will generate the thumbnails and update the record."
+              ]
             },
             "summarization-04": {
               "facts": 13,
@@ -493,7 +694,10 @@
               "fraction": 0.923,
               "lost": [
                 "Clicking \"Export as PDF\" produces repeated \"export failed\" error banners."
-              ]
+              ],
+              "styled_facts": 11,
+              "additions": 0,
+              "added": []
             },
             "summarization-05": {
               "facts": 9,
@@ -501,7 +705,10 @@
               "fraction": 0.889,
               "lost": [
                 "Ada is assigned to run the payments DB migration dry run."
-              ]
+              ],
+              "styled_facts": 6,
+              "additions": 0,
+              "added": []
             }
           }
         }

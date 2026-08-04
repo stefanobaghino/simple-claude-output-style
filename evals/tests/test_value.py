@@ -13,7 +13,8 @@ import pytest
 from runner.provenance import sha256_of
 from value import cli, extract_json, judge_argv, score_checks, select_pairs
 from value.analysis import shared_facts
-from value.judges import JudgeSession, parse_bools, select_facts
+from value.judges import JudgeSession, parse_bools, select_balanced, select_facts
+from value.report import build_value_report, build_value_summary
 from value.similarity import mean_pairwise_f1, unigram_f1
 
 STYLED_TEXT = "The quick brown fox jumps."
@@ -154,7 +155,33 @@ def test_select_facts_spaces_evenly_and_keeps_the_order():
     assert select_facts(["a", "b"], 5) == ["a", "b"]
 
 
-def test_shared_facts_takes_only_the_facts_that_survive():
+def test_select_balanced_splits_the_cap_between_the_sources():
+    unstyled = [f"U{number}" for number in range(10)]
+    styled = [f"S{number}" for number in range(10)]
+    facts, sources = select_balanced(unstyled, styled, 6)
+    assert sources == {"unstyled": 3, "styled": 3}
+    assert facts == select_facts(unstyled, 3) + select_facts(styled, 3)
+
+
+def test_select_balanced_gives_an_odd_cap_extra_to_the_unstyled_side():
+    unstyled = [f"U{number}" for number in range(10)]
+    styled = [f"S{number}" for number in range(10)]
+    _, sources = select_balanced(unstyled, styled, 5)
+    assert sources == {"unstyled": 3, "styled": 2}
+
+
+def test_select_balanced_lets_a_short_side_yield_its_remainder():
+    ten = [f"X{number}" for number in range(10)]
+    _, sources = select_balanced(ten, ["S0"], 6)
+    assert sources == {"unstyled": 5, "styled": 1}
+    _, sources = select_balanced(["U0"], ten, 6)
+    assert sources == {"unstyled": 1, "styled": 5}
+    facts, sources = select_balanced(["U0"], [], 6)
+    assert facts == ["U0"]
+    assert sources == {"unstyled": 1, "styled": 0}
+
+
+def test_shared_facts_takes_the_survivors_of_both_directions():
     pairs = {"alpha": ["p-01"]}
     answers = {
         ("p-01", "alpha"): {"text": "s", "sha256": "S"},
@@ -163,28 +190,60 @@ def test_shared_facts_takes_only_the_facts_that_survive():
     loss_rows = {
         "completeness:facts:U": {"output": '["F1", "F2", "F3"]'},
         "completeness:check:S": {"output": "[true, false, true]"},
+        "completeness:facts:S": {"output": '["G1", "G2"]'},
+        "completeness:reverse:S": {"output": "[false, true]"},
     }
     facts, warnings = shared_facts(pairs, answers, loss_rows)
-    assert facts == {("alpha", "p-01"): ["F1", "F3"]}
+    assert facts == {("alpha", "p-01"): {"unstyled": ["F1", "F3"], "styled": ["G2"]}}
+    assert warnings == []
+
+
+def test_shared_facts_accepts_an_empty_fact_list_without_a_check_row():
+    pairs = {"alpha": ["p-01"]}
+    answers = {
+        ("p-01", "alpha"): {"text": "s", "sha256": "S"},
+        ("p-01", None): {"text": "u", "sha256": "U"},
+    }
+    loss_rows = {
+        "completeness:facts:U": {"output": '["F1"]'},
+        "completeness:check:S": {"output": "[true]"},
+        "completeness:facts:S": {"output": "[]"},
+    }
+    facts, warnings = shared_facts(pairs, answers, loss_rows)
+    assert facts == {("alpha", "p-01"): {"unstyled": ["F1"], "styled": []}}
     assert warnings == []
 
 
 def test_shared_facts_warns_on_missing_and_unparsable_rows():
-    pairs = {"alpha": ["p-01", "p-02"]}
+    pairs = {"alpha": ["p-01", "p-02", "p-03"]}
     answers = {
         ("p-01", "alpha"): {"text": "s1", "sha256": "S1"},
         ("p-01", None): {"text": "u1", "sha256": "U1"},
         ("p-02", "alpha"): {"text": "s2", "sha256": "S2"},
         ("p-02", None): {"text": "u2", "sha256": "U2"},
+        ("p-03", "alpha"): {"text": "s3", "sha256": "S3"},
+        ("p-03", None): {"text": "u3", "sha256": "U3"},
     }
     loss_rows = {
         "completeness:facts:U2": {"output": '["F1"]'},
         "completeness:check:S2": {"output": "no json here"},
+        "completeness:facts:U3": {"output": '["F1"]'},
+        "completeness:check:S3": {"output": "[true]"},
     }
     facts, warnings = shared_facts(pairs, answers, loss_rows)
     assert facts == {}
-    assert any("alpha/p-01: loss-raw.jsonl holds no completeness rows" in w for w in warnings)
-    assert any("alpha/p-02: the completeness rows of the pair do not parse" in w for w in warnings)
+    assert any(
+        "alpha/p-01: loss-raw.jsonl holds no completeness rows for the unstyled facts" in w
+        for w in warnings
+    )
+    assert any(
+        "alpha/p-02: the completeness rows for the unstyled facts do not parse" in w
+        for w in warnings
+    )
+    assert any(
+        "alpha/p-03: loss-raw.jsonl holds no completeness rows for the styled facts" in w
+        for w in warnings
+    )
 
 
 def pair_fixture(styled_score_rows):
@@ -322,6 +381,71 @@ def test_v2_scoring_without_a_replicate_side_leaves_the_pair_unscored():
     assert any("no usable score for the unstyled answer" in w for w in result.warnings)
 
 
+def v3_fixture(styled_reps, unstyled_reps, styled_replies=(), unstyled_replies=()):
+    """A one-pair scoring input with hand-built balanced-facts rows."""
+    rows = {
+        "comprehension:v3:questions:alpha:p-01": {
+            "check": "comprehension",
+            "output": '["Q1", "Q2"]',
+            "sources": {"unstyled": 1, "styled": 1},
+        }
+    }
+    for replicate, grades in enumerate(styled_reps):
+        rows[f"comprehension:v3:grades:alpha:p-01:styled:{replicate}"] = grades_row(grades)
+    for replicate, grades in enumerate(unstyled_reps):
+        rows[f"comprehension:v3:grades:alpha:p-01:unstyled:{replicate}"] = grades_row(grades)
+    for arm, replies_per_replicate in (("styled", styled_replies), ("unstyled", unstyled_replies)):
+        for replicate, replies in enumerate(replies_per_replicate):
+            rows[f"comprehension:v3:reader:alpha:p-01:{arm}:{replicate}"] = {
+                "check": "comprehension",
+                "output": json.dumps(replies),
+            }
+    answers = {
+        ("p-01", "alpha"): {"text": "styled text", "sha256": "S"},
+        ("p-01", None): {"text": "unstyled text", "sha256": "U"},
+    }
+    return {"alpha": ["p-01"]}, answers, rows
+
+
+def score_v3(pairs, answers, rows):
+    return score_checks(
+        pairs=pairs,
+        answers=answers,
+        rows=rows,
+        paraphrases_k=3,
+        comprehension_design="balanced-facts-v3",
+        replicates=3,
+    )
+
+
+def test_v3_scoring_records_the_sources_and_the_design():
+    pairs, answers, rows = v3_fixture(
+        styled_reps=([True, True], [True, True], [True, False]),
+        unstyled_reps=([True, False], [True, False], [True, False]),
+    )
+    result = score_v3(pairs, answers, rows)
+    check = result.checks["comprehension"]
+    assert check["design"] == "balanced-facts-v3"
+    pair = check["per_style"]["alpha"]["pairs"]["p-01"]
+    assert pair["result"] == "win"
+    assert pair["agreement"] == 0.667
+    assert pair["sources"] == {"unstyled": 1, "styled": 1}
+
+
+def test_v3_scoring_counts_the_buried_facts_per_arm():
+    reps = ([True, True], [True, True], [True, True])
+    pairs, answers, rows = v3_fixture(
+        styled_reps=reps,
+        unstyled_reps=reps,
+        styled_replies=(["A1", "NOT IN TEXT"], ["A1", "A2"], ["A1", "A2"]),
+        unstyled_replies=(["NOT IN TEXT", "NOT IN TEXT"], ["NOT IN TEXT", "A2"], ["A1", "A2"]),
+    )
+    result = score_v3(pairs, answers, rows)
+    stats = result.checks["comprehension"]["per_style"]["alpha"]
+    assert stats["buried_fact_rate"] == 0.167
+    assert stats["buried_fact_rate_unstyled"] == 0.5
+
+
 def paraphrase_rows(sha_key, texts):
     return {
         f"paraphrase:reader:{sha_key}:{index}": {"check": "paraphrase", "output": text}
@@ -425,6 +549,7 @@ def make_project(tmp_path, styled_answers=None):
         {
             "type": "meta",
             "model": "opus",
+            "fact_mine": "two-way",
             "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
         },
         {
@@ -434,15 +559,27 @@ def make_project(tmp_path, styled_answers=None):
             "output": '["F1", "F2", "F3"]',
         },
     ]
-    loss_rows += [
-        {
-            "type": "call",
-            "key": f"completeness:check:{sha(text)}",
-            "check": "completeness",
-            "output": "[true, true, true]",
-        }
-        for text in styled_answers.values()
-    ]
+    for text in styled_answers.values():
+        loss_rows += [
+            {
+                "type": "call",
+                "key": f"completeness:check:{sha(text)}",
+                "check": "completeness",
+                "output": "[true, true, true]",
+            },
+            {
+                "type": "call",
+                "key": f"completeness:facts:{sha(text)}",
+                "check": "completeness",
+                "output": '["G1", "G2", "G3"]',
+            },
+            {
+                "type": "call",
+                "key": f"completeness:reverse:{sha(text)}",
+                "check": "completeness",
+                "output": "[true, true, true]",
+            },
+        ]
     write_jsonl(run_dir / "loss-raw.jsonl", loss_rows)
     provenance = {
         "conditions": {"model_requested": "sonnet"},
@@ -467,24 +604,30 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     summary = json.loads((project / "run" / "value.json").read_text())
     assert summary["pairs"] == {"alpha": ["explanation-01"]}
     assert summary["judges"]["replicates"] == 3
-    assert summary["judges"]["comprehension_design"] == "shared-facts-v2"
+    assert summary["judges"]["comprehension_design"] == "balanced-facts-v3"
     for check in ("comprehension", "paraphrase", "roundtrip"):
         stats = summary["checks"][check]["per_style"]["alpha"]
         assert (stats["wins"], stats["losses"], stats["ties"]) == (1, 0, 0)
     assert summary["checks"]["comprehension"]["per_style"]["alpha"]["pairs"]["explanation-01"] == {
         "styled": 1.0,
-        "unstyled": 0.667,
-        "questions": 3,
+        "unstyled": 0.833,
+        "questions": 6,
         "agreement": 1.0,
         "result": "win",
+        "sources": {"unstyled": 3, "styled": 3},
     }
     assert summary["checks"]["comprehension"]["per_style"]["alpha"]["buried_fact_rate"] == 0.0
+    assert (
+        summary["checks"]["comprehension"]["per_style"]["alpha"]["buried_fact_rate_unstyled"]
+        == 0.167
+    )
     assert summary["warnings"] == []
     report = (project / "run" / "value.md").read_text()
     assert report.count("| alpha | 1 | 0 | 0 |\n") == 2
-    assert "| alpha | 1 | 0 | 0 | 0.333 | 1.0 | 0.0 |" in report
+    assert "worded by both answers in balance" in report
+    assert "| alpha | 1 | 0 | 0 | 0.167 | 1.0 | 0.0 | 0.167 |" in report
     assert "- alpha: the styled answer holds (1 wins, 0 losses, 0 ties)." in report
-    assert "| explanation-01 | 3 | 1.0 | 0.667 | 1.0 | win |" in report
+    assert "| explanation-01 | 6 | 3/3 | 1.0 | 0.833 | 1.0 | win |" in report
     out = capsys.readouterr().out
     assert "alpha: comprehension 1-0-0, paraphrase 1-0-0, roundtrip 1-0-0 (win-loss-tie)" in out
 
@@ -533,7 +676,7 @@ def test_cli_meta_mismatch_exits_2(project):
     assert error.value.code == 2
 
 
-def test_cli_meta_upgrade_appends_a_row(project):
+def test_cli_a_first_design_file_transitions_to_the_current_design(project):
     run_dir = project / "run"
     old_meta = {
         "type": "meta",
@@ -556,9 +699,101 @@ def test_cli_meta_upgrade_appends_a_row(project):
     ]
     assert len(metas) == 2
     assert "comprehension_design" not in metas[0]
-    assert metas[1]["comprehension_design"] == "shared-facts-v2"
+    assert metas[1]["comprehension_design"] == "balanced-facts-v3"
+    assert metas[1]["questions"] == 6
     assert metas[1]["replicates"] == 3
     assert metas[1]["date"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_cli_a_v2_file_transitions_and_re_judges_comprehension_only(project):
+    run_dir = project / "run"
+    v2_rows = [
+        {
+            "type": "meta",
+            "date": "2026-01-01T00:00:00+00:00",
+            "claude_version": "1.0.0",
+            "models": {"reader": "haiku", "grader": "opus"},
+            "questions": 5,
+            "paraphrases": 3,
+            "replicates": 3,
+            "comprehension_design": "shared-facts-v2",
+            "language": "Italian",
+            "flags": [],
+            "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
+        },
+        {
+            "type": "call",
+            "key": "comprehension:v2:questions:alpha:explanation-01",
+            "check": "comprehension",
+            "output": '["Q1", "Q2", "Q3"]',
+        },
+    ]
+    for text in (STYLED_TEXT, UNSTYLED_TEXT):
+        v2_rows += [
+            {
+                "type": "call",
+                "key": f"paraphrase:reader:{sha(text)}:{index}",
+                "check": "paraphrase",
+                "output": "one same restatement",
+            }
+            for index in range(3)
+        ]
+        v2_rows += [
+            {
+                "type": "call",
+                "key": f"roundtrip:translate:{sha(text)}",
+                "check": "roundtrip",
+                "output": "testo tradotto",
+            },
+            {
+                "type": "call",
+                "key": f"roundtrip:back:{sha(text)}",
+                "check": "roundtrip",
+                "output": "text translated back",
+            },
+        ]
+    write_jsonl(run_dir / "value-raw.jsonl", v2_rows)
+    runner = FakeJudgeRunner()
+    assert run_cli(project, "--judge", run=runner) == 0
+    prompts = [argv[argv.index("-p") + 1] for argv in runner.calls]
+    assert not any(
+        prompt.startswith(("Restate the text", "Translate the text")) for prompt in prompts
+    )
+    # One questions call, then a reader and a grades call per arm and
+    # replicate: the transition re-judges only the comprehension rows.
+    assert len(prompts) == 1 + 2 * 3 * 2
+    metas = [
+        row
+        for line in (run_dir / "value-raw.jsonl").read_text().splitlines()
+        if (row := json.loads(line)).get("type") == "meta"
+    ]
+    assert len(metas) == 2
+    assert metas[0]["comprehension_design"] == "shared-facts-v2"
+    assert metas[1]["comprehension_design"] == "balanced-facts-v3"
+    assert metas[1]["questions"] == 6
+    assert metas[1]["date"] == "2026-01-01T00:00:00+00:00"
+    summary = json.loads((run_dir / "value.json").read_text())
+    assert summary["judges"]["comprehension_design"] == "balanced-facts-v3"
+    assert summary["checks"]["comprehension"]["design"] == "balanced-facts-v3"
+
+
+def test_cli_an_unknown_stored_design_exits_2(project):
+    run_dir = project / "run"
+    meta = {
+        "type": "meta",
+        "date": "2026-01-01T00:00:00+00:00",
+        "models": {"reader": "haiku", "grader": "opus"},
+        "questions": 6,
+        "paraphrases": 3,
+        "replicates": 3,
+        "comprehension_design": "balanced-facts-v9",
+        "language": "Italian",
+        "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
+    }
+    write_jsonl(run_dir / "value-raw.jsonl", [meta])
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge")
+    assert error.value.code == 2
 
 
 def test_cli_without_loss_data_skips_comprehension(project):
@@ -579,6 +814,18 @@ def test_cli_stale_loss_data_skips_comprehension(project):
     summary = json.loads((project / "run" / "value.json").read_text())
     assert summary["checks"]["comprehension"]["judged"] is False
     assert any("comes from other answers" in w for w in summary["warnings"])
+
+
+def test_cli_one_way_loss_data_skips_comprehension(project):
+    loss_path = project / "run" / "loss-raw.jsonl"
+    rows = [json.loads(line) for line in loss_path.read_text().splitlines()]
+    del rows[0]["fact_mine"]
+    write_jsonl(loss_path, rows)
+    assert run_cli(project, "--judge") == 1
+    summary = json.loads((project / "run" / "value.json").read_text())
+    assert summary["checks"]["comprehension"]["judged"] is False
+    assert summary["checks"]["paraphrase"]["judged"] is True
+    assert any("one-way fact mine" in w for w in summary["warnings"])
 
 
 def test_cli_a_pair_below_the_facts_floor_is_skipped(project):
@@ -666,6 +913,31 @@ def test_cli_unparseable_grades_warn_and_exit_1(project):
     summary = json.loads((project / "run" / "value.json").read_text())
     assert any("no usable grades" in w for w in summary["warnings"])
     assert any("comprehension check has no usable score" in w for w in summary["warnings"])
+
+
+def test_report_keeps_the_v2_rendering_for_a_stored_v2_run():
+    pairs, answers, rows = v2_fixture(
+        styled_reps=([True, True], [True, True], [True, False]),
+        unstyled_reps=([True, False], [True, False], [True, False]),
+    )
+    result = score_v2(pairs, answers, rows)
+    meta = {
+        "date": "2026-01-01T00:00:00+00:00",
+        "models": {"reader": "haiku", "grader": "opus"},
+        "questions": 5,
+        "paraphrases": 3,
+        "replicates": 3,
+        "comprehension_design": "shared-facts-v2",
+        "language": "Italian",
+    }
+    summary = build_value_summary(
+        run_name="run", meta=meta, pairs=pairs, checks=result.checks, warnings=[]
+    )
+    report = build_value_report(summary)
+    assert "Comprehension asks up to 5 questions per pair, with 3 reader replicates" in report
+    assert "| Style | Wins | Losses | Ties | Mean delta | Agreement | Buried-fact rate |" in report
+    assert "| Pair | Questions | Styled | Unstyled | Agreement | Result |" in report
+    assert "Sources" not in report
 
 
 def test_load_raw_takes_the_last_row_per_key(tmp_path):

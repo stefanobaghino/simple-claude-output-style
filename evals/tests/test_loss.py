@@ -8,12 +8,15 @@ import json
 import pytest
 
 from loss import cli, parse_string_list, parse_verdicts, score_checks
+from runner.provenance import sha256_of
 
 STYLED_TEXT = "The quick brown fox jumps."
 UNSTYLED_TEXT = "The slow green turtle crawls."
 BETA_TEXT = "The big red bear sleeps."
 
 FACTS = '["the animal crawls", "the animal is green"]'
+STYLED_FACTS = '["the animal jumps", "the animal is brown"]'
+BETA_FACTS = '["the animal sleeps", "the animal is red"]'
 CLAIMS = '["the animal probably sleeps", "the animal may swim"]'
 
 
@@ -44,6 +47,9 @@ class FakeLossRunner:
     The unstyled turtle text yields two facts and two uncertain
     claims. The styled fox text loses one fact and turns one claim
     certain; the beta bear text keeps every fact and drops one claim.
+    In reverse, the fox text yields two facts of which one is an
+    addition, and the bear text adds no fact. A reverse check carries
+    the turtle text, and its claims name the styled facts.
     """
 
     def __init__(self):
@@ -56,8 +62,14 @@ class FakeLossRunner:
 
     def reply(self, prompt):
         if prompt.startswith("List the distinct factual claims"):
+            if "fox" in prompt:
+                return STYLED_FACTS
+            if "bear" in prompt:
+                return BETA_FACTS
             return FACTS
         if prompt.startswith("Check each claim"):
+            if "turtle" in prompt:
+                return "[false, true]" if "jumps" in prompt else "[true, true]"
             return "[true, false]" if "fox" in prompt else "[true, true]"
         if prompt.startswith("List the claims"):
             return CLAIMS
@@ -109,6 +121,83 @@ def test_completeness_scoring_counts_the_lost_facts():
         "lost": ["f2", "f3"],
     }
     assert stats["median"] == 0.333
+
+
+def test_two_way_scoring_counts_the_additions():
+    pairs, answers, rows = pair_fixture(
+        {
+            "completeness:facts:U": loss_row("completeness", '["f1", "f2", "f3"]'),
+            "completeness:check:S": loss_row("completeness", "[true, false, false]"),
+            "completeness:facts:S": loss_row("completeness", '["g1", "g2"]'),
+            "completeness:reverse:S": loss_row("completeness", "[false, true]"),
+        }
+    )
+    result = score_checks(pairs=pairs, answers=answers, rows=rows, fact_mine="two-way")
+    stats = result.checks["completeness"]["per_style"]["alpha"]
+    assert stats["pairs"]["p-01"] == {
+        "facts": 3,
+        "survived": 1,
+        "fraction": 0.333,
+        "lost": ["f2", "f3"],
+        "styled_facts": 2,
+        "additions": 1,
+        "added": ["g1"],
+    }
+    assert stats["additions_median"] == 1
+    assert not any("completeness" in w for w in result.warnings)
+
+
+def test_two_way_scoring_without_reverse_marks_keeps_the_fraction():
+    pairs, answers, rows = pair_fixture(
+        {
+            "completeness:facts:U": loss_row("completeness", '["f1", "f2", "f3"]'),
+            "completeness:check:S": loss_row("completeness", "[true, false, false]"),
+            "completeness:facts:S": loss_row("completeness", '["g1", "g2"]'),
+        }
+    )
+    result = score_checks(pairs=pairs, answers=answers, rows=rows, fact_mine="two-way")
+    stats = result.checks["completeness"]["per_style"]["alpha"]
+    entry = stats["pairs"]["p-01"]
+    assert entry["fraction"] == 0.333
+    assert entry["styled_facts"] == 2
+    assert entry["additions"] is None
+    assert entry["added"] == []
+    assert stats["additions_median"] is None
+    assert any("no usable reverse marks" in w for w in result.warnings)
+
+
+def test_two_way_scoring_without_a_styled_fact_list_warns():
+    pairs, answers, rows = pair_fixture(
+        {
+            "completeness:facts:U": loss_row("completeness", '["f1"]'),
+            "completeness:check:S": loss_row("completeness", "[true]"),
+        }
+    )
+    result = score_checks(pairs=pairs, answers=answers, rows=rows, fact_mine="two-way")
+    entry = result.checks["completeness"]["per_style"]["alpha"]["pairs"]["p-01"]
+    assert entry["styled_facts"] is None
+    assert entry["additions"] is None
+    assert any("no usable styled fact list" in w for w in result.warnings)
+
+
+def test_scoring_without_the_two_way_tag_adds_no_addition_fields():
+    pairs, answers, rows = pair_fixture(
+        {
+            "completeness:facts:U": loss_row("completeness", '["f1", "f2", "f3"]'),
+            "completeness:check:S": loss_row("completeness", "[true, false, false]"),
+            "completeness:facts:S": loss_row("completeness", '["g1", "g2"]'),
+            "completeness:reverse:S": loss_row("completeness", "[false, true]"),
+        }
+    )
+    result = score_checks(pairs=pairs, answers=answers, rows=rows)
+    stats = result.checks["completeness"]["per_style"]["alpha"]
+    assert stats["pairs"]["p-01"] == {
+        "facts": 3,
+        "survived": 1,
+        "fraction": 0.333,
+        "lost": ["f2", "f3"],
+    }
+    assert "additions_median" not in stats
 
 
 def test_hedging_scoring_counts_the_three_verdicts():
@@ -219,20 +308,42 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert summary["pairs"] == {"alpha": ["explanation-01"]}
     completeness = summary["checks"]["completeness"]["per_style"]["alpha"]
     assert completeness["median"] == 0.5
-    assert completeness["pairs"]["explanation-01"]["lost"] == ["the animal is green"]
+    assert completeness["additions_median"] == 1
+    assert completeness["pairs"]["explanation-01"] == {
+        "facts": 2,
+        "survived": 1,
+        "fraction": 0.5,
+        "lost": ["the animal is green"],
+        "styled_facts": 2,
+        "additions": 1,
+        "added": ["the animal jumps"],
+    }
     hedging = summary["checks"]["hedging"]["per_style"]["alpha"]
     assert hedging["median"] == 0.5
     assert hedging["pairs"]["explanation-01"]["lost"] == ["the animal may swim"]
     assert summary["warnings"] == []
     report = (project / "run" / "loss.md").read_text()
-    assert "| explanation-01 | 2 | 1 | 0.5 |" in report
+    assert "| explanation-01 | 2 | 1 | 0.5 | 2 | 1 |" in report
     assert "Median fraction: 0.5 over 1 scored pairs." in report
+    assert "Median additions: 1 over 1 scored pairs." in report
     assert "- explanation-01: the animal is green" in report
+    assert "Added facts (styled only):" in report
+    assert "- explanation-01: the animal jumps" in report
     assert "| explanation-01 | 2 | 1 | 1 | 0 | 0.5 |" in report
     assert "Median survival: 0.5 over 1 scored pairs." in report
     assert "- explanation-01: the animal may swim" in report
     out = capsys.readouterr().out
     assert "alpha: completeness median 0.5, hedging median 0.5" in out
+
+
+def test_cli_judge_emits_the_reverse_keys(project):
+    run_cli(project, "--judge")
+    raw = (project / "run" / "loss-raw.jsonl").read_text().splitlines()
+    keys = {json.loads(line).get("key") for line in raw}
+    assert f"completeness:facts:{sha(UNSTYLED_TEXT)}" in keys
+    assert f"completeness:check:{sha(STYLED_TEXT)}" in keys
+    assert f"completeness:facts:{sha(STYLED_TEXT)}" in keys
+    assert f"completeness:reverse:{sha(STYLED_TEXT)}" in keys
 
 
 def test_cli_judge_prompts_are_blind(project):
@@ -254,11 +365,13 @@ def test_cli_shares_the_extraction_between_styles(tmp_path):
     runner = FakeLossRunner()
     assert run_cli(project, "--judge", run=runner) == 0
     turtle_calls = [argv for argv in runner.calls if "turtle" in argv[argv.index("-p") + 1]]
-    # One fact extraction and one claim extraction: judged once, not per style.
-    assert len(turtle_calls) == 2
+    # One fact extraction, one claim extraction, and one reverse check
+    # per style: the extractions are judged once, not per style.
+    assert len(turtle_calls) == 4
     summary = json.loads((project / "run" / "loss.json").read_text())
     beta = summary["checks"]["completeness"]["per_style"]["beta"]
     assert beta["pairs"]["explanation-01"]["fraction"] == 1.0
+    assert beta["pairs"]["explanation-01"]["additions"] == 0
     assert summary["checks"]["hedging"]["per_style"]["beta"]["pairs"]["explanation-01"] == {
         "claims": 2,
         "hedged": 1,
@@ -312,6 +425,44 @@ def test_cli_meta_mismatch_exits_2(project):
     run_cli(project, "--judge")
     with pytest.raises(SystemExit) as error:
         run_cli(project, "--judge", "--model", "haiku")
+    assert error.value.code == 2
+
+
+def test_cli_meta_upgrade_appends_a_row(project):
+    run_dir = project / "run"
+    old_meta = {
+        "type": "meta",
+        "date": "2026-01-01T00:00:00+00:00",
+        "claude_version": "1.0.0",
+        "model": "opus",
+        "flags": [],
+        "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
+    }
+    write_jsonl(run_dir / "loss-raw.jsonl", [old_meta])
+    assert run_cli(project, "--judge") == 0
+    metas = [
+        row
+        for line in (run_dir / "loss-raw.jsonl").read_text().splitlines()
+        if (row := json.loads(line)).get("type") == "meta"
+    ]
+    assert len(metas) == 2
+    assert "fact_mine" not in metas[0]
+    assert metas[1]["fact_mine"] == "two-way"
+    assert metas[1]["date"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_cli_a_fact_mine_mismatch_exits_2(project):
+    run_dir = project / "run"
+    old_meta = {
+        "type": "meta",
+        "date": "2026-01-01T00:00:00+00:00",
+        "model": "opus",
+        "fact_mine": "three-way",
+        "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
+    }
+    write_jsonl(run_dir / "loss-raw.jsonl", [old_meta])
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge")
     assert error.value.code == 2
 
 
@@ -376,7 +527,9 @@ def test_cli_unparseable_marks_retry_then_warn_and_exit_1(project):
 
     runner = BadChecker()
     assert run_cli(project, "--judge", run=runner) == 1
-    assert runner.check_calls == 2
+    # Two attempts per direction: the forward check and the reverse check.
+    assert runner.check_calls == 4
     summary = json.loads((project / "run" / "loss.json").read_text())
     assert any("the fact check returned no usable marks" in w for w in summary["warnings"])
+    assert any("the fact reverse check returned no usable marks" in w for w in summary["warnings"])
     assert any("no usable survival marks" in w for w in summary["warnings"])

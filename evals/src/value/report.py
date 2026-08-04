@@ -34,6 +34,25 @@ COMPREHENSION_V2_INTRO = (
     "content-loss report. Higher is better."
 )
 
+COMPREHENSION_V3_INTRO = (
+    "The questions come from the shared facts of the pair, mined in "
+    "both directions: the facts of the unstyled answer that survive "
+    "in the styled answer, and the facts of the styled answer that "
+    "the unstyled answer also states. The quiz takes half of its "
+    "questions from each wording, so neither answer sets the phrasing "
+    "alone, and the Sources column counts the questions per wording "
+    "(unstyled/styled). A grader call turns each fact into one "
+    "question, and the fact is the reference answer. The weak reader "
+    "answers the questions from one answer text, once per replicate, "
+    "and the grader marks every reply. Each styled replicate meets "
+    "each unstyled replicate as a win, a loss, or a tie, and the pair "
+    "outcome is the strict plurality, else a tie. The agreement is "
+    "the plurality share, and the buried-fact rate counts "
+    '"NOT IN TEXT" replies to a shared fact, per arm. The check '
+    "measures extraction over shared material. Absence belongs to the "
+    "content-loss report. Higher is better."
+)
+
 CHECK_INTROS = {
     "comprehension": (
         "The grader model writes questions with reference answers from the "
@@ -86,15 +105,42 @@ def build_value_summary(
     }
 
 
+def _sources(scores: dict) -> str:
+    sources = scores.get("sources")
+    if not sources:
+        return "n/a"
+    return f"{sources['unstyled']}/{sources['styled']}"
+
+
 def _check_section(name: str, check: dict, run_name: str) -> list[str]:
-    v2 = check.get("design") is not None
-    intro = COMPREHENSION_V2_INTRO if v2 else CHECK_INTROS[name]
+    design = check.get("design")
+    v3 = design == "balanced-facts-v3"
+    if v3:
+        intro = COMPREHENSION_V3_INTRO
+    elif design is not None:
+        intro = COMPREHENSION_V2_INTRO
+    else:
+        intro = CHECK_INTROS[name]
     lines = [f"## {CHECK_TITLES[name]}", "", intro, ""]
     if not check["judged"]:
         lines += [f"The check is not judged. Run `style-value {run_name} --judge`.", ""]
         return lines
 
-    if v2:
+    if v3:
+        lines += [
+            (
+                "| Style | Wins | Losses | Ties | Mean delta | Agreement "
+                "| Buried (styled) | Buried (unstyled) |"
+            ),
+            "|---|---|---|---|---|---|---|---|",
+        ]
+        for style, stats in check["per_style"].items():
+            lines.append(
+                f"| {style} | {stats['wins']} | {stats['losses']} | {stats['ties']} | "
+                f"{stats['mean_delta']} | {stats['mean_agreement']} | "
+                f"{stats['buried_fact_rate']} | {stats['buried_fact_rate_unstyled']} |"
+            )
+    elif design is not None:
         lines += [
             "| Style | Wins | Losses | Ties | Mean delta | Agreement | Buried-fact rate |",
             "|---|---|---|---|---|---|---|",
@@ -124,7 +170,18 @@ def _check_section(name: str, check: dict, run_name: str) -> list[str]:
 
     for style, stats in check["per_style"].items():
         lines += [f"### {style}", ""]
-        if v2:
+        if v3:
+            lines += [
+                "| Pair | Questions | Sources (u/s) | Styled | Unstyled | Agreement | Result |",
+                "|---|---|---|---|---|---|---|",
+            ]
+            lines += [
+                f"| {prompt_id} | {scores['questions']} | {_sources(scores)} | "
+                f"{scores['styled']} | {scores['unstyled']} | {scores['agreement']} | "
+                f"{scores['result']} |"
+                for prompt_id, scores in stats["pairs"].items()
+            ]
+        elif design is not None:
             lines += [
                 "| Pair | Questions | Styled | Unstyled | Agreement | Result |",
                 "|---|---|---|---|---|---|",
@@ -147,6 +204,22 @@ def _check_section(name: str, check: dict, run_name: str) -> list[str]:
     return lines
 
 
+def _comprehension_header(judges: dict) -> str:
+    design = judges.get("comprehension_design")
+    if design == "balanced-facts-v3":
+        return (
+            f"Comprehension asks up to {judges['questions']} questions per pair, "
+            "worded by both answers in balance, "
+            f"with {judges['replicates']} reader replicates per answer, "
+        )
+    if design:
+        return (
+            f"Comprehension asks up to {judges['questions']} questions per pair, "
+            f"with {judges['replicates']} reader replicates per answer, "
+        )
+    return f"Comprehension uses {judges['questions']} questions per prompt, "
+
+
 def build_value_report(summary: dict) -> str:
     judges = summary["judges"]
     lines = [
@@ -162,12 +235,7 @@ def build_value_report(summary: dict) -> str:
         (
             f"Judges: reader {judges['models']['reader']}, "
             f"grader {judges['models']['grader']}. "
-            + (
-                f"Comprehension asks up to {judges['questions']} questions per pair, "
-                f"with {judges['replicates']} reader replicates per answer, "
-                if judges.get("comprehension_design")
-                else f"Comprehension uses {judges['questions']} questions per prompt, "
-            )
+            + _comprehension_header(judges)
             + f"ambiguity uses {judges['paraphrases']} restatements per answer, "
             f"and the round-trip goes through {judges['language']}. "
             f"Judged on {judges['judged_date']}."

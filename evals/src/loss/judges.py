@@ -25,7 +25,7 @@ from pathlib import Path
 
 from runner.generate import ISOLATION_FLAGS, Runner, subprocess_runner
 from runner.provenance import claude_version
-from value.judges import JudgeSession, RowSink, extract_json, parse_bools
+from value.judges import JudgeSession, RowSink, extract_json, parse_bools, run_parallel
 
 CHECKS = ("completeness", "hedging")
 VERDICTS = ("hedged", "certain", "absent")
@@ -149,30 +149,67 @@ def _extract(
     prompt_template: str,
     model: str,
     noun: str,
+    parallel: int,
     consequence: str | None = None,
 ) -> dict[str, list[str]]:
-    """One extraction call per unique text. Returns lists by sha."""
+    """One extraction call per unique text, one task each. Returns lists by sha."""
     lists: dict[str, list[str]] = {}
     consequence = consequence or f"{check} skips its pairs"
-    for prompt_id, arm in arms:
-        items = session.structured(
-            validate=parse_string_list,
-            key=f"{check}:{role}:{arm['sha256']}",
+    tasks = [
+        partial(
+            _extract_one,
+            session,
+            lists,
+            prompt_id,
+            arm,
             check=check,
             role=role,
+            prompt_template=prompt_template,
             model=model,
-            prompt=prompt_template.format(text=arm["text"]),
-            prompt_id=prompt_id,
-            answer_sha256=arm["sha256"],
+            noun=noun,
+            consequence=consequence,
         )
-        if items is None:
-            session.warnings.append(
-                f"{prompt_id}: the {noun} extraction returned no usable list for the text "
-                f"{arm['sha256'][:12]}, so {consequence}"
-            )
-            continue
-        lists[arm["sha256"]] = items
+        for prompt_id, arm in arms
+    ]
+    run_parallel(tasks, parallel)
     return lists
+
+
+def _extract_one(
+    session: JudgeSession,
+    lists: dict[str, list[str]],
+    prompt_id: str,
+    arm: dict,
+    *,
+    check: str,
+    role: str,
+    prompt_template: str,
+    model: str,
+    noun: str,
+    consequence: str,
+) -> None:
+    """One extraction call.
+
+    The arms carry unique shas, so parallel tasks never write one
+    lists entry twice.
+    """
+    items = session.structured(
+        validate=parse_string_list,
+        key=f"{check}:{role}:{arm['sha256']}",
+        check=check,
+        role=role,
+        model=model,
+        prompt=prompt_template.format(text=arm["text"]),
+        prompt_id=prompt_id,
+        answer_sha256=arm["sha256"],
+    )
+    if items is None:
+        session.warnings.append(
+            f"{prompt_id}: the {noun} extraction returned no usable list for the text "
+            f"{arm['sha256'][:12]}, so {consequence}"
+        )
+        return
+    lists[arm["sha256"]] = items
 
 
 def _check_pairs(
@@ -186,6 +223,7 @@ def _check_pairs(
     validate_factory,
     model: str,
     noun: str,
+    parallel: int,
     reverse: bool = False,
 ) -> None:
     """One check call per pair whose source arm has a non-empty list.
@@ -194,9 +232,13 @@ def _check_pairs(
     unstyled answer. In reverse, the unstyled text is checked against
     the facts of the styled answer. The key carries the styled sha in
     both directions, so two styles that share one unstyled answer
-    never share a check row.
+    never share a check row. Two pairs with byte-identical styled
+    texts do share a key, and parallel tasks can then both miss the
+    row fast path. The key gets two rows, the last row wins at load,
+    and the marks agree, so the duplicate is harmless.
     """
     role = "reverse" if reverse else "check"
+    tasks = []
     for style in sorted(pairs):
         for prompt_id in pairs[style]:
             styled = answers[(prompt_id, style)]
@@ -205,23 +247,59 @@ def _check_pairs(
             items = lists.get(source["sha256"])
             if not items:
                 continue
-            marks = session.structured(
-                validate=validate_factory(len(items)),
-                key=f"{check}:{role}:{styled['sha256']}",
-                check=check,
-                role=role,
-                model=model,
-                prompt=prompt_template.format(text=checked["text"], claims=_numbered(items)),
-                prompt_id=prompt_id,
-                answer_sha256=checked["sha256"],
-            )
-            if marks is None:
-                what = f"the {noun} reverse check" if reverse else f"the {noun} check"
-                outcome = "the additions of the pair are" if reverse else "the pair is"
-                session.warnings.append(
-                    f"{prompt_id}: {what} returned no usable marks for the text "
-                    f"{checked['sha256'][:12]}, so {outcome} unscored"
+            tasks.append(
+                partial(
+                    _check_pair,
+                    session,
+                    items,
+                    styled,
+                    checked,
+                    prompt_id,
+                    check=check,
+                    role=role,
+                    prompt_template=prompt_template,
+                    validate_factory=validate_factory,
+                    model=model,
+                    noun=noun,
+                    reverse=reverse,
                 )
+            )
+    run_parallel(tasks, parallel)
+
+
+def _check_pair(
+    session: JudgeSession,
+    items: list[str],
+    styled: dict,
+    checked: dict,
+    prompt_id: str,
+    *,
+    check: str,
+    role: str,
+    prompt_template: str,
+    validate_factory,
+    model: str,
+    noun: str,
+    reverse: bool,
+) -> None:
+    """One check call, one task."""
+    marks = session.structured(
+        validate=validate_factory(len(items)),
+        key=f"{check}:{role}:{styled['sha256']}",
+        check=check,
+        role=role,
+        model=model,
+        prompt=prompt_template.format(text=checked["text"], claims=_numbered(items)),
+        prompt_id=prompt_id,
+        answer_sha256=checked["sha256"],
+    )
+    if marks is None:
+        what = f"the {noun} reverse check" if reverse else f"the {noun} check"
+        outcome = "the additions of the pair are" if reverse else "the pair is"
+        session.warnings.append(
+            f"{prompt_id}: {what} returned no usable marks for the text "
+            f"{checked['sha256'][:12]}, so {outcome} unscored"
+        )
 
 
 def run_judges(
@@ -234,12 +312,15 @@ def run_judges(
     sink: RowSink,
     workdir: Path,
     run: Runner = subprocess_runner,
+    parallel: int = 1,
 ) -> list[str]:
     """Run the judge calls for every pair and return the warnings.
 
     The answers mapping goes from (prompt_id, style or None) to a dict
     with text and sha256. The rows mapping is read for reuse and
-    extended in place; every new row also goes to the sink.
+    extended in place; every new row also goes to the sink. The
+    parallel count sets how many tasks run at a time, per phase, and
+    a check phase starts only when its extraction phase is complete.
     """
     session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
 
@@ -252,6 +333,7 @@ def run_judges(
             prompt_template=FACTS_PROMPT,
             model=model,
             noun="fact",
+            parallel=parallel,
         )
         _check_pairs(
             session,
@@ -263,6 +345,7 @@ def run_judges(
             validate_factory=lambda n: partial(parse_bools, n=n),
             model=model,
             noun="fact",
+            parallel=parallel,
         )
         styled_facts = _extract(
             session,
@@ -272,6 +355,7 @@ def run_judges(
             prompt_template=FACTS_PROMPT,
             model=model,
             noun="fact",
+            parallel=parallel,
             consequence="the additions of its pairs are unscored",
         )
         _check_pairs(
@@ -284,6 +368,7 @@ def run_judges(
             validate_factory=lambda n: partial(parse_bools, n=n),
             model=model,
             noun="fact",
+            parallel=parallel,
             reverse=True,
         )
 
@@ -296,6 +381,7 @@ def run_judges(
             prompt_template=CLAIMS_PROMPT,
             model=model,
             noun="claim",
+            parallel=parallel,
         )
         _check_pairs(
             session,
@@ -307,6 +393,7 @@ def run_judges(
             validate_factory=lambda n: partial(parse_verdicts, n=n),
             model=model,
             noun="claim",
+            parallel=parallel,
         )
 
     return session.warnings

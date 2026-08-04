@@ -79,8 +79,8 @@ uv run style-lint FILE.md --rules rules/technical-simplified.rules.yaml
 uv run style-pairs
 uv run style-gate runs/<date>
 uv run style-cost runs/<date> [--probe]
-uv run style-value runs/<date> [--judge]
-uv run style-loss runs/<date> [--judge]
+uv run style-value runs/<date> [--judge] [--parallel N]
+uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-drift [--generate] [--out runs/<date>-drift]
 ```
 
@@ -135,7 +135,11 @@ the questions probe only material that both answers contain, neither
 answer sets the phrasing alone, and the score measures extraction,
 not coverage. The check reads the facts from `loss-raw.jsonl`: run
 `style-loss <run> --judge` before the first
-`style-value <run> --judge`. Each answer gets several reader
+`style-value <run> --judge`. Each judge tool works in its own
+scratch directory, so the two tools can run at the same time on one
+run. But the comprehension check reads `loss-raw.jsonl` once, at
+the start, so make sure that the loss judge pass is complete first.
+Each answer gets several reader
 replicates. The pair outcome is the plurality over the replicate
 outcomes, and the report states the replicate
 agreement next to a buried-fact rate per arm (a "NOT IN TEXT" reply
@@ -143,7 +147,9 @@ to a shared fact). Every judge call sees one bare text without a
 style name or an arm label, and the judge models must differ from
 the writer model of the run. `--judge` runs the live calls and
 appends the raw outputs to `value-raw.jsonl`; an interrupted judge
-run resumes when the same invocation runs again. Without `--judge`
+run resumes when the same invocation runs again. The judge calls
+run several at a time (8 by default), and `--parallel` sets the
+count (1 runs one call at a time). Without `--judge`
 the tool rescores the stored raw data offline. Exit codes: 0 when
 the checks are scored and no warnings exist, 1 when warnings exist
 (for example, a check without judge data), 2 when the run cannot be
@@ -164,7 +170,9 @@ states is otherwise invisible. No judge call sees both answers of a
 pair: the extracted items travel between the calls, never the source
 text. The judge model must differ from the writer model of the run. `--judge` runs the live calls and appends the raw
 outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
-the same invocation runs again. Without `--judge` the tool rescores
+the same invocation runs again. The judge calls run several at a
+time (8 by default), and `--parallel` sets the count (1 runs one
+call at a time). Without `--judge` the tool rescores
 the stored raw data offline. The exit codes equal the exit codes of
 `style-value`.
 

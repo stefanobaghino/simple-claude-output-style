@@ -12,14 +12,19 @@ every judge prompt.
 
 Each completed call goes to the sink as one raw row. A later run
 reuses every key that the stored rows already hold, so an interrupted
-run resumes without loss.
+run resumes without loss. With parallel judge calls, the session lock
+serializes the row writes, and the rows land in completion order, not
+in call order. The loaders read the rows by key, so the row order in
+the raw file carries no meaning.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import threading
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
@@ -213,18 +218,52 @@ def build_meta(
     }
 
 
+def run_parallel(tasks: list[Callable[[], None]], workers: int) -> None:
+    """Run the tasks, at most workers at a time.
+
+    With workers at 1 or below, the tasks run in order in the thread
+    of the caller, exactly like a plain loop, and the first error
+    stops the loop. Else the tasks run on a thread pool. An error
+    cancels every task that did not start, and the helper waits for
+    the live tasks, then re-raises the error. Thus no task is live
+    after the helper returns, and the caller can close a shared file
+    directly after the helper.
+    """
+    if workers <= 1:
+        for task in tasks:
+            task()
+        return
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(task) for task in tasks]
+        try:
+            for future in futures:
+                future.result()
+        except BaseException:
+            # A KeyboardInterrupt must also cancel the queue, so the
+            # catch takes BaseException, not Exception.
+            for future in futures:
+                future.cancel()
+            raise
+
+
 RowSink = Callable[[dict], None]
 
 
 @dataclass
 class JudgeSession:
-    """Runs judge calls with reuse of the stored rows."""
+    """Runs judge calls with reuse of the stored rows.
+
+    Parallel tasks share one session. The lock serializes the row
+    fast path and the row writes, so the sink never interleaves two
+    rows. The subprocess runs outside the lock.
+    """
 
     rows: dict[str, dict]
     sink: RowSink
     workdir: Path
     run: Runner
     warnings: list[str] = field(default_factory=list)
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
     def call(
         self,
@@ -240,8 +279,10 @@ class JudgeSession:
         extra: dict | None = None,
         force: bool = False,
     ) -> dict:
-        if not force and key in self.rows:
-            return self.rows[key]
+        if not force:
+            with self.lock:
+                if key in self.rows:
+                    return self.rows[key]
         stdout = self.run(judge_argv(prompt, model), self.workdir)
         init, result = parse_events(stdout)
         active = init.get("output_style")
@@ -255,6 +296,7 @@ class JudgeSession:
             )
         row = {
             "type": "call",
+            "date": datetime.now(UTC).isoformat(timespec="seconds"),
             "key": key,
             "check": check,
             "role": role,
@@ -269,8 +311,9 @@ class JudgeSession:
         }
         if extra:
             row.update(extra)
-        self.rows[key] = row
-        self.sink(row)
+        with self.lock:
+            self.rows[key] = row
+            self.sink(row)
         return row
 
     def structured(self, *, validate: Callable[[str], object | None], **call_kwargs) -> object:
@@ -307,92 +350,164 @@ def _judge_comprehension(
     reader_model: str,
     questions_cap: int,
     replicates: int,
+    parallel: int,
 ) -> None:
     """One quiz per pair, from the shared facts, read by both answers.
 
     A pair without an entry in facts_by_pair was warned about by the
-    caller and is skipped here. The facts of a pair come in the two
-    wordings of the answers, and the quiz takes half of its cap from
-    each wording. The reference answer of a question is the fact that
-    produced the question. Both arms answer the same question list,
-    so the question order carries no arm bias.
+    caller and is skipped here. Each remaining pair is one task, and
+    the calls of a pair run in order inside the task.
     """
+    tasks = []
     for style in sorted(pairs):
         for prompt_id in pairs[style]:
             survivors = facts_by_pair.get((style, prompt_id))
             if survivors is None:
                 continue
-            total = len(survivors["unstyled"]) + len(survivors["styled"])
-            if total < FACTS_FLOOR:
-                session.warnings.append(
-                    f"{style}/{prompt_id}: the pair has {total} shared facts, "
-                    f"fewer than the floor of {FACTS_FLOOR}, so comprehension skips the pair"
+            tasks.append(
+                partial(
+                    _judge_comprehension_pair,
+                    session,
+                    answers,
+                    survivors,
+                    grader_model=grader_model,
+                    reader_model=reader_model,
+                    questions_cap=questions_cap,
+                    replicates=replicates,
+                    style=style,
+                    prompt_id=prompt_id,
                 )
-                continue
-            facts, sources = select_balanced(
-                survivors["unstyled"], survivors["styled"], questions_cap
             )
-            questions = session.structured(
+    run_parallel(tasks, parallel)
+
+
+def _judge_comprehension_pair(
+    session: JudgeSession,
+    answers: dict[tuple[str, str | None], dict],
+    survivors: dict[str, list[str]],
+    *,
+    grader_model: str,
+    reader_model: str,
+    questions_cap: int,
+    replicates: int,
+    style: str,
+    prompt_id: str,
+) -> None:
+    """The question, reader, and grade calls of one pair.
+
+    The facts of a pair come in the two wordings of the answers, and
+    the quiz takes half of its cap from each wording. The reference
+    answer of a question is the fact that produced the question. Both
+    arms answer the same question list, so the question order carries
+    no arm bias.
+    """
+    total = len(survivors["unstyled"]) + len(survivors["styled"])
+    if total < FACTS_FLOOR:
+        session.warnings.append(
+            f"{style}/{prompt_id}: the pair has {total} shared facts, "
+            f"fewer than the floor of {FACTS_FLOOR}, so comprehension skips the pair"
+        )
+        return
+    facts, sources = select_balanced(survivors["unstyled"], survivors["styled"], questions_cap)
+    questions = session.structured(
+        validate=partial(parse_strings, n=len(facts)),
+        key=f"comprehension:v3:questions:{style}:{prompt_id}",
+        check="comprehension",
+        role="questions",
+        model=grader_model,
+        prompt=QUESTIONS_FROM_FACTS_PROMPT.format(facts=_numbered(facts)),
+        prompt_id=prompt_id,
+        answer_sha256=None,
+        extra={"sources": sources},
+    )
+    if questions is None:
+        session.warnings.append(
+            f"{style}/{prompt_id}: the question writer returned no usable "
+            "questions, so comprehension skips the pair"
+        )
+        return
+    references = [
+        {"question": question, "reference": fact}
+        for question, fact in zip(questions, facts, strict=True)
+    ]
+    for arm, arm_key in (("styled", (prompt_id, style)), ("unstyled", (prompt_id, None))):
+        text = answers[arm_key]
+        for replicate in range(replicates):
+            replies = session.structured(
                 validate=partial(parse_strings, n=len(facts)),
-                key=f"comprehension:v3:questions:{style}:{prompt_id}",
+                key=f"comprehension:v3:reader:{style}:{prompt_id}:{arm}:{replicate}",
                 check="comprehension",
-                role="questions",
-                model=grader_model,
-                prompt=QUESTIONS_FROM_FACTS_PROMPT.format(facts=_numbered(facts)),
+                role="reader",
+                model=reader_model,
+                prompt=READER_PROMPT.format(text=text["text"], questions=_numbered(questions)),
                 prompt_id=prompt_id,
-                answer_sha256=None,
-                extra={"sources": sources},
+                answer_sha256=text["sha256"],
+                index=replicate,
             )
-            if questions is None:
+            if replies is None:
                 session.warnings.append(
-                    f"{style}/{prompt_id}: the question writer returned no usable "
-                    "questions, so comprehension skips the pair"
+                    f"{prompt_id}: the reader returned no usable answers for the "
+                    f"text {text['sha256'][:12]}, so comprehension skips the "
+                    "replicate"
                 )
                 continue
-            references = [
-                {"question": question, "reference": fact}
-                for question, fact in zip(questions, facts, strict=True)
-            ]
-            for arm, arm_key in (("styled", (prompt_id, style)), ("unstyled", (prompt_id, None))):
-                text = answers[arm_key]
-                for replicate in range(replicates):
-                    replies = session.structured(
-                        validate=partial(parse_strings, n=len(facts)),
-                        key=f"comprehension:v3:reader:{style}:{prompt_id}:{arm}:{replicate}",
-                        check="comprehension",
-                        role="reader",
-                        model=reader_model,
-                        prompt=READER_PROMPT.format(
-                            text=text["text"], questions=_numbered(questions)
-                        ),
-                        prompt_id=prompt_id,
-                        answer_sha256=text["sha256"],
-                        index=replicate,
-                    )
-                    if replies is None:
-                        session.warnings.append(
-                            f"{prompt_id}: the reader returned no usable answers for the "
-                            f"text {text['sha256'][:12]}, so comprehension skips the "
-                            "replicate"
-                        )
-                        continue
-                    grades = session.structured(
-                        validate=partial(parse_bools, n=len(facts)),
-                        key=f"comprehension:v3:grades:{style}:{prompt_id}:{arm}:{replicate}",
-                        check="comprehension",
-                        role="grades",
-                        model=grader_model,
-                        prompt=GRADES_PROMPT.format(items=_grade_items(references, replies)),
-                        prompt_id=prompt_id,
-                        answer_sha256=text["sha256"],
-                        index=replicate,
-                    )
-                    if grades is None:
-                        session.warnings.append(
-                            f"{prompt_id}: the grader returned no usable grades for the "
-                            f"text {text['sha256'][:12]}, so comprehension skips the "
-                            "replicate"
-                        )
+            grades = session.structured(
+                validate=partial(parse_bools, n=len(facts)),
+                key=f"comprehension:v3:grades:{style}:{prompt_id}:{arm}:{replicate}",
+                check="comprehension",
+                role="grades",
+                model=grader_model,
+                prompt=GRADES_PROMPT.format(items=_grade_items(references, replies)),
+                prompt_id=prompt_id,
+                answer_sha256=text["sha256"],
+                index=replicate,
+            )
+            if grades is None:
+                session.warnings.append(
+                    f"{prompt_id}: the grader returned no usable grades for the "
+                    f"text {text['sha256'][:12]}, so comprehension skips the "
+                    "replicate"
+                )
+
+
+def _paraphrase_call(session: JudgeSession, model: str, text: dict, index: int) -> None:
+    """One restatement call, one task."""
+    session.call(
+        key=f"paraphrase:reader:{text['sha256']}:{index}",
+        check="paraphrase",
+        role="paraphrase",
+        model=model,
+        prompt=PARAPHRASE_PROMPT.format(text=text["text"]),
+        prompt_id=text["prompt_id"],
+        answer_sha256=text["sha256"],
+        index=index,
+    )
+
+
+def _roundtrip_chain(session: JudgeSession, model: str, language: str, text: dict) -> None:
+    """The translate call and the back call of one text, one task.
+
+    The back call consumes the output of the translate call, so the
+    two calls stay in one task.
+    """
+    translated = session.call(
+        key=f"roundtrip:translate:{text['sha256']}",
+        check="roundtrip",
+        role="translate",
+        model=model,
+        prompt=TRANSLATE_PROMPT.format(language=language, text=text["text"]),
+        prompt_id=text["prompt_id"],
+        answer_sha256=text["sha256"],
+    )
+    session.call(
+        key=f"roundtrip:back:{text['sha256']}",
+        check="roundtrip",
+        role="back",
+        model=model,
+        prompt=BACK_PROMPT.format(text=translated["output"]),
+        prompt_id=text["prompt_id"],
+        answer_sha256=text["sha256"],
+    )
 
 
 def run_judges(
@@ -412,6 +527,7 @@ def run_judges(
     sink: RowSink,
     workdir: Path,
     run: Runner = subprocess_runner,
+    parallel: int = 1,
 ) -> list[str]:
     """Run the judge calls for every pair and return the warnings.
 
@@ -419,7 +535,8 @@ def run_judges(
     one dict with prompt_id, sha256, and text per unique sha256. The
     comprehension check works per pair instead, with the shared facts
     from facts_by_pair. The rows mapping is read for reuse and
-    extended in place; every new row also goes to the sink.
+    extended in place; every new row also goes to the sink. The
+    parallel count sets how many tasks run at a time, per check.
     """
     session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
 
@@ -433,41 +550,23 @@ def run_judges(
             reader_model,
             questions_n,
             replicates,
+            parallel,
         )
 
     if "paraphrase" in checks:
-        for text in texts:
-            for index in range(paraphrases_k):
-                session.call(
-                    key=f"paraphrase:reader:{text['sha256']}:{index}",
-                    check="paraphrase",
-                    role="paraphrase",
-                    model=reader_model,
-                    prompt=PARAPHRASE_PROMPT.format(text=text["text"]),
-                    prompt_id=text["prompt_id"],
-                    answer_sha256=text["sha256"],
-                    index=index,
-                )
+        run_parallel(
+            [
+                partial(_paraphrase_call, session, reader_model, text, index)
+                for text in texts
+                for index in range(paraphrases_k)
+            ],
+            parallel,
+        )
 
     if "roundtrip" in checks:
-        for text in texts:
-            translated = session.call(
-                key=f"roundtrip:translate:{text['sha256']}",
-                check="roundtrip",
-                role="translate",
-                model=reader_model,
-                prompt=TRANSLATE_PROMPT.format(language=language, text=text["text"]),
-                prompt_id=text["prompt_id"],
-                answer_sha256=text["sha256"],
-            )
-            session.call(
-                key=f"roundtrip:back:{text['sha256']}",
-                check="roundtrip",
-                role="back",
-                model=reader_model,
-                prompt=BACK_PROMPT.format(text=translated["output"]),
-                prompt_id=text["prompt_id"],
-                answer_sha256=text["sha256"],
-            )
+        run_parallel(
+            [partial(_roundtrip_chain, session, reader_model, language, text) for text in texts],
+            parallel,
+        )
 
     return session.warnings

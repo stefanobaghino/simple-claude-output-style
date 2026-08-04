@@ -41,6 +41,13 @@ This plugin does not make the output of Claude compliant with ASD-STE100. Downlo
 
 ## License
 
-The Zero-Clause BSD license (0BSD) covers this project. See [LICENSE](LICENSE).
+Two licenses cover this project:
 
-The license covers only the content of this project: the adapted rules, the examples, and the packaging. The license does not give rights to the ASD-STE100 specification or to the trademarks of ASD.
+- The Zero-Clause BSD license (0BSD) covers the plugin, the rule files in `evals/rules/`, and every other file outside `evals/`. See [LICENSE](LICENSE). 0BSD requires no attribution notice, so you can copy a style text into your own setup without a license notice.
+- The Apache License 2.0 covers the evaluation harness in `evals/`, except the rule files in `evals/rules/`. See [evals/LICENSE](evals/LICENSE).
+
+The rule files stay under 0BSD because a rule file pairs with a style text. A fork of a style needs the matched rule file to measure the fork.
+
+GitHub reads only the root license file, so the repository page shows 0BSD. This section states the full split.
+
+The licenses cover only the content of this project: the adapted rules, the examples, and the packaging. The licenses do not give rights to the ASD-STE100 specification or to the trademarks of ASD.

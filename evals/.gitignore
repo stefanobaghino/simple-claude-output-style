@@ -1,5 +1,6 @@
-# Scratch space of an interrupted pair run
+# Scratch space of an interrupted run
 runs/*/.workdir/
+runs/*/.judge-workdir*/
 
 # Python
 __pycache__/

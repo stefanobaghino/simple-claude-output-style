@@ -4,6 +4,9 @@ canned stream-json output."""
 
 import hashlib
 import json
+import threading
+from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -54,11 +57,15 @@ class FakeLossRunner:
 
     def __init__(self):
         self.calls = []
+        # Parallel judge calls share the runner, so the lock covers
+        # the calls list and the counters of the reply methods.
+        self.lock = threading.Lock()
 
     def __call__(self, argv, cwd):
-        self.calls.append(argv)
-        prompt = argv[argv.index("-p") + 1]
-        return stream(self.reply(prompt))
+        with self.lock:
+            self.calls.append(argv)
+            prompt = argv[argv.index("-p") + 1]
+            return stream(self.reply(prompt))
 
     def reply(self, prompt):
         if prompt.startswith("List the distinct factual claims"):
@@ -419,6 +426,51 @@ def test_cli_resume_makes_no_new_calls(project):
     second_runner = FakeLossRunner()
     assert run_cli(project, "--judge", run=second_runner) == 0
     assert second_runner.calls == []
+
+
+def test_cli_parallel_judge_matches_the_serial_artifacts(tmp_path):
+    roots = {}
+    for name, width in (("serial", "1"), ("wide", "3")):
+        root = tmp_path / name
+        root.mkdir()
+        make_project(root)
+        assert run_cli(root, "--judge", "--parallel", width) == 0
+        roots[name] = root
+    summaries = []
+    for root in roots.values():
+        summary = json.loads((root / "run" / "loss.json").read_text())
+        summary.pop("date")
+        summary["judge"].pop("judged_date")
+        summaries.append(summary)
+    assert summaries[0] == summaries[1]
+    rows = [
+        json.loads(line)
+        for line in (roots["wide"] / "run" / "loss-raw.jsonl").read_text().splitlines()
+    ]
+    keys = Counter(row["key"] for row in rows if row.get("type") == "call")
+    assert keys
+    assert max(keys.values()) == 1
+
+
+def test_cli_parallel_below_1_exits_2(project):
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--parallel", "0")
+    assert error.value.code == 2
+
+
+def test_cli_judge_works_in_a_tool_scoped_workdir(project):
+    expected = project / "run" / ".judge-workdir-loss"
+    seen = []
+
+    class WorkdirProbe(FakeLossRunner):
+        def __call__(self, argv, cwd):
+            seen.append((Path(cwd), Path(cwd).is_dir()))
+            return super().__call__(argv, cwd)
+
+    assert run_cli(project, "--judge", run=WorkdirProbe()) == 0
+    assert seen
+    assert set(seen) == {(expected, True)}
+    assert not expected.exists()
 
 
 def test_cli_meta_mismatch_exits_2(project):

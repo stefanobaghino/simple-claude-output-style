@@ -75,7 +75,7 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
             meta = meta_stored
 
     raw_path = run_dir / "loss-raw.jsonl"
-    workdir = run_dir / ".judge-workdir"
+    workdir = run_dir / ".judge-workdir-loss"
     workdir.mkdir(exist_ok=True)
     with raw_path.open("a", encoding="utf-8") as raw_file:
         if meta_stored is None or meta_upgraded:
@@ -96,6 +96,7 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
                 sink=sink,
                 workdir=workdir,
                 run=run,
+                parallel=args.parallel,
             )
         except GenerationError as error:
             raise _fail(f"a judge call failed: {error}") from error
@@ -123,12 +124,20 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         default=",".join(CHECKS),
         help="comma-separated subset of the checks to judge",
     )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=8,
+        help="concurrent judge calls (1 runs one call at a time)",
+    )
     args = parser.parse_args(argv)
 
     args.check_list = [check for check in args.checks.split(",") if check]
     unknown = sorted(set(args.check_list) - set(CHECKS))
     if unknown:
         raise _fail(f"unknown check(s): {', '.join(unknown)}; the checks are {', '.join(CHECKS)}")
+    if args.parallel < 1:
+        raise _fail(f"--parallel must be 1 or more, not {args.parallel}")
 
     run_dir = Path(args.run_dir)
     answers = load_answers(run_dir / "answers.jsonl")

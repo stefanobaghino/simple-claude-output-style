@@ -77,6 +77,13 @@ CHECK_INTROS = {
     ),
 }
 
+LENGTH_CONFOUND_NOTE = (
+    "The length confound is the correlation between the length ratio of "
+    "a pair (styled words over unstyled words) and the styled advantage "
+    "(the score gain of the styled arm). A negative value means that "
+    "the shorter styled answers score better."
+)
+
 
 def build_value_summary(
     *,
@@ -110,6 +117,10 @@ def _sources(scores: dict) -> str:
     if not sources:
         return "n/a"
     return f"{sources['unstyled']}/{sources['styled']}"
+
+
+def _correlation_value(value: float | None) -> str:
+    return "not computable" if value is None else str(value)
 
 
 def _check_section(name: str, check: dict, run_name: str) -> list[str]:
@@ -155,6 +166,16 @@ def _check_section(name: str, check: dict, run_name: str) -> list[str]:
         lines += ["| Style | Wins | Losses | Ties |", "|---|---|---|---|"]
         for style, stats in check["per_style"].items():
             lines.append(f"| {style} | {stats['wins']} | {stats['losses']} | {stats['ties']} |")
+        lines += ["", LENGTH_CONFOUND_NOTE]
+        for style, stats in check["per_style"].items():
+            corr = stats.get("length_correlation")
+            if corr is None:
+                continue
+            noun = "pair" if corr["n"] == 1 else "pairs"
+            lines.append(
+                f"- {style}: Pearson {_correlation_value(corr['pearson'])}, "
+                f"Spearman {_correlation_value(corr['spearman'])}, over {corr['n']} {noun}."
+            )
     lines.append("")
 
     if name == "comprehension":

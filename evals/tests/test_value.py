@@ -485,6 +485,91 @@ def test_roundtrip_loss_arithmetic():
     assert stats["result"] == "win"
 
 
+def length_fixture(arms):
+    """A multi-pair scoring input: one (prompt_id, styled, unstyled) per arm."""
+    pairs = {"alpha": []}
+    answers = {}
+    for index, (prompt_id, styled_text, unstyled_text) in enumerate(arms):
+        pairs["alpha"].append(prompt_id)
+        answers[(prompt_id, "alpha")] = {"text": styled_text, "sha256": f"S{index}"}
+        answers[(prompt_id, None)] = {"text": unstyled_text, "sha256": f"U{index}"}
+    return pairs, answers
+
+
+def test_length_correlation_tracks_the_length_ratio():
+    # Ratios 0.25, 0.5, 0.75; the styled loss is 0 everywhere, and the
+    # unstyled loss is 0.75, 0.5, 0.25. The advantage is thus exactly
+    # 1 - ratio, so both statistics are exactly -1.
+    pairs, answers = length_fixture(
+        [
+            ("p-01", "one", "one two three four"),
+            ("p-02", "one two", "one two three four"),
+            ("p-03", "one two three", "one two three four"),
+        ]
+    )
+    backs = {
+        "S0": "one",
+        "S1": "one two",
+        "S2": "one two three",
+        "U0": "one aa bb cc",
+        "U1": "one two bb cc",
+        "U2": "one two three cc",
+    }
+    rows = {
+        f"roundtrip:back:{sha}": {"check": "roundtrip", "output": output}
+        for sha, output in backs.items()
+    }
+    result = score_checks(pairs=pairs, answers=answers, rows=rows, paraphrases_k=3)
+    stats = result.checks["roundtrip"]["per_style"]["alpha"]
+    assert (stats["wins"], stats["losses"], stats["ties"]) == (3, 0, 0)
+    assert stats["length_correlation"] == {"n": 3, "pearson": -1.0, "spearman": -1.0}
+
+
+def test_length_correlation_uses_the_styled_advantage_sign():
+    # Paraphrase scores win high, so the advantage is styled minus
+    # unstyled: (ratio 0.5, advantage 1/3) and (ratio 1.0, advantage
+    # -1/3) give -1. An inverted sign gives +1 and fails.
+    pairs, answers = length_fixture([("p-01", "one", "one two"), ("p-02", "one two", "one two")])
+    rows = {}
+    rows.update(paraphrase_rows("S0", ["same words here", "same words here"]))
+    rows.update(paraphrase_rows("U0", ["same words here", "same words also"]))
+    rows.update(paraphrase_rows("S1", ["same words here", "same words also"]))
+    rows.update(paraphrase_rows("U1", ["same words here", "same words here"]))
+    result = score_checks(pairs=pairs, answers=answers, rows=rows, paraphrases_k=3)
+    stats = result.checks["paraphrase"]["per_style"]["alpha"]
+    assert stats["length_correlation"] == {"n": 2, "pearson": -1.0, "spearman": -1.0}
+
+
+def test_length_correlation_is_none_on_a_constant_ratio():
+    # Both ratios are 0.5, so statistics.correlation raises and each
+    # statistic becomes None. The third pair has no unstyled words, so
+    # the sample count stays 2.
+    pairs, answers = length_fixture(
+        [
+            ("p-01", "one two", "one two three four"),
+            ("p-02", "three four", "one two three four"),
+            ("p-03", "one", "?!"),
+        ]
+    )
+    backs = {"S0": "one two", "S1": "three four", "S2": "one", "U0": "aa", "U1": "bb", "U2": "?!"}
+    rows = {
+        f"roundtrip:back:{sha}": {"check": "roundtrip", "output": output}
+        for sha, output in backs.items()
+    }
+    result = score_checks(pairs=pairs, answers=answers, rows=rows, paraphrases_k=3)
+    stats = result.checks["roundtrip"]["per_style"]["alpha"]
+    assert stats["length_correlation"] == {"n": 2, "pearson": None, "spearman": None}
+
+
+def test_length_correlation_is_none_for_a_single_pair():
+    pairs, answers, rows = pair_fixture({})
+    rows["roundtrip:back:S"] = {"check": "roundtrip", "output": "styled text"}
+    rows["roundtrip:back:U"] = {"check": "roundtrip", "output": "unstyled text"}
+    result = score_checks(pairs=pairs, answers=answers, rows=rows, paraphrases_k=3)
+    stats = result.checks["roundtrip"]["per_style"]["alpha"]
+    assert stats["length_correlation"] == {"n": 1, "pearson": None, "spearman": None}
+
+
 def test_an_unjudged_check_warns():
     pairs, answers, rows = pair_fixture({})
     result = score_checks(pairs=pairs, answers=answers, rows=rows, paraphrases_k=3)
@@ -661,6 +746,12 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     for check in ("comprehension", "paraphrase", "roundtrip"):
         stats = summary["checks"][check]["per_style"]["alpha"]
         assert (stats["wins"], stats["losses"], stats["ties"]) == (1, 0, 0)
+    for check in ("paraphrase", "roundtrip"):
+        assert summary["checks"][check]["per_style"]["alpha"]["length_correlation"] == {
+            "n": 1,
+            "pearson": None,
+            "spearman": None,
+        }
     assert summary["checks"]["comprehension"]["per_style"]["alpha"]["pairs"]["explanation-01"] == {
         "styled": 1.0,
         "unstyled": 0.833,
@@ -681,6 +772,10 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert "| alpha | 1 | 0 | 0 | 0.167 | 1.0 | 0.0 | 0.167 |" in report
     assert "- alpha: the styled answer holds (1 wins, 0 losses, 0 ties)." in report
     assert "| explanation-01 | 6 | 3/3 | 1.0 | 0.833 | 1.0 | win |" in report
+    assert report.count("The length confound is the correlation") == 2
+    assert (
+        report.count("- alpha: Pearson not computable, Spearman not computable, over 1 pair.") == 2
+    )
     out = capsys.readouterr().out
     assert "alpha: comprehension 1-0-0, paraphrase 1-0-0, roundtrip 1-0-0 (win-loss-tie)" in out
 

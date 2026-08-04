@@ -13,11 +13,18 @@ from dataclasses import dataclass
 
 from loss.judges import parse_string_list
 
-from .judges import CHECKS, COMPREHENSION_DESIGN, parse_bools, parse_questions, parse_strings
+from .judges import CHECKS, parse_bools, parse_questions, parse_strings
 from .similarity import mean_pairwise_f1, unigram_f1
 
 TIE_EPSILON = 0.02
 """Two similarity scores closer than this count as a tie."""
+
+# The scoring spec per stored shared-facts design. The design tag of
+# a run selects the spec, so every stored run stays rescoreable.
+SHARED_DESIGNS = {
+    "shared-facts-v2": {"prefix": "comprehension:v2:", "burial_arms": ("styled",)},
+    "balanced-facts-v3": {"prefix": "comprehension:v3:", "burial_arms": ("styled", "unstyled")},
+}
 
 # Per check: does a higher score win, and how close is a tie? The
 # comprehension score is a fraction of a small question count, so only
@@ -71,40 +78,58 @@ def shared_facts(
     pairs: dict[str, list[str]],
     answers: dict[tuple[str, str | None], dict],
     loss_rows: dict[str, dict],
-) -> tuple[dict[tuple[str, str], list[str]], list[str]]:
-    """The facts of each pair that survive in the styled answer.
+) -> tuple[dict[tuple[str, str], dict[str, list[str]]], list[str]]:
+    """The facts of each pair that both answers hold, in both wordings.
 
-    The completeness check of the content-loss report extracted the
-    facts from the unstyled answer and judged each fact against the
-    styled answer. The row keys carry the answer hashes, so a stale
-    row never matches a current pair.
+    The completeness check of the content-loss report mined both
+    directions: the facts of the unstyled answer judged against the
+    styled answer, and the facts of the styled answer judged against
+    the unstyled answer. A survivor of either direction is a shared
+    fact, worded by its source answer. An empty fact list has no
+    check row and yields an empty survivor list. The row keys carry
+    the answer hashes, so a stale row never matches a current pair.
     """
-    facts_by_pair: dict[tuple[str, str], list[str]] = {}
+    facts_by_pair: dict[tuple[str, str], dict[str, list[str]]] = {}
     warnings: list[str] = []
     for style in sorted(pairs):
         for prompt_id in pairs[style]:
             unstyled_sha = answers[(prompt_id, None)]["sha256"]
             styled_sha = answers[(prompt_id, style)]["sha256"]
-            facts_row = loss_rows.get(f"completeness:facts:{unstyled_sha}")
-            check_row = loss_rows.get(f"completeness:check:{styled_sha}")
-            if facts_row is None or check_row is None:
-                warnings.append(
-                    f"{style}/{prompt_id}: loss-raw.jsonl holds no completeness rows "
-                    "for the pair, so comprehension skips the pair; run style-loss "
-                    "--judge first"
-                )
-                continue
-            facts = parse_string_list(facts_row["output"])
-            marks = None if facts is None else parse_bools(check_row["output"], len(facts))
-            if facts is None or marks is None:
-                warnings.append(
-                    f"{style}/{prompt_id}: the completeness rows of the pair do not "
-                    "parse, so comprehension skips the pair"
-                )
-                continue
-            facts_by_pair[(style, prompt_id)] = [
-                fact for fact, mark in zip(facts, marks, strict=True) if mark
-            ]
+            directions = {
+                "unstyled": (
+                    f"completeness:facts:{unstyled_sha}",
+                    f"completeness:check:{styled_sha}",
+                ),
+                "styled": (
+                    f"completeness:facts:{styled_sha}",
+                    f"completeness:reverse:{styled_sha}",
+                ),
+            }
+            survivors: dict[str, list[str]] = {}
+            for source, (facts_key, marks_key) in directions.items():
+                facts_row = loss_rows.get(facts_key)
+                facts = parse_string_list(facts_row["output"]) if facts_row else None
+                if facts == []:
+                    survivors[source] = []
+                    continue
+                marks_row = loss_rows.get(marks_key)
+                if facts_row is None or marks_row is None:
+                    warnings.append(
+                        f"{style}/{prompt_id}: loss-raw.jsonl holds no completeness rows "
+                        f"for the {source} facts, so comprehension skips the pair; run "
+                        "style-loss --judge first"
+                    )
+                    break
+                marks = None if facts is None else parse_bools(marks_row["output"], len(facts))
+                if facts is None or marks is None:
+                    warnings.append(
+                        f"{style}/{prompt_id}: the completeness rows for the {source} "
+                        "facts do not parse, so comprehension skips the pair"
+                    )
+                    break
+                survivors[source] = [fact for fact, mark in zip(facts, marks, strict=True) if mark]
+            else:
+                facts_by_pair[(style, prompt_id)] = survivors
     return facts_by_pair, warnings
 
 
@@ -115,12 +140,15 @@ def _outcome(styled: float, unstyled: float, higher_wins: bool, tie_epsilon: flo
     return "win" if (delta > 0) == higher_wins else "loss"
 
 
-def _score_comprehension_v2(
+def _score_comprehension_shared(
     *,
     pairs: dict[str, list[str]],
     rows: dict[str, dict],
     replicates: int,
     warnings: list[str],
+    prefix: str,
+    design: str,
+    burial_arms: tuple[str, ...],
 ) -> dict:
     """Score the shared-facts comprehension rows, pair by pair.
 
@@ -128,22 +156,24 @@ def _score_comprehension_v2(
     and each meeting is a win, a loss, or a tie under the exact-tie
     rule. The pair outcome is the strict plurality of the meetings,
     else a tie. The agreement of a pair is the plurality share. The
-    buried-fact rate counts styled "NOT IN TEXT" replies: the reader
-    missed a fact that the loss judge found present.
+    buried-fact rate counts "NOT IN TEXT" replies per burial arm: the
+    reader missed a fact that the loss judge found present. The
+    balanced design adds the unstyled burial rate and the question
+    sources of each pair.
     """
-    if not any(key.startswith("comprehension:v2:") for key in rows):
+    if not any(key.startswith(prefix) for key in rows):
         warnings.append("the comprehension check has no judge data: run style-value with --judge")
-        return {"judged": False, "design": COMPREHENSION_DESIGN, "per_style": None}
+        return {"judged": False, "design": design, "per_style": None}
     per_style: dict[str, dict] = {}
     for style in sorted(pairs):
         tally = {"win": 0, "loss": 0, "tie": 0}
         pair_scores: dict[str, dict] = {}
         deltas: list[float] = []
         agreements: list[float] = []
-        buried = 0
-        styled_replies = 0
+        buried = dict.fromkeys(burial_arms, 0)
+        replies_seen = dict.fromkeys(burial_arms, 0)
         for prompt_id in pairs[style]:
-            questions_row = rows.get(f"comprehension:v2:questions:{style}:{prompt_id}")
+            questions_row = rows.get(f"{prefix}questions:{style}:{prompt_id}")
             questions = parse_string_list(questions_row["output"]) if questions_row else None
             if not questions:
                 warnings.append(
@@ -155,18 +185,19 @@ def _score_comprehension_v2(
             scores: dict[str, list[float]] = {"styled": [], "unstyled": []}
             for arm, values in scores.items():
                 for replicate in range(replicates):
-                    key = f"comprehension:v2:grades:{style}:{prompt_id}:{arm}:{replicate}"
+                    key = f"{prefix}grades:{style}:{prompt_id}:{arm}:{replicate}"
                     row = rows.get(key)
                     grades = parse_bools(row["output"], n) if row else None
                     if grades is not None:
                         values.append(sum(grades) / n)
-            for replicate in range(replicates):
-                key = f"comprehension:v2:reader:{style}:{prompt_id}:styled:{replicate}"
-                row = rows.get(key)
-                replies = parse_strings(row["output"], n) if row else None
-                if replies is not None:
-                    styled_replies += n
-                    buried += sum(1 for reply in replies if reply == "NOT IN TEXT")
+            for arm in burial_arms:
+                for replicate in range(replicates):
+                    key = f"{prefix}reader:{style}:{prompt_id}:{arm}:{replicate}"
+                    row = rows.get(key)
+                    replies = parse_strings(row["output"], n) if row else None
+                    if replies is not None:
+                        replies_seen[arm] += n
+                        buried[arm] += sum(1 for reply in replies if reply == "NOT IN TEXT")
             missing = [arm for arm, values in scores.items() if not values]
             if missing:
                 warnings.append(
@@ -189,23 +220,34 @@ def _score_comprehension_v2(
             tally[result] += 1
             deltas.append(styled_mean - unstyled_mean)
             agreements.append(agreement)
-            pair_scores[prompt_id] = {
+            entry = {
                 "styled": round(styled_mean, 3),
                 "unstyled": round(unstyled_mean, 3),
                 "questions": n,
                 "agreement": round(agreement, 3),
                 "result": result,
             }
-        per_style[style] = {
+            if design == "balanced-facts-v3":
+                entry["sources"] = questions_row.get("sources")
+            pair_scores[prompt_id] = entry
+
+        rates = {
+            arm: round(buried[arm] / replies_seen[arm], 3) if replies_seen[arm] else None
+            for arm in burial_arms
+        }
+        stats = {
             "wins": tally["win"],
             "losses": tally["loss"],
             "ties": tally["tie"],
             "mean_delta": round(sum(deltas) / len(deltas), 3) if deltas else None,
             "mean_agreement": round(sum(agreements) / len(agreements), 3) if agreements else None,
-            "buried_fact_rate": round(buried / styled_replies, 3) if styled_replies else None,
-            "pairs": pair_scores,
+            "buried_fact_rate": rates["styled"],
         }
-    return {"judged": True, "design": COMPREHENSION_DESIGN, "per_style": per_style}
+        if "unstyled" in burial_arms:
+            stats["buried_fact_rate_unstyled"] = rates["unstyled"]
+        stats["pairs"] = pair_scores
+        per_style[style] = stats
+    return {"judged": True, "design": design, "per_style": per_style}
 
 
 def score_checks(
@@ -222,8 +264,8 @@ def score_checks(
     The answers mapping goes from (prompt_id, style or None) to a dict
     with text and sha256. The rows mapping is the raw judge data keyed
     by call key. The comprehension_design value comes from the meta
-    row: None selects the first-design scorer, so an old run stays
-    rescoreable.
+    row and selects the matched scorer: None selects the first-design
+    scorer, so every stored run stays rescoreable.
     """
     warnings: list[str] = []
     checks_out: dict[str, dict] = {}
@@ -269,9 +311,14 @@ def score_checks(
     }
 
     for check in CHECKS:
-        if check == "comprehension" and comprehension_design == COMPREHENSION_DESIGN:
-            checks_out[check] = _score_comprehension_v2(
-                pairs=pairs, rows=rows, replicates=replicates, warnings=warnings
+        if check == "comprehension" and comprehension_design in SHARED_DESIGNS:
+            checks_out[check] = _score_comprehension_shared(
+                pairs=pairs,
+                rows=rows,
+                replicates=replicates,
+                warnings=warnings,
+                design=comprehension_design,
+                **SHARED_DESIGNS[comprehension_design],
             )
             continue
         if not any(row.get("check") == check for row in rows.values()):

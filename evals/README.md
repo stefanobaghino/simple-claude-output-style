@@ -22,12 +22,12 @@ a reader-value report. It compares, per gated pair, the styled answer
 with the unstyled answer on three reader-facing checks, as win, loss,
 or tie. The sixth is a content-loss report. It measures, per gated
 pair, the fraction of the facts of the unstyled answer that survive
-in the styled answer, and each uncertain claim that lost its
-uncertainty. The seventh is a drift report. It runs a scripted long
-session per style, several times, lints every turn, and shows the
-violation rate over turn positions with a verdict per style: flat or
-growing. See the tracking issue in this repository for the other
-planned components.
+in the styled answer, the facts that only the styled answer states,
+and each uncertain claim that lost its uncertainty. The seventh is a
+drift report. It runs a scripted long session per style, several
+times, lints every turn, and shows the violation rate over turn
+positions with a verdict per style: flat or growing. See the
+tracking issue in this repository for the other planned components.
 
 ## Rule files
 
@@ -128,15 +128,17 @@ text, and a grader marks every reply), ambiguity through paraphrase
 agreement), and translation round-trip (one answer text goes to
 another language and back, scored by the lexical loss). The
 comprehension questions come from the shared facts of the pair. The
-completeness check of the content-loss report extracted these facts
-from the unstyled answer and marked them as present in the styled
-answer. Thus the questions probe only material that both answers
-contain, and the score measures extraction, not coverage. The check
-reads the facts from `loss-raw.jsonl`: run `style-loss <run> --judge`
-before the first `style-value <run> --judge`. Each answer gets
-several reader replicates. The pair outcome is the plurality over
-the replicate outcomes, and the report states the replicate
-agreement next to a buried-fact rate (a styled "NOT IN TEXT" reply
+completeness check of the content-loss report mined these facts in
+both directions, so a shared fact exists in two wordings, and the
+quiz takes half of its questions from the facts of each answer. Thus
+the questions probe only material that both answers contain, neither
+answer sets the phrasing alone, and the score measures extraction,
+not coverage. The check reads the facts from `loss-raw.jsonl`: run
+`style-loss <run> --judge` before the first
+`style-value <run> --judge`. Each answer gets several reader
+replicates. The pair outcome is the plurality over the replicate
+outcomes, and the report states the replicate
+agreement next to a buried-fact rate per arm (a "NOT IN TEXT" reply
 to a shared fact). Every judge call sees one bare text without a
 style name or an arm label, and the judge models must differ from
 the writer model of the run. `--judge` runs the live calls and
@@ -153,10 +155,14 @@ facts of the unstyled answer, then checks each fact against the
 styled answer) and hedging survival (the judge lists the uncertain
 claims of the unstyled answer, then judges whether the styled answer
 keeps, hardens, or drops each claim). A claim that hardens becomes a
-false certainty, which is worse than a lost fact. No judge call sees
-both answers of a pair: the extracted items travel between the calls,
-never the source text. The judge model must differ from the writer
-model of the run. `--judge` runs the live calls and appends the raw
+false certainty, which is worse than a lost fact. The completeness
+check also mines the reverse direction: the judge lists the facts of
+the styled answer and checks each fact against the unstyled answer.
+A styled fact that the unstyled answer does not state counts as an
+addition, reported per pair, because material that only the rewrite
+states is otherwise invisible. No judge call sees both answers of a
+pair: the extracted items travel between the calls, never the source
+text. The judge model must differ from the writer model of the run. `--judge` runs the live calls and appends the raw
 outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
 the same invocation runs again. Without `--judge` the tool rescores
 the stored raw data offline. The exit codes equal the exit codes of

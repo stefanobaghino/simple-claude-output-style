@@ -16,19 +16,21 @@ import sys
 from pathlib import Path
 
 from gate.cli import load_answers
+from loss.judges import FACT_MINE
 from runner.generate import GenerationError, Runner, subprocess_runner
 from runner.provenance import sha256_of
 
 from .analysis import score_checks, select_pairs, shared_facts
-from .judges import CHECKS, build_meta, run_judges
+from .judges import CHECKS, COMPREHENSION_DESIGN, COMPREHENSION_DESIGNS, build_meta, run_judges
 from .report import build_value_report, build_value_summary
 
 META_MATCH_KEYS = ("models", "questions", "paraphrases", "language", "answers_sha256")
 
-# The keys that the shared-facts redesign added to the meta row. A
-# stored meta row without them gets an upgraded meta row appended;
-# a stored value that differs is a hard mismatch.
-META_UPGRADE_KEYS = ("comprehension_design", "replicates")
+# On a design transition (a stored design earlier than the current
+# one), the comprehension rows rebuild fully under new keys, so the
+# questions and the replicates can change. The reuse of the
+# paraphrase and roundtrip rows depends only on these keys.
+TRANSITION_MATCH_KEYS = ("models", "paraphrases", "language", "answers_sha256")
 
 
 def _fail(message: str) -> SystemExit:
@@ -115,7 +117,7 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
     checks = list(args.check_list)
     answers_sha256 = sha256_of(run_dir / "answers.jsonl")
 
-    facts_by_pair: dict[tuple[str, str], list[str]] = {}
+    facts_by_pair: dict[tuple[str, str], dict[str, list[str]]] = {}
     if "comprehension" in checks:
         loss_meta, loss_rows = load_raw(run_dir / "loss-raw.jsonl")
         if loss_meta is None:
@@ -127,6 +129,12 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
         elif loss_meta.get("answers_sha256") != answers_sha256:
             warnings.append(
                 "loss-raw.jsonl comes from other answers, so comprehension is not "
+                f"judged; run style-loss {run_dir} --judge again"
+            )
+            checks.remove("comprehension")
+        elif loss_meta.get("fact_mine") != FACT_MINE:
+            warnings.append(
+                "loss-raw.jsonl holds a one-way fact mine, so comprehension is not "
                 f"judged; run style-loss {run_dir} --judge again"
             )
             checks.remove("comprehension")
@@ -145,18 +153,29 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
     )
     meta_upgraded = False
     if meta_stored is not None:
-        mismatched = [key for key in META_MATCH_KEYS if meta_stored.get(key) != meta[key]]
-        mismatched += [
-            key for key in META_UPGRADE_KEYS if key in meta_stored and meta_stored[key] != meta[key]
-        ]
+        stored_design = meta_stored.get("comprehension_design")
+        if stored_design not in COMPREHENSION_DESIGNS:
+            raise _fail(
+                f"value-raw.jsonl holds the comprehension design {stored_design!r}, "
+                "which this tool does not know; use a newer tool or remove the file"
+            )
+        if stored_design != COMPREHENSION_DESIGN:
+            match_keys = TRANSITION_MATCH_KEYS
+        else:
+            match_keys = (*META_MATCH_KEYS, "replicates")
+        mismatched = [key for key in match_keys if meta_stored.get(key) != meta[key]]
         if mismatched:
             raise _fail(
                 f"value-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
                 "remove the file to judge again from scratch"
             )
-        absent = [key for key in META_UPGRADE_KEYS if key not in meta_stored]
-        if absent:
-            meta = {**meta_stored, **{key: meta[key] for key in absent}}
+        if stored_design != COMPREHENSION_DESIGN:
+            meta = {
+                **meta_stored,
+                "comprehension_design": COMPREHENSION_DESIGN,
+                "questions": meta["questions"],
+                "replicates": meta["replicates"],
+            }
             meta_upgraded = True
         else:
             meta = meta_stored
@@ -215,7 +234,12 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     parser.add_argument("--judge", action="store_true", help="run the live judge calls first")
     parser.add_argument("--model-reader", default="haiku", help="the weak-reader model")
     parser.add_argument("--model-grader", default="opus", help="the question and grading model")
-    parser.add_argument("--questions", type=int, default=5, help="questions per pair (cap)")
+    parser.add_argument(
+        "--questions",
+        type=int,
+        default=6,
+        help="questions per pair (cap, split between the fact sources)",
+    )
     parser.add_argument("--paraphrases", type=int, default=3, help="restatements per answer")
     parser.add_argument("--replicates", type=int, default=3, help="reader calls per answer")
     parser.add_argument("--language", default="Italian", help="the round-trip language")

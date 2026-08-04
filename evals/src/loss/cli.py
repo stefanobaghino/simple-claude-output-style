@@ -26,6 +26,11 @@ from .report import build_loss_report, build_loss_summary
 
 META_MATCH_KEYS = ("model", "answers_sha256")
 
+# The key that the two-way fact mine added to the meta row. A stored
+# meta row without it gets an upgraded meta row appended; a stored
+# value that differs is a hard mismatch.
+META_UPGRADE_KEYS = ("fact_mine",)
+
 
 def _fail(message: str) -> SystemExit:
     print(message, file=sys.stderr)
@@ -51,20 +56,29 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
     warnings = _check_writer_constraint(run_dir, args.model)
 
     meta = build_meta(model=args.model, answers_sha256=sha256_of(run_dir / "answers.jsonl"))
+    meta_upgraded = False
     if meta_stored is not None:
         mismatched = [key for key in META_MATCH_KEYS if meta_stored.get(key) != meta[key]]
+        mismatched += [
+            key for key in META_UPGRADE_KEYS if key in meta_stored and meta_stored[key] != meta[key]
+        ]
         if mismatched:
             raise _fail(
                 f"loss-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
                 "remove the file to judge again from scratch"
             )
-        meta = meta_stored
+        absent = [key for key in META_UPGRADE_KEYS if key not in meta_stored]
+        if absent:
+            meta = {**meta_stored, **{key: meta[key] for key in absent}}
+            meta_upgraded = True
+        else:
+            meta = meta_stored
 
     raw_path = run_dir / "loss-raw.jsonl"
     workdir = run_dir / ".judge-workdir"
     workdir.mkdir(exist_ok=True)
     with raw_path.open("a", encoding="utf-8") as raw_file:
-        if meta_stored is None:
+        if meta_stored is None or meta_upgraded:
             raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
             raw_file.flush()
 
@@ -134,7 +148,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     elif meta is None:
         raise _fail(f"{raw_path}: no judge data; run style-loss {run_dir} --judge")
 
-    result = score_checks(pairs=pairs, answers=index, rows=rows)
+    result = score_checks(pairs=pairs, answers=index, rows=rows, fact_mine=meta.get("fact_mine"))
     warnings = pair_warnings + judge_warnings + result.warnings
     summary = build_loss_summary(
         run_name=run_dir.name, meta=meta, pairs=pairs, checks=result.checks, warnings=warnings

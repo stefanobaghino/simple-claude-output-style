@@ -20,8 +20,11 @@ CHECK_INTROS = {
     "completeness": (
         "The judge lists the facts of the unstyled answer, then checks "
         "each fact against the styled answer. The fraction is the share "
-        "of the facts that survive. The lost facts appear verbatim below "
-        "the table."
+        "of the facts that survive. The judge also lists the facts of "
+        "the styled answer and checks each fact against the unstyled "
+        "answer: a styled fact that the unstyled answer does not state "
+        "is an addition. The lost facts and the added facts appear "
+        "verbatim below the table."
     ),
     "hedging": (
         "The judge lists the claims that the unstyled answer presents "
@@ -62,14 +65,34 @@ def _fraction(value: float | None) -> str:
 
 
 def _completeness_section(stats: dict) -> list[str]:
-    lines = ["| Pair | Facts | Survived | Fraction |", "|---|---|---|---|"]
-    lines += [
-        f"| {prompt_id} | {entry['facts']} | {entry['survived']} | {_fraction(entry['fraction'])} |"
-        for prompt_id, entry in stats["pairs"].items()
-    ]
+    two_way = any("additions" in entry for entry in stats["pairs"].values())
+    if two_way:
+        lines = [
+            "| Pair | Facts | Survived | Fraction | Styled facts | Additions |",
+            "|---|---|---|---|---|---|",
+        ]
+        lines += [
+            f"| {prompt_id} | {entry['facts']} | {entry['survived']} "
+            f"| {_fraction(entry['fraction'])} | {_fraction(entry['styled_facts'])} "
+            f"| {_fraction(entry['additions'])} |"
+            for prompt_id, entry in stats["pairs"].items()
+        ]
+    else:
+        lines = ["| Pair | Facts | Survived | Fraction |", "|---|---|---|---|"]
+        lines += [
+            f"| {prompt_id} | {entry['facts']} | {entry['survived']} "
+            f"| {_fraction(entry['fraction'])} |"
+            for prompt_id, entry in stats["pairs"].items()
+        ]
     lines.append("")
     lines += _median_line(stats, "fraction")
-    lines += _lost_lines(stats, "Lost facts:", "No pair lost a fact.")
+    if two_way:
+        lines += _additions_median_line(stats)
+    lines += _lost_lines(stats, "lost", "Lost facts:", "No pair lost a fact.")
+    if two_way:
+        lines += _lost_lines(
+            stats, "added", "Added facts (styled only):", "No styled answer adds a fact."
+        )
     return lines
 
 
@@ -85,7 +108,7 @@ def _hedging_section(stats: dict) -> list[str]:
     ]
     lines.append("")
     lines += _median_line(stats, "survival")
-    lines += _lost_lines(stats, "Claims that became certain:", "No claim became certain.")
+    lines += _lost_lines(stats, "lost", "Claims that became certain:", "No claim became certain.")
     return lines
 
 
@@ -96,15 +119,22 @@ def _median_line(stats: dict, score_key: str) -> list[str]:
     return [f"Median {score_key}: {stats['median']} over {scored} scored pairs.", ""]
 
 
-def _lost_lines(stats: dict, title: str, empty: str) -> list[str]:
-    lost = [
+def _additions_median_line(stats: dict) -> list[str]:
+    if stats["additions_median"] is None:
+        return ["No pair has an additions count.", ""]
+    scored = sum(1 for entry in stats["pairs"].values() if entry["additions"] is not None)
+    return [f"Median additions: {stats['additions_median']} over {scored} scored pairs.", ""]
+
+
+def _lost_lines(stats: dict, key: str, title: str, empty: str) -> list[str]:
+    items = [
         f"- {prompt_id}: {item}"
         for prompt_id, entry in stats["pairs"].items()
-        for item in entry["lost"]
+        for item in entry.get(key, [])
     ]
-    if not lost:
+    if not items:
         return [empty, ""]
-    return [title, "", *lost, ""]
+    return [title, "", *items, ""]
 
 
 def _check_section(name: str, check: dict, run_name: str) -> list[str]:

@@ -5,6 +5,9 @@ the raw judge rows: no network, no clock beyond the caller. Per pair,
 the completeness check yields the fraction of the facts that survive,
 and the hedging check yields the fraction of the uncertain claims
 that keep their uncertainty among the claims that survive at all.
+Under the two-way fact mine, the completeness check also yields the
+additions of a pair: the facts of the styled answer that the unstyled
+answer does not state.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from statistics import median
 
 from value.judges import parse_bools
 
-from .judges import CHECKS, parse_string_list, parse_verdicts
+from .judges import CHECKS, FACT_MINE, parse_string_list, parse_verdicts
 
 
 @dataclass
@@ -32,12 +35,15 @@ def score_checks(
     pairs: dict[str, list[str]],
     answers: dict[tuple[str, str | None], dict],
     rows: dict[str, dict],
+    fact_mine: str | None = None,
 ) -> LossResult:
     """Score both checks for every pair.
 
     The answers mapping goes from (prompt_id, style or None) to a dict
     with text and sha256. The rows mapping is the raw judge data keyed
-    by call key.
+    by call key. The fact_mine value comes from the meta row: only the
+    two-way tag scores the additions, so an old one-way run keeps its
+    exact output shape.
     """
     warnings: list[str] = []
     checks_out: dict[str, dict] = {}
@@ -51,6 +57,28 @@ def score_checks(
             lists_cache[key] = parse_string_list(row["output"]) if row else None
         return lists_cache[key]
 
+    def additions_fields(style: str, prompt_id: str) -> dict:
+        styled_sha = answers[(prompt_id, style)]["sha256"]
+        styled_facts = list_for("completeness", "facts", styled_sha)
+        if styled_facts is None:
+            warnings.append(
+                f"{style}/{prompt_id}: the completeness check has no usable styled "
+                "fact list, so the additions of the pair are unscored"
+            )
+            return {"styled_facts": None, "additions": None, "added": []}
+        if not styled_facts:
+            return {"styled_facts": 0, "additions": 0, "added": []}
+        row = rows.get(f"completeness:reverse:{styled_sha}")
+        marks = parse_bools(row["output"], len(styled_facts)) if row else None
+        if marks is None:
+            warnings.append(
+                f"{style}/{prompt_id}: the completeness check has no usable reverse "
+                "marks, so the additions of the pair are unscored"
+            )
+            return {"styled_facts": len(styled_facts), "additions": None, "added": []}
+        added = [fact for fact, present in zip(styled_facts, marks, strict=True) if not present]
+        return {"styled_facts": len(styled_facts), "additions": len(added), "added": added}
+
     def completeness_pair(style: str, prompt_id: str) -> dict | None:
         facts = list_for("completeness", "facts", answers[(prompt_id, None)]["sha256"])
         if facts is None:
@@ -60,21 +88,25 @@ def score_checks(
             )
             return None
         if not facts:
-            return {"facts": 0, "survived": 0, "fraction": None, "lost": []}
-        row = rows.get(f"completeness:check:{answers[(prompt_id, style)]['sha256']}")
-        marks = parse_bools(row["output"], len(facts)) if row else None
-        if marks is None:
-            warnings.append(
-                f"{style}/{prompt_id}: the completeness check has no usable survival marks, "
-                "so the pair is unscored"
-            )
-            return None
-        return {
-            "facts": len(facts),
-            "survived": sum(marks),
-            "fraction": round(sum(marks) / len(facts), 3),
-            "lost": [fact for fact, kept in zip(facts, marks, strict=True) if not kept],
-        }
+            entry = {"facts": 0, "survived": 0, "fraction": None, "lost": []}
+        else:
+            row = rows.get(f"completeness:check:{answers[(prompt_id, style)]['sha256']}")
+            marks = parse_bools(row["output"], len(facts)) if row else None
+            if marks is None:
+                warnings.append(
+                    f"{style}/{prompt_id}: the completeness check has no usable survival "
+                    "marks, so the pair is unscored"
+                )
+                return None
+            entry = {
+                "facts": len(facts),
+                "survived": sum(marks),
+                "fraction": round(sum(marks) / len(facts), 3),
+                "lost": [fact for fact, kept in zip(facts, marks, strict=True) if not kept],
+            }
+        if fact_mine == FACT_MINE:
+            entry.update(additions_fields(style, prompt_id))
+        return entry
 
     def hedging_pair(style: str, prompt_id: str) -> dict | None:
         claims = list_for("hedging", "claims", answers[(prompt_id, None)]["sha256"])
@@ -137,7 +169,16 @@ def score_checks(
             scores = [
                 entry[score_key] for entry in pair_scores.values() if entry[score_key] is not None
             ]
-            per_style[style] = {"median": _median(scores), "pairs": pair_scores}
+            stats = {"median": _median(scores)}
+            if check == "completeness" and fact_mine == FACT_MINE:
+                additions = [
+                    entry["additions"]
+                    for entry in pair_scores.values()
+                    if entry["additions"] is not None
+                ]
+                stats["additions_median"] = _median(additions)
+            stats["pairs"] = pair_scores
+            per_style[style] = stats
         checks_out[check] = {"judged": True, "per_style": per_style}
 
     return LossResult(checks=checks_out, warnings=warnings)

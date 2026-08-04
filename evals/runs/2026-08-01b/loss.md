@@ -16,34 +16,36 @@ Judge: opus. Judged on 2026-08-01T21:55:23+00:00.
 
 ## Completeness (fact survival)
 
-The judge lists the facts of the unstyled answer, then checks each fact against the styled answer. The fraction is the share of the facts that survive. The lost facts appear verbatim below the table.
+The judge lists the facts of the unstyled answer, then checks each fact against the styled answer. The fraction is the share of the facts that survive. The judge also lists the facts of the styled answer and checks each fact against the unstyled answer: a styled fact that the unstyled answer does not state is an addition. The lost facts and the added facts appear verbatim below the table.
 
 ### plain-language
 
-| Pair | Facts | Survived | Fraction |
-|---|---|---|---|
-| code-review-01 | 29 | 22 | 0.759 |
-| code-review-02 | 20 | 14 | 0.7 |
-| code-review-03 | 20 | 11 | 0.55 |
-| code-review-04 | 22 | 17 | 0.773 |
-| code-review-05 | 34 | 24 | 0.706 |
-| debugging-01 | 8 | 8 | 1.0 |
-| debugging-02 | 14 | 11 | 0.786 |
-| debugging-03 | 7 | 6 | 0.857 |
-| debugging-04 | 17 | 11 | 0.647 |
-| debugging-05 | 10 | 9 | 0.9 |
-| explanation-01 | 36 | 24 | 0.667 |
-| explanation-02 | 24 | 19 | 0.792 |
-| explanation-03 | 38 | 26 | 0.684 |
-| explanation-04 | 46 | 31 | 0.674 |
-| explanation-05 | 14 | 13 | 0.929 |
-| summarization-01 | 8 | 8 | 1.0 |
-| summarization-02 | 14 | 11 | 0.786 |
-| summarization-03 | 13 | 13 | 1.0 |
-| summarization-04 | 13 | 13 | 1.0 |
-| summarization-05 | 9 | 9 | 1.0 |
+| Pair | Facts | Survived | Fraction | Styled facts | Additions |
+|---|---|---|---|---|---|
+| code-review-01 | 29 | 22 | 0.759 | 27 | 6 |
+| code-review-02 | 20 | 14 | 0.7 | 25 | 2 |
+| code-review-03 | 20 | 11 | 0.55 | 20 | 4 |
+| code-review-04 | 22 | 17 | 0.773 | 18 | 1 |
+| code-review-05 | 34 | 24 | 0.706 | 34 | 6 |
+| debugging-01 | 8 | 8 | 1.0 | 7 | 1 |
+| debugging-02 | 14 | 11 | 0.786 | 14 | 0 |
+| debugging-03 | 7 | 6 | 0.857 | 9 | 0 |
+| debugging-04 | 17 | 11 | 0.647 | 11 | 2 |
+| debugging-05 | 10 | 9 | 0.9 | 14 | 0 |
+| explanation-01 | 36 | 24 | 0.667 | 25 | 1 |
+| explanation-02 | 24 | 19 | 0.792 | 21 | 2 |
+| explanation-03 | 38 | 26 | 0.684 | 25 | 1 |
+| explanation-04 | 46 | 31 | 0.674 | 25 | 1 |
+| explanation-05 | 14 | 13 | 0.929 | 15 | 2 |
+| summarization-01 | 8 | 8 | 1.0 | 8 | 0 |
+| summarization-02 | 14 | 11 | 0.786 | 19 | 4 |
+| summarization-03 | 13 | 13 | 1.0 | 13 | 0 |
+| summarization-04 | 13 | 13 | 1.0 | 12 | 2 |
+| summarization-05 | 9 | 9 | 1.0 | 6 | 0 |
 
 Median fraction: 0.786 over 20 scored pairs.
+
+Median additions: 1.0 over 20 scored pairs.
 
 Lost facts:
 
@@ -144,30 +146,70 @@ Lost facts:
 - summarization-02: The reduction in production pool size was a 10x reduction.
 - summarization-02: A recommended prevention is to add pool size and other critical infrastructure parameters to the review checklist.
 
+Added facts (styled only):
+
+- code-review-01: The mutable default argument is the most serious problem in the function
+- code-review-01: `except Exception as e` should be used at a minimum instead of a bare `except`
+- code-review-01: Logging or re-raising with context should be considered in the exception handler
+- code-review-01: The function does not check whether `roles` contains valid values before inserting
+- code-review-01: The corrected version catches `Exception as e` and logs the error with `logging.error`
+- code-review-01: The corrected version returns `True` on a successful insert and `False` after a caught exception
+- code-review-02: `fetch` rejects only on network failures.
+- code-review-02: Callers must wrap the call in a `try`/`catch`.
+- code-review-03: Naming the exact columns needed is safer than `SELECT *`.
+- code-review-03: The function assumes `customer_name` and `status` are always strings.
+- code-review-03: If a caller passes `None` or another type, the `+` concatenation fails with a `TypeError`.
+- code-review-03: A `TypeError` is not a clear error about bad input.
+- code-review-04: Because `reset` writes a fixed value, it does not have the read-then-write problem on its own.
+- code-review-05: Adding `cd "$BACKUP_DIR" || exit 1` makes the script stop when cd fails.
+- code-review-05: The shell's own globbing is more reliable than parsing `ls` and does not need an extra process.
+- code-review-05: `set -eu` stops the script on the first error or unset variable.
+- code-review-05: `${1:?...}` produces a clear error message if no argument is passed.
+- code-review-05: The rewrite replaces `rm -rf` with `rm -f` because the targets are plain temp files, not directories.
+- code-review-05: If directory removal is needed, `-r` should be kept but only with a solid guard in place.
+- debugging-01: The corrected function get_url(cfg) returns the f-string "http://{cfg['host']}:{cfg['port']}/api".
+- debugging-04: The byte 0xc3 is the first byte of many UTF-8 characters outside the plain English alphabet.
+- debugging-04: errors="ignore" is an alternative to errors="replace".
+- explanation-01: Most language standard libraries use chaining.
+- explanation-02: Editing a wiki page is an example of optimistic locking.
+- explanation-02: Most web form edits are a case that fits optimistic locking.
+- explanation-03: Slow start is used at the start of a connection or after a long pause.
+- explanation-04: Processes cost more to create and switch between than threads do.
+- explanation-05: In a garbage-collected language, a garbage collector is a background process.
+- explanation-05: A UI component subscribing to an event source is an example of one object registering itself with another.
+- summarization-02: The pool size of 5 exhausted the database connection pool.
+- summarization-02: The exhausted connection pool broke checkout for about 12% of requests.
+- summarization-02: Rollback took 27 minutes after the page.
+- summarization-02: Rollback spanned 09:21 to 09:48.
+- summarization-04: The reproduction steps click Export and then choose PDF.
+- summarization-04: Nothing happens on the first click of the PDF export.
+
 ### technical-simplified
 
-| Pair | Facts | Survived | Fraction |
-|---|---|---|---|
-| code-review-01 | 29 | 24 | 0.828 |
-| code-review-02 | 20 | 13 | 0.65 |
-| code-review-03 | 20 | 9 | 0.45 |
-| code-review-04 | 22 | 20 | 0.909 |
-| code-review-05 | 34 | 25 | 0.735 |
-| debugging-01 | 8 | 8 | 1.0 |
-| debugging-02 | 14 | 9 | 0.643 |
-| debugging-03 | 7 | 7 | 1.0 |
-| debugging-04 | 17 | 12 | 0.706 |
-| debugging-05 | 10 | 9 | 0.9 |
-| explanation-01 | 36 | 24 | 0.667 |
-| explanation-02 | 24 | 15 | 0.625 |
-| explanation-04 | 46 | 27 | 0.587 |
-| explanation-05 | 14 | 13 | 0.929 |
-| summarization-01 | 8 | 8 | 1.0 |
-| summarization-03 | 13 | 13 | 1.0 |
-| summarization-04 | 13 | 12 | 0.923 |
-| summarization-05 | 9 | 8 | 0.889 |
+| Pair | Facts | Survived | Fraction | Styled facts | Additions |
+|---|---|---|---|---|---|
+| code-review-01 | 29 | 24 | 0.828 | 30 | 2 |
+| code-review-02 | 20 | 13 | 0.65 | 16 | 1 |
+| code-review-03 | 20 | 9 | 0.45 | 18 | 2 |
+| code-review-04 | 22 | 20 | 0.909 | 19 | 2 |
+| code-review-05 | 34 | 25 | 0.735 | 31 | 2 |
+| debugging-01 | 8 | 8 | 1.0 | 9 | 2 |
+| debugging-02 | 14 | 9 | 0.643 | 17 | 0 |
+| debugging-03 | 7 | 7 | 1.0 | 12 | 3 |
+| debugging-04 | 17 | 12 | 0.706 | 11 | 3 |
+| debugging-05 | 10 | 9 | 0.9 | 16 | 0 |
+| explanation-01 | 36 | 24 | 0.667 | 26 | 1 |
+| explanation-02 | 24 | 15 | 0.625 | 24 | 9 |
+| explanation-04 | 46 | 27 | 0.587 | 23 | 2 |
+| explanation-05 | 14 | 13 | 0.929 | 13 | 0 |
+| summarization-01 | 8 | 8 | 1.0 | 5 | 0 |
+| summarization-03 | 13 | 13 | 1.0 | 13 | 1 |
+| summarization-04 | 13 | 12 | 0.923 | 11 | 0 |
+| summarization-05 | 9 | 8 | 0.889 | 6 | 0 |
 
 Median fraction: 0.859 over 18 scored pairs.
+
+Median additions: 1.5 over 18 scored pairs.
 
 Lost facts:
 
@@ -259,6 +301,39 @@ Lost facts:
 - explanation-05: A registry reference also keeps alive anything the registered object closes over.
 - summarization-04: Clicking "Export as PDF" produces repeated "export failed" error banners.
 - summarization-05: Ada is assigned to run the payments DB migration dry run.
+
+Added facts (styled only):
+
+- code-review-01: The function has 6 problems.
+- code-review-01: The corrected version raises `ValueError("name must not be empty")` when `name` is falsy.
+- code-review-02: The function returns no value.
+- code-review-03: Retrieving all columns wastes bandwidth.
+- code-review-03: The fixed version uses `?` placeholders for the customer and status conditions.
+- code-review-04: A caller has no way to run several operations together as one atomic unit.
+- code-review-04: Read-then-reset is an example of a multi-operation atomic unit the caller cannot perform.
+- code-review-05: The loop still handles the no-matching-`.log`-files case correctly, but the error message is confusing to the user.
+- code-review-05: The recommended script uses `cd -- "$BACKUP_DIR"` with the variable quoted and `--` before it.
+- debugging-01: The corrected function `get_url(cfg)` returns the f-string `http://{cfg['host']}:{cfg['port']}/api`.
+- debugging-01: The function `get_url` takes a single parameter named `cfg`.
+- debugging-03: `moving_sum` computes the sum of each window of the given size.
+- debugging-03: `moving_sum` builds a list `sums` by appending `sum(values[i : i + window])` for each `i`, and returns it.
+- debugging-03: After the fix, the resulting sums are `[3, 5, 7]`.
+- debugging-04: The file has a non-ASCII byte 0xc3 at position 512.
+- debugging-04: UTF-8 is a superset of ASCII.
+- debugging-04: Because UTF-8 is a superset of ASCII, the fix works for ASCII files too.
+- explanation-01: Rust's HashMap uses open addressing.
+- explanation-02: In the example, a wiki page has a `version` column.
+- explanation-02: In the example, User A reads the wiki page at version 5.
+- explanation-02: In the example, User B also reads the page at version 5 and saves an edit.
+- explanation-02: In the example, the database sets the page version to 6 after User B saves.
+- explanation-02: In the example, User A's later save fails because the version in the database is 6, not 5.
+- explanation-02: In the example, User A must reload the page and try again.
+- explanation-02: Optimistic locking fits web applications with many readers and few conflicting writes.
+- explanation-02: In the example, a bank system must transfer money between two accounts.
+- explanation-02: In the example, the bank system locks both account rows with `SELECT ... FOR UPDATE`.
+- explanation-04: Threads must use locks or other synchronization to protect shared data.
+- explanation-04: Each process takes longer to start than a thread.
+- summarization-03: A worker pool will generate the thumbnails and update the record.
 
 ## Hedging survival
 

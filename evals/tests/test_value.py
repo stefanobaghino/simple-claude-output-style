@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from runner.generate import GenerationError
 from runner.provenance import sha256_of
 from value import cli, extract_json, judge_argv, score_checks, select_pairs
 from value.analysis import shared_facts
@@ -596,6 +597,58 @@ def test_structured_calls_retry_once(tmp_path):
     )
     assert value == [True, False]
     assert session.rows["comprehension:grades:S"]["output"] == "[true, false]"
+
+
+def test_a_call_retries_a_transient_failure_once(tmp_path):
+    attempts = []
+
+    def run(argv, cwd):
+        attempts.append(argv)
+        if len(attempts) == 1:
+            raise GenerationError("claude exited with code 1: transient")
+        return stream("[true, false]")
+
+    session = JudgeSession(rows={}, sink=lambda row: None, workdir=tmp_path, run=run)
+    row = session.call(
+        key="comprehension:grades:S",
+        check="comprehension",
+        role="grades",
+        model="opus",
+        prompt="Grade the quiz answers below.",
+        prompt_id="p-01",
+        answer_sha256="S",
+    )
+    assert len(attempts) == 2
+    assert row["output"] == "[true, false]"
+    assert session.rows["comprehension:grades:S"] is row
+    assert session.warnings == [
+        (
+            "comprehension:grades:S: the first call failed and the retry "
+            "succeeded: claude exited with code 1: transient"
+        )
+    ]
+
+
+def test_a_second_call_failure_propagates(tmp_path):
+    attempts = []
+
+    def run(argv, cwd):
+        attempts.append(argv)
+        raise GenerationError("claude exited with code 1: persistent")
+
+    session = JudgeSession(rows={}, sink=lambda row: None, workdir=tmp_path, run=run)
+    with pytest.raises(GenerationError):
+        session.call(
+            key="comprehension:grades:S",
+            check="comprehension",
+            role="grades",
+            model="opus",
+            prompt="Grade the quiz answers below.",
+            prompt_id="p-01",
+            answer_sha256="S",
+        )
+    assert len(attempts) == 2
+    assert session.rows == {}
 
 
 def test_run_parallel_runs_every_task():

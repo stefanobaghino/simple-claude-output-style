@@ -1,0 +1,1015 @@
+{
+  "date": "2026-08-05T06:33:23+00:00",
+  "run": "2026-08-05b",
+  "judge": {
+    "model": "opus",
+    "judged_date": "2026-08-05T06:28:26+00:00",
+    "claude_version": "2.1.222 (Claude Code)"
+  },
+  "pairs": {
+    "plain-language": [
+      "code-review-01",
+      "code-review-02",
+      "code-review-03",
+      "code-review-04",
+      "code-review-05",
+      "debugging-01",
+      "debugging-02",
+      "debugging-03",
+      "debugging-04",
+      "debugging-05",
+      "explanation-01",
+      "explanation-02",
+      "explanation-03",
+      "explanation-04",
+      "explanation-05",
+      "summarization-01",
+      "summarization-02",
+      "summarization-03",
+      "summarization-04",
+      "summarization-05"
+    ],
+    "technical-simplified": [
+      "code-review-01",
+      "code-review-02",
+      "code-review-03",
+      "code-review-04",
+      "code-review-05",
+      "debugging-01",
+      "debugging-02",
+      "debugging-03",
+      "debugging-05",
+      "explanation-02",
+      "explanation-04",
+      "summarization-01",
+      "summarization-02",
+      "summarization-03",
+      "summarization-04",
+      "summarization-05"
+    ]
+  },
+  "checks": {
+    "completeness": {
+      "judged": true,
+      "per_style": {
+        "plain-language": {
+          "median": 0.769,
+          "additions_median": 1.0,
+          "pairs": {
+            "code-review-01": {
+              "facts": 29,
+              "survived": 18,
+              "fraction": 0.621,
+              "lost": [
+                "If `db` is not provided, `db.insert(...)` raises `AttributeError`.",
+                "Nothing checks that `name` is non-empty, is the correct type, or is not already present.",
+                "Without validation, invalid input gets stored.",
+                "The return value carries no information about failure.",
+                "When `roles` is explicitly passed in, `.append` mutates the caller's list in place.",
+                "Mutating the caller's list is a surprising side effect if the caller reuses that list elsewhere.",
+                "The code has no duplicate-role guard.",
+                "Calling the function with `roles=[\"member\"]` produces `[\"member\", \"member\"]`.",
+                "The fixed version copies `roles` with `list(roles) if roles else []`.",
+                "The fixed version appends `\"member\"` only if `\"member\"` is not already in `roles`.",
+                "The fixed version calls `db.insert({\"name\": name, \"roles\": roles})` and returns `True`."
+              ],
+              "styled_facts": 23,
+              "additions": 2,
+              "added": [
+                "The function does not validate that `roles` is a list.",
+                "Bad input can cause errors that the `except` then swallows."
+              ]
+            },
+            "code-review-02": {
+              "facts": 24,
+              "survived": 14,
+              "fraction": 0.583,
+              "lost": [
+                "Marking the function `async` gives no benefit here and masks the fact that the body is really synchronous.",
+                "There is no guard on `data.name`.",
+                "If the API returns a payload without a `name` field, or with `name` set to `null`, `.toUpperCase()` throws.",
+                "The outer `profile` variable is unnecessary.",
+                "Using a shared `profile` variable and mutating it in a closure is more indirect than working with the resolved value directly.",
+                "The shared outer variable is what let the async bug hide in plain sight.",
+                "`userId` is not encoded.",
+                "If `userId` can contain special characters, it should be passed through `encodeURIComponent` before being interpolated into the URL path.",
+                "The corrected version awaits `fetch` with the URL `/api/users/${encodeURIComponent(userId)}`.",
+                "The corrected version throws an `Error` with the message 'Profile response missing name' when `data?.name` is falsy."
+              ],
+              "styled_facts": 21,
+              "additions": 0,
+              "added": []
+            },
+            "code-review-03": {
+              "facts": 26,
+              "survived": 18,
+              "fraction": 0.692,
+              "lost": [
+                "A stacked or UNION payload can exploit the SQL injection, depending on the driver.",
+                "`status` presumably comes from a small fixed set of values, such as an enum.",
+                "Unexpected `status` values silently produce empty results instead of failing fast.",
+                "`fetchall()` is used on potentially large result sets.",
+                "The query has no LIMIT or pagination.",
+                "A broad `customer_name` match could pull an unbounded number of rows into memory.",
+                "The function has no type hints.",
+                "Missing type hints make the expected argument and return types unclear at the call site."
+              ],
+              "styled_facts": 26,
+              "additions": 5,
+              "added": [
+                "The psycopg2 driver uses `%s` as its parameter placeholder.",
+                "Code that unpacks rows by position may misalign when a column is added to the table.",
+                "One option for error handling is to catch the exception and re-raise it with more detail.",
+                "Another option for error handling is to let the caller handle the exception deliberately.",
+                "The appropriate error-handling choice depends on the needs of the surrounding code."
+              ]
+            },
+            "code-review-04": {
+              "facts": 29,
+              "survived": 17,
+              "fraction": 0.586,
+              "lost": [
+                "This failure mode is known as the lost-update bug.",
+                "`+=` compiles to separate LOAD, ADD, and STORE steps at the bytecode level.",
+                "`reset` writes `self.value = 0` with no coordination.",
+                "Such an interleaving silently discards either the reset or the increment, depending on timing.",
+                "Any external read of `self.value` is exposed to a TOCTOU race.",
+                "The class has no `__slots__`.",
+                "Relying on CPython's GIL to hand-wave these issues is not portable.",
+                "The code is unsafe on any implementation without a GIL guaranteeing bytecode-level atomicity of the whole `current = ...; self.value = ...` sequence.",
+                "In the fixed version, `__init__` creates `self._lock = threading.Lock()` and sets `self.value = 0`.",
+                "In the fixed version, `increment` executes `self.value += 1` inside a `with self._lock:` block.",
+                "In the fixed version, `reset` executes `self.value = 0` inside a `with self._lock:` block.",
+                "The fixed version imports the `threading` module."
+              ],
+              "styled_facts": 23,
+              "additions": 4,
+              "added": [
+                "The class is not thread-safe despite the code claiming it is.",
+                "Another fix is to use `itertools.count()` or another atomic counter instead of a plain attribute.",
+                "Another fix is to use `multiprocessing.Value` or an atomic integer type if the counter must work across processes.",
+                "If calling code reads `counter.value` directly, that read can happen mid-write in another language's runtime."
+              ]
+            },
+            "code-review-05": {
+              "facts": 34,
+              "survived": 28,
+              "fraction": 0.824,
+              "lost": [
+                "The script assigns `BACKUP_DIR=$1` without quoting.",
+                "If `$1` is empty, `cd` is called with no arguments and changes to `$HOME` instead of failing.",
+                "With an unexpanded `*.tmp` glob, `rm -rf` fails harmlessly.",
+                "If no `.log` files match, the glob `*.log` is passed literally to `ls`.",
+                "`ls` errors to stderr with a message like `ls: cannot access '*.log'` when the glob does not match.",
+                "The suggested fix checks `[ -z \"$BACKUP_DIR\" ] || [ ! -d \"$BACKUP_DIR\" ]` and exits 1 with a usage message on stderr."
+              ],
+              "styled_facts": 39,
+              "additions": 5,
+              "added": [
+                "`cd` should be followed by `|| exit 1`, for example `cd \"$BACKUP_DIR\" || exit 1`.",
+                "Running `rm -rf` on an unexpanded glob hides a wrong-directory mistake because it does not error out.",
+                "Using a plain glob instead of `$(ls ...)` avoids a needless subprocess.",
+                "Disk full or a permission problem can cause `gzip` to fail.",
+                "`${1:?...}` fails immediately with a clear message when no argument is given."
+              ]
+            },
+            "debugging-01": {
+              "facts": 8,
+              "survived": 8,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 9,
+              "additions": 0,
+              "added": []
+            },
+            "debugging-02": {
+              "facts": 17,
+              "survived": 14,
+              "fraction": 0.824,
+              "lost": [
+                "The resulting `NaN` is assigned back to the property and logged.",
+                "An alternative fix is to bind the regular function with `.bind(this)`.",
+                "Another alternative fix is to capture `this` beforehand in a variable such as `const self = this;` and use `self.seconds` inside the callback."
+              ],
+              "styled_facts": 16,
+              "additions": 1,
+              "added": [
+                "In strict mode, `this` inside such a plain function callback is `undefined`."
+              ]
+            },
+            "debugging-03": {
+              "facts": 15,
+              "survived": 15,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 12,
+              "additions": 0,
+              "added": []
+            },
+            "debugging-04": {
+              "facts": 19,
+              "survived": 11,
+              "fraction": 0.579,
+              "lost": [
+                "The errors=\"ignore\" option is an alternative fallback to errors=\"replace\".",
+                "Detecting the encoding first is an alternative to assuming ASCII.",
+                "chardet and charset-normalizer are libraries that detect encodings.",
+                "The actual encoding might not be UTF-8 at all, for example Latin-1 or Windows-1252.",
+                "The command `file <path>` inspects a specific file to determine its encoding.",
+                "Checking the source of a file is a way to confirm its encoding.",
+                "The encoding should be confirmed before picking it.",
+                "errors=\"replace\" silently corrupts characters when the encoding is wrong."
+              ],
+              "styled_facts": 14,
+              "additions": 1,
+              "added": [
+                "The problematic byte is at position 512."
+              ]
+            },
+            "debugging-05": {
+              "facts": 16,
+              "survived": 11,
+              "fraction": 0.688,
+              "lost": [
+                "When the test runs alone, it is the only call to make_post.",
+                "In the full suite, DEFAULT_TAGS is already [\"draft\", \"post\"] by the time this test runs.",
+                "In the full suite, the result becomes [\"draft\", \"post\", \"post\"], failing the assertion.",
+                "The fixed code is: tags = list(tags) if tags is not None else list(DEFAULT_TAGS).",
+                "Copying the caller's tags list protects callers from having their own list mutated in place."
+              ],
+              "styled_facts": 18,
+              "additions": 0,
+              "added": []
+            },
+            "explanation-01": {
+              "facts": 42,
+              "survived": 35,
+              "fraction": 0.833,
+              "lost": [
+                "The array of a hash map is finite, but the space of possible keys usually is not.",
+                "Collisions in a hash map are inevitable.",
+                "The collection in a chaining bucket is sometimes a tree.",
+                "Linear probing checks index+1, index+2, and so on.",
+                "Quadratic probing is a probe sequence.",
+                "Double hashing is a probe sequence.",
+                "Rust's HashMap uses an open addressing variant for speed."
+              ],
+              "styled_facts": 27,
+              "additions": 1,
+              "added": [
+                "Separate chaining's performance stays steady as the map fills up."
+              ]
+            },
+            "explanation-02": {
+              "facts": 28,
+              "survived": 25,
+              "fraction": 0.893,
+              "lost": [
+                "Optimistic locking fits when transactions are short but the think time between read and write can be long.",
+                "A user editing a form in a browser is an example of long think time between read and write.",
+                "Pessimistic locking fits when the critical section is short so lock hold time stays small."
+              ],
+              "styled_facts": 26,
+              "additions": 4,
+              "added": [
+                "Financial transfers, seat reservations, and inventory deductions are common cases for pessimistic locking.",
+                "Two transactions that both act on stale data could cause real harm, such as double-booking a seat.",
+                "Content editing systems and shopping-cart updates fit optimistic locking well.",
+                "Most users edit different rows at the same time, so the check-and-retry cost of optimistic locking stays low."
+              ]
+            },
+            "explanation-03": {
+              "facts": 36,
+              "survived": 22,
+              "fraction": 0.611,
+              "lost": [
+                "The sender keeps a variable called the congestion window, abbreviated cwnd.",
+                "The receiver's advertised window caps data based on the receiver's buffer space, not on the network.",
+                "The initial congestion window was historically 1 segment.",
+                "The initial congestion window is now commonly 10 segments.",
+                "RFC 6928 specifies the initial congestion window of 10 segments.",
+                "The name 'slow start' is somewhat misleading, because growth is slow only in the first round trip and then accelerates rapidly.",
+                "Congestion avoidance is more cautious than slow start and grows the window linearly instead of exponentially.",
+                "If a sender transmitted at a fixed conservative rate and never grew it, well-provisioned paths would be badly underused.",
+                "With a fixed conservative rate, every connection would be slow regardless of the available capacity.",
+                "Exponential growth is a deliberate compromise.",
+                "Additive growth from the start would take too long to reach a good rate on high-capacity paths.",
+                "Growth must stop being exponential, via ssthresh or a loss event, before it overshoots the network's actual capacity.",
+                "Routers on the Internet do not tell endpoints that they are sending too fast.",
+                "Newer algorithms use delay or ECN signals as feedback."
+              ],
+              "styled_facts": 20,
+              "additions": 1,
+              "added": [
+                "Slow start continues until the sender detects a loss, or the window reaches a threshold, or the window reaches the receiver's stated capacity."
+              ]
+            },
+            "explanation-04": {
+              "facts": 41,
+              "survived": 28,
+              "fraction": 0.683,
+              "lost": [
+                "A process has its own set of OS resources, such as file descriptors and signal handlers.",
+                "Processes are isolated from each other by the OS and MMU.",
+                "All threads in a process share the same open file descriptors.",
+                "Each thread has its own stack.",
+                "Each thread has its own register state, including the program counter.",
+                "Browser tabs and sandboxed plugins are examples of running untrusted code.",
+                "Independent lifecycle and restart is a reason to use more processes instead of more threads.",
+                "A process provides restart granularity through the OS via kill, exit codes, and resource limits.",
+                "A thread cannot be forcibly terminated as cleanly as a process.",
+                "Resource limiting is a reason to use more processes instead of more threads.",
+                "OS tools like ulimit, cgroups, and nice apply per-process.",
+                "Capping CPU or memory for one piece of work independently requires that work to have its own process.",
+                "Many workers reading and writing a shared in-memory cache is an example of work suited to threads."
+              ],
+              "styled_facts": 29,
+              "additions": 2,
+              "added": [
+                "Web servers often run one process per worker for fault isolation.",
+                "With one process per worker, a bug in handling one request won't take down the whole server."
+              ]
+            },
+            "explanation-05": {
+              "facts": 17,
+              "survived": 14,
+              "fraction": 0.824,
+              "lost": [
+                "GC roots include globals, stacks, and active closures.",
+                "Using a regular strong-referencing collection as a cache instead of a weak or bounded one causes a memory leak.",
+                "A listener closure that captures its enclosing scope keeps a whole chain of otherwise-unrelated objects alive."
+              ],
+              "styled_facts": 17,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-01": {
+              "facts": 6,
+              "survived": 6,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 5,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-02": {
+              "facts": 12,
+              "survived": 5,
+              "fraction": 0.417,
+              "lost": [
+                "The pool size was changed from 50 to 5.",
+                "Connection pool sizing, and likely other resource limits, should be added to the review checklist.",
+                "Detection to mitigation took about 34 minutes.",
+                "The errors started at 09:14.",
+                "The rollback happened at 09:48.",
+                "The page fired quickly, within 7 minutes.",
+                "Alerting on pool exhaustion specifically, rather than only on error rate, could shorten the diagnosis step."
+              ],
+              "styled_facts": 13,
+              "additions": 4,
+              "added": [
+                "Small pool size values are set on purpose in staging.",
+                "The connection pool exhaustion led to errors for about 12% of checkout requests.",
+                "The staging and production templates sit in the same directory.",
+                "The staging and production templates have similar names."
+              ]
+            },
+            "summarization-03": {
+              "facts": 16,
+              "survived": 16,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 11,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-04": {
+              "facts": 14,
+              "survived": 10,
+              "fraction": 0.714,
+              "lost": [
+                "The reproduction clicks the \"Export\" button and then selects the PDF option.",
+                "After selecting the PDF option, nothing happens.",
+                "Four identical \"export failed\" error banners appear simultaneously.",
+                "The bug was reproduced on Chrome on a colleague's machine."
+              ],
+              "styled_facts": 11,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-05": {
+              "facts": 8,
+              "survived": 8,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 8,
+              "additions": 0,
+              "added": []
+            }
+          }
+        },
+        "technical-simplified": {
+          "median": 0.862,
+          "additions_median": 1.0,
+          "pairs": {
+            "code-review-01": {
+              "facts": 29,
+              "survived": 29,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 26,
+              "additions": 4,
+              "added": [
+                "The suggested fix raises `ValueError(\"name is required\")` when `name` is falsy.",
+                "The suggested fix catches `Exception` instead of using a bare `except`.",
+                "The suggested fix logs the error with `logger.error` including the name and the exception.",
+                "The suggested fix returns `True` on success and `False` on failure."
+              ]
+            },
+            "code-review-02": {
+              "facts": 24,
+              "survived": 19,
+              "fraction": 0.792,
+              "lost": [
+                "Marking the function `async` gives no benefit here and masks the fact that the body is really synchronous.",
+                "The outer `profile` variable is unnecessary.",
+                "Using a shared `profile` variable and mutating it in a closure is more indirect than working with the resolved value directly.",
+                "The shared outer variable is what let the async bug hide in plain sight.",
+                "The corrected version throws an `Error` with the message 'Profile response missing name' when `data?.name` is falsy."
+              ],
+              "styled_facts": 20,
+              "additions": 0,
+              "added": []
+            },
+            "code-review-03": {
+              "facts": 26,
+              "survived": 11,
+              "fraction": 0.423,
+              "lost": [
+                "SQL injection is the biggest issue in the code.",
+                "A stacked or UNION payload can exploit the SQL injection, depending on the driver.",
+                "The SQL injection lets an attacker manipulate arbitrary rows.",
+                "sqlite3 uses `?` placeholders instead of `%s`.",
+                "`status` presumably comes from a small fixed set of values, such as an enum.",
+                "Nothing in the code checks that `status` is one of the allowed values.",
+                "Unexpected `status` values silently produce empty results instead of failing fast.",
+                "The code has no error handling.",
+                "A database error such as a bad connection or lock timeout propagates as a raw exception.",
+                "The propagated exception gives the caller no context.",
+                "`fetchall()` is used on potentially large result sets.",
+                "The query has no LIMIT or pagination.",
+                "A broad `customer_name` match could pull an unbounded number of rows into memory.",
+                "The function has no type hints.",
+                "Missing type hints make the expected argument and return types unclear at the call site."
+              ],
+              "styled_facts": 22,
+              "additions": 7,
+              "added": [
+                "The function has four problems.",
+                "Most database drivers support parameterized queries.",
+                "A later change to the table structure can break the caller in a silent way.",
+                "A caller can pass `None` or another type to the function.",
+                "The string concatenation raises an error when a caller passes a non-string value.",
+                "Placeholder syntaxes include `%s`, `?`, and `:name`.",
+                "The driver documentation states the correct placeholder syntax."
+              ]
+            },
+            "code-review-04": {
+              "facts": 29,
+              "survived": 24,
+              "fraction": 0.828,
+              "lost": [
+                "This failure mode is known as the lost-update bug.",
+                "`+=` compiles to separate LOAD, ADD, and STORE steps at the bytecode level.",
+                "The value read may already be stale by the time it is used.",
+                "Any external read of `self.value` is exposed to a TOCTOU race.",
+                "The class has no `__slots__`."
+              ],
+              "styled_facts": 22,
+              "additions": 5,
+              "added": [
+                "Free-threaded CPython builds (3.13+) do not guarantee the atomicity of a single attribute read.",
+                "The error grows with more threads and more calls.",
+                "In the fix, the counter state is a private attribute `self._value` initialized to 0.",
+                "In the fix, a `get` method returns `self._value` while holding the lock.",
+                "The `get` method gives callers a safe way to read the count."
+              ]
+            },
+            "code-review-05": {
+              "facts": 34,
+              "survived": 31,
+              "fraction": 0.912,
+              "lost": [
+                "`ls` errors to stderr with a message like `ls: cannot access '*.log'` when the glob does not match.",
+                "The suggested fix checks `[ -z \"$BACKUP_DIR\" ] || [ ! -d \"$BACKUP_DIR\" ]` and exits 1 with a usage message on stderr.",
+                "Using `--` stops `rm` and `gzip` from treating filenames as options."
+              ],
+              "styled_facts": 36,
+              "additions": 4,
+              "added": [
+                "`set -f` avoidance is not needed for the zero-match problem.",
+                "When a `.gz` file with the same name already exists, `gzip` refuses by default.",
+                "`gzip` prints an error to stderr when it refuses to overwrite an existing `.gz` file.",
+                "A safer version loops over `*.tmp` and uses `[ -e \"$f\" ] && rm -f -- \"$f\"`."
+              ]
+            },
+            "debugging-01": {
+              "facts": 8,
+              "survived": 7,
+              "fraction": 0.875,
+              "lost": [
+                "The mismatch between `\"port\"` and `'Port'` raises a `KeyError`."
+              ],
+              "styled_facts": 6,
+              "additions": 0,
+              "added": []
+            },
+            "debugging-02": {
+              "facts": 17,
+              "survived": 13,
+              "fraction": 0.765,
+              "lost": [
+                "The global object is `window` or `globalThis`.",
+                "The resulting `NaN` is assigned back to the property and logged.",
+                "An alternative fix is to bind the regular function with `.bind(this)`.",
+                "Another alternative fix is to capture `this` beforehand in a variable such as `const self = this;` and use `self.seconds` inside the callback."
+              ],
+              "styled_facts": 13,
+              "additions": 1,
+              "added": [
+                "In strict mode, `this` inside the `setInterval` callback is `undefined`."
+              ]
+            },
+            "debugging-03": {
+              "facts": 15,
+              "survived": 13,
+              "fraction": 0.867,
+              "lost": [
+                "The corrected code gives `[3, 5, 7]`.",
+                "`[3, 5, 7]` is the expected result."
+              ],
+              "styled_facts": 12,
+              "additions": 2,
+              "added": [
+                "The last valid start index is `len(values) - window`.",
+                "Because `range()` excludes its end value, the code needs `+ 1` to include the last valid start index."
+              ]
+            },
+            "debugging-05": {
+              "facts": 16,
+              "survived": 14,
+              "fraction": 0.875,
+              "lost": [
+                "The fixed code is: tags = list(tags) if tags is not None else list(DEFAULT_TAGS).",
+                "Copying the caller's tags list protects callers from having their own list mutated in place."
+              ],
+              "styled_facts": 17,
+              "additions": 0,
+              "added": []
+            },
+            "explanation-02": {
+              "facts": 28,
+              "survived": 24,
+              "fraction": 0.857,
+              "lost": [
+                "Optimistic locking fits when transactions are short but the think time between read and write can be long.",
+                "A user editing a form in a browser is an example of long think time between read and write.",
+                "Financial transactions and inventory decrements are cases where the cost of a conflict is severe.",
+                "Pessimistic locking fits when the critical section is short so lock hold time stays small."
+              ],
+              "styled_facts": 20,
+              "additions": 1,
+              "added": [
+                "Web applications with many read-heavy views often use optimistic locking."
+              ]
+            },
+            "explanation-04": {
+              "facts": 41,
+              "survived": 27,
+              "fraction": 0.659,
+              "lost": [
+                "A process has its own memory, including heap, stack, and data segment.",
+                "A process has its own set of OS resources, such as file descriptors and signal handlers.",
+                "All threads in a process share the same open file descriptors.",
+                "Each thread has its own stack.",
+                "Each thread has its own register state, including the program counter.",
+                "Threads are cheaper to switch between than processes.",
+                "Separate processes allow OS-level restrictions such as seccomp, capabilities, and separate users.",
+                "Threads cannot get OS-level restrictions like seccomp, capabilities, or separate users.",
+                "Threads share the parent's privileges and address space.",
+                "A process provides restart granularity through the OS via kill, exit codes, and resource limits.",
+                "A thread cannot be forcibly terminated as cleanly as a process.",
+                "Resource limiting is a reason to use more processes instead of more threads.",
+                "OS tools like ulimit, cgroups, and nice apply per-process.",
+                "Capping CPU or memory for one piece of work independently requires that work to have its own process."
+              ],
+              "styled_facts": 31,
+              "additions": 3,
+              "added": [
+                "Shared memory is a mechanism that lets one process access another process's memory.",
+                "A pipe is a mechanism that lets one process access another process's memory.",
+                "A thread crash can bring down the whole process because the threads share memory."
+              ]
+            },
+            "summarization-01": {
+              "facts": 6,
+              "survived": 6,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 5,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-02": {
+              "facts": 12,
+              "survived": 7,
+              "fraction": 0.583,
+              "lost": [
+                "The pool size was changed from 50 to 5.",
+                "Detection to mitigation took about 34 minutes.",
+                "The errors started at 09:14.",
+                "The rollback happened at 09:48.",
+                "The page fired quickly, within 7 minutes."
+              ],
+              "styled_facts": 12,
+              "additions": 5,
+              "added": [
+                "The staging and production templates live in the same directory.",
+                "The staging and production templates have similar names.",
+                "The shared directory and similar names make it easy to copy the wrong value.",
+                "The team found the cause fast.",
+                "The gap between the deployment and the page was long."
+              ]
+            },
+            "summarization-03": {
+              "facts": 16,
+              "survived": 16,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 13,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-04": {
+              "facts": 14,
+              "survived": 12,
+              "fraction": 0.857,
+              "lost": [
+                "The reproduction clicks the \"Export\" button and then selects the PDF option.",
+                "The bug was reproduced on Chrome on a colleague's machine."
+              ],
+              "styled_facts": 14,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-05": {
+              "facts": 8,
+              "survived": 7,
+              "fraction": 0.875,
+              "lost": [
+                "Ada will run the payments database migration dry run"
+              ],
+              "styled_facts": 6,
+              "additions": 0,
+              "added": []
+            }
+          }
+        }
+      }
+    },
+    "hedging": {
+      "judged": true,
+      "per_style": {
+        "plain-language": {
+          "median": 0.75,
+          "pairs": {
+            "code-review-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-02": {
+              "claims": 3,
+              "hedged": 1,
+              "certain": 1,
+              "absent": 1,
+              "survival": 0.5,
+              "lost": [
+                "A corrected version would look like the code shown (one possible correction, not necessarily the only one)"
+              ]
+            },
+            "code-review-03": {
+              "claims": 4,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 3,
+              "survival": 0.0,
+              "lost": [
+                "A value like `' OR '1'='1` \u2014 or possibly a worse stacked/UNION payload, depending on the driver \u2014 lets an attacker read or manipulate arbitrary rows."
+              ]
+            },
+            "code-review-04": {
+              "claims": 2,
+              "hedged": 2,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "code-review-05": {
+              "claims": 2,
+              "hedged": 1,
+              "certain": 1,
+              "absent": 0,
+              "survival": 0.5,
+              "lost": [
+                "If no `.log` files match, the loop body may run once with the literal string `*.log` as `f`, causing `gzip` to fail noisily."
+              ]
+            },
+            "debugging-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-04": {
+              "claims": 2,
+              "hedged": 2,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "debugging-05": {
+              "claims": 1,
+              "hedged": 1,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "explanation-01": {
+              "claims": 5,
+              "hedged": 1,
+              "certain": 3,
+              "absent": 1,
+              "survival": 0.25,
+              "lost": [
+                "Each bucket in separate chaining holds a small collection, usually a linked list and sometimes a tree.",
+                "Implementations of open addressing typically use a \"tombstone\" marker instead of a true empty slot when deleting.",
+                "Some high-performance implementations, like Python's dict or Rust's HashMap, use open addressing variants for speed."
+              ]
+            },
+            "explanation-02": {
+              "claims": 4,
+              "hedged": 0,
+              "certain": 3,
+              "absent": 1,
+              "survival": 0.0,
+              "lost": [
+                "Holding a pessimistic lock until the transaction commits blocks other writers, and sometimes blocks readers as well.",
+                "Pessimistic locking suits cases where you assume conflicts are likely enough that you would rather prevent them upfront.",
+                "As a rule of thumb, optimistic locking trades a small chance of retry for better throughput under low contention, while pessimistic locking trades throughput and concurrency for guaranteed correctness under high contention or high-stakes writes."
+              ]
+            },
+            "explanation-03": {
+              "claims": 3,
+              "hedged": 2,
+              "certain": 0,
+              "absent": 1,
+              "survival": 1.0,
+              "lost": []
+            },
+            "explanation-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-02": {
+              "claims": 2,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 2,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-03": {
+              "claims": 2,
+              "hedged": 2,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "summarization-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            }
+          }
+        },
+        "technical-simplified": {
+          "median": 0.834,
+          "pairs": {
+            "code-review-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-02": {
+              "claims": 3,
+              "hedged": 2,
+              "certain": 1,
+              "absent": 0,
+              "survival": 0.667,
+              "lost": [
+                "res.json() will probably attempt to parse an error body on a 4xx/5xx response, or may fail confusingly, instead of surfacing \"user not found\" cleanly"
+              ]
+            },
+            "code-review-03": {
+              "claims": 4,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 3,
+              "survival": 0.0,
+              "lost": [
+                "A value like `' OR '1'='1` \u2014 or possibly a worse stacked/UNION payload, depending on the driver \u2014 lets an attacker read or manipulate arbitrary rows."
+              ]
+            },
+            "code-review-04": {
+              "claims": 2,
+              "hedged": 1,
+              "certain": 0,
+              "absent": 1,
+              "survival": 1.0,
+              "lost": []
+            },
+            "code-review-05": {
+              "claims": 2,
+              "hedged": 0,
+              "certain": 2,
+              "absent": 0,
+              "survival": 0.0,
+              "lost": [
+                "If no `.tmp` files exist, most shells leave the literal glob `*.tmp` unexpanded, so `rm -rf` fails harmlessly here.",
+                "If no `.log` files match, the loop body may run once with the literal string `*.log` as `f`, causing `gzip` to fail noisily."
+              ]
+            },
+            "debugging-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-05": {
+              "claims": 1,
+              "hedged": 1,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "explanation-02": {
+              "claims": 4,
+              "hedged": 0,
+              "certain": 3,
+              "absent": 1,
+              "survival": 0.0,
+              "lost": [
+                "Holding a pessimistic lock until the transaction commits blocks other writers, and sometimes blocks readers as well.",
+                "Pessimistic locking suits cases where you assume conflicts are likely enough that you would rather prevent them upfront.",
+                "As a rule of thumb, optimistic locking trades a small chance of retry for better throughput under low contention, while pessimistic locking trades throughput and concurrency for guaranteed correctness under high contention or high-stakes writes."
+              ]
+            },
+            "explanation-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-02": {
+              "claims": 2,
+              "hedged": 1,
+              "certain": 0,
+              "absent": 1,
+              "survival": 1.0,
+              "lost": []
+            },
+            "summarization-03": {
+              "claims": 2,
+              "hedged": 2,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "summarization-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "warnings": [
+    "technical-simplified/explanation-01: the pair failed the gate, excluded",
+    "technical-simplified/explanation-03: the pair failed the gate, excluded",
+    "technical-simplified/explanation-05: the pair failed the gate, excluded",
+    "technical-simplified/debugging-04: the pair failed the gate, excluded"
+  ]
+}

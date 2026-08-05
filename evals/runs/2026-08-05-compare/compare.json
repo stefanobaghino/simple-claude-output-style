@@ -1,0 +1,209 @@
+{
+  "date": "2026-08-05T06:59:57+00:00",
+  "runs": [
+    "2026-08-01b",
+    "2026-08-05",
+    "2026-08-05b"
+  ],
+  "axes": {
+    "plain-language": {
+      "fidelity: styled violation rate": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 0.0,
+          "2026-08-05": 0.0,
+          "2026-08-05b": 0.0
+        },
+        "min": 0.0,
+        "mean": 0.0,
+        "max": 0.0,
+        "stdev": 0.0
+      },
+      "fidelity: gated pairs passed": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 20,
+          "2026-08-05": 20,
+          "2026-08-05b": 20
+        },
+        "min": 20,
+        "mean": 20.0,
+        "max": 20,
+        "stdev": 0.0
+      },
+      "cost: output-token ratio": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 0.87,
+          "2026-08-05": 0.88,
+          "2026-08-05b": 0.8
+        },
+        "min": 0.8,
+        "mean": 0.85,
+        "max": 0.88,
+        "stdev": 0.044
+      },
+      "value: net wins (comprehension)": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": -1,
+          "2026-08-05": 3,
+          "2026-08-05b": -2
+        },
+        "min": -2,
+        "mean": 0.0,
+        "max": 3,
+        "stdev": 2.646
+      },
+      "value: net wins (paraphrase)": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 11,
+          "2026-08-05": -3,
+          "2026-08-05b": 2
+        },
+        "min": -3,
+        "mean": 3.333,
+        "max": 11,
+        "stdev": 7.095
+      },
+      "value: net wins (roundtrip)": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 5,
+          "2026-08-05": 3,
+          "2026-08-05b": 1
+        },
+        "min": 1,
+        "mean": 3.0,
+        "max": 5,
+        "stdev": 2.0
+      },
+      "loss: fact survival median": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 0.786,
+          "2026-08-05": 0.806,
+          "2026-08-05b": 0.769
+        },
+        "min": 0.769,
+        "mean": 0.787,
+        "max": 0.806,
+        "stdev": 0.019
+      },
+      "loss: hedge survival median": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 0.333,
+          "2026-08-05": 0.5,
+          "2026-08-05b": 0.75
+        },
+        "min": 0.333,
+        "mean": 0.528,
+        "max": 0.75,
+        "stdev": 0.21
+      }
+    },
+    "technical-simplified": {
+      "fidelity: styled violation rate": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 4.56,
+          "2026-08-05": 5.3,
+          "2026-08-05b": 6.34
+        },
+        "min": 4.56,
+        "mean": 5.4,
+        "max": 6.34,
+        "stdev": 0.894
+      },
+      "fidelity: gated pairs passed": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 18,
+          "2026-08-05": 16,
+          "2026-08-05b": 16
+        },
+        "min": 16,
+        "mean": 16.667,
+        "max": 18,
+        "stdev": 1.155
+      },
+      "cost: output-token ratio": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 0.88,
+          "2026-08-05": 0.8,
+          "2026-08-05b": 0.84
+        },
+        "min": 0.8,
+        "mean": 0.84,
+        "max": 0.88,
+        "stdev": 0.04
+      },
+      "value: net wins (comprehension)": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 2,
+          "2026-08-05": -2,
+          "2026-08-05b": 0
+        },
+        "min": -2,
+        "mean": 0.0,
+        "max": 2,
+        "stdev": 2.0
+      },
+      "value: net wins (paraphrase)": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 10,
+          "2026-08-05": -3,
+          "2026-08-05b": 6
+        },
+        "min": -3,
+        "mean": 4.333,
+        "max": 10,
+        "stdev": 6.658
+      },
+      "value: net wins (roundtrip)": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 8,
+          "2026-08-05": 6,
+          "2026-08-05b": 8
+        },
+        "min": 6,
+        "mean": 7.333,
+        "max": 8,
+        "stdev": 1.155
+      },
+      "loss: fact survival median": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 0.859,
+          "2026-08-05": 0.806,
+          "2026-08-05b": 0.862
+        },
+        "min": 0.806,
+        "mean": 0.842,
+        "max": 0.862,
+        "stdev": 0.032
+      },
+      "loss: hedge survival median": {
+        "n": 3,
+        "per_run": {
+          "2026-08-01b": 0.0,
+          "2026-08-05": 0.0,
+          "2026-08-05b": 0.834
+        },
+        "min": 0.0,
+        "mean": 0.278,
+        "max": 0.834,
+        "stdev": 0.482
+      }
+    }
+  },
+  "warnings": [
+    "condition mismatch on claude version: 2026-08-01b 2.1.220 (Claude Code), 2026-08-05 2.1.222 (Claude Code), 2026-08-05b 2.1.222 (Claude Code)"
+  ]
+}

@@ -158,7 +158,10 @@ to a shared fact). Every judge call sees one bare text without a
 style name or an arm label, and the judge models must differ from
 the writer model of the run. `--judge` runs the live calls and
 appends the raw outputs to `value-raw.jsonl`; an interrupted judge
-run resumes when the same invocation runs again. The judge calls
+run resumes when the same invocation runs again. A judge call that
+fails runs once more, and the retry becomes a warning, because one
+transient failure must not abort a whole pass. A second failure
+stops the pass. The judge calls
 run several at a time (8 by default), and `--parallel` sets the
 count (1 runs one call at a time). Without `--judge`
 the tool rescores the stored raw data offline. Exit codes: 0 when
@@ -181,7 +184,8 @@ states is otherwise invisible. No judge call sees both answers of a
 pair: the extracted items travel between the calls, never the source
 text. The judge model must differ from the writer model of the run. `--judge` runs the live calls and appends the raw
 outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
-the same invocation runs again. The judge calls run several at a
+the same invocation runs again. A failed judge call retries once
+here as well, with the same warning. The judge calls run several at a
 time (8 by default), and `--parallel` sets the count (1 runs one
 call at a time). Without `--judge` the tool rescores
 the stored raw data offline. The exit codes equal the exit codes of

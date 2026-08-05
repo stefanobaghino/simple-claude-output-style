@@ -255,7 +255,10 @@ class JudgeSession:
 
     Parallel tasks share one session. The lock serializes the row
     fast path and the row writes, so the sink never interleaves two
-    rows. The subprocess runs outside the lock.
+    rows. The subprocess runs outside the lock. A call that raises
+    a GenerationError runs once more before the error propagates,
+    because one transient failure must not abort a whole pass; the
+    retry becomes a warning.
     """
 
     rows: dict[str, dict]
@@ -283,17 +286,11 @@ class JudgeSession:
             with self.lock:
                 if key in self.rows:
                     return self.rows[key]
-        stdout = self.run(judge_argv(prompt, model), self.workdir)
-        init, result = parse_events(stdout)
-        active = init.get("output_style")
-        if active != "default":
-            raise GenerationError(
-                f"{key}: expected the default output style, but {active!r} was active"
-            )
-        if result.get("is_error"):
-            raise GenerationError(
-                f"{key}: claude reported an error: {str(result.get('result', ''))[:500]}"
-            )
+        try:
+            init, result = self._attempt(key, model, prompt)
+        except GenerationError as error:
+            init, result = self._attempt(key, model, prompt)
+            self.warnings.append(f"{key}: the first call failed and the retry succeeded: {error}")
         row = {
             "type": "call",
             "date": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -315,6 +312,21 @@ class JudgeSession:
             self.rows[key] = row
             self.sink(row)
         return row
+
+    def _attempt(self, key: str, model: str, prompt: str) -> tuple[dict, dict]:
+        """One live judge call: the subprocess, then the sanity checks."""
+        stdout = self.run(judge_argv(prompt, model), self.workdir)
+        init, result = parse_events(stdout)
+        active = init.get("output_style")
+        if active != "default":
+            raise GenerationError(
+                f"{key}: expected the default output style, but {active!r} was active"
+            )
+        if result.get("is_error"):
+            raise GenerationError(
+                f"{key}: claude reported an error: {str(result.get('result', ''))[:500]}"
+            )
+        return init, result
 
     def structured(self, *, validate: Callable[[str], object | None], **call_kwargs) -> object:
         """A call whose output must pass the validator; one retry on failure."""

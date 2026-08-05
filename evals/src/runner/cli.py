@@ -5,11 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from string import ascii_lowercase
 
 import yaml
+
+from value.judges import TaskPool
 
 from .generate import GenerationError, Runner, generate, isolated_workdir, subprocess_runner
 from .provenance import build_provenance, claude_version
@@ -89,7 +93,15 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         "--out",
         help="run directory (default: runs/<date>, next letter suffix on a same-day repeat)",
     )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=8,
+        help="concurrent generation calls (1 runs one call at a time)",
+    )
     args = parser.parse_args(argv)
+    if args.parallel < 1:
+        raise SystemExit(f"--parallel must be 1 or more, not {args.parallel}")
 
     prompts_path = Path(args.prompts)
     plugin_dir = Path(args.plugin_dir).resolve()
@@ -125,19 +137,32 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         print(f"resuming: {skipped} answer(s) already present", file=sys.stderr)
 
     failures: list[str] = []
+    done = 0
+    lock = threading.Lock()
     with (
         answers_path.open("a", encoding="utf-8") as answers_file,
         isolated_workdir("pairs") as workdir,
     ):
-        for index, (style, prompt) in enumerate(todo, start=1):
+        # The calls do not interact: each call is an isolated
+        # subprocess, and the workdir stays read-only for the CLI. The
+        # lock serializes the append, the progress line, and the
+        # failure list, so two rows never interleave. The rows land in
+        # completion order, and the loaders read the rows by key, so
+        # the row order carries no meaning.
+        def generate_one(style: str | None, prompt: dict) -> None:
+            nonlocal done
             name = arm_name(style)
-            print(f"[{index}/{len(todo)}] {name}: {prompt['id']}", file=sys.stderr)
             try:
                 result = generate(prompt["text"], args.model, style, plugin_dir, workdir, run=run)
             except GenerationError as error:
-                failures.append(f"{name}/{prompt['id']}: {error}")
-                print(f"  failed: {error}", file=sys.stderr)
-                continue
+                with lock:
+                    done += 1
+                    failures.append(f"{name}/{prompt['id']}: {error}")
+                    print(
+                        f"[{done}/{len(todo)}] {name}: {prompt['id']} failed: {error}",
+                        file=sys.stderr,
+                    )
+                return
             line = {
                 "prompt_id": prompt["id"],
                 "style": style,
@@ -152,8 +177,16 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
                 "cache_read_input_tokens": result.cache_read_input_tokens,
                 "duration_ms": result.duration_ms,
             }
-            answers_file.write(json.dumps(line, ensure_ascii=False) + "\n")
-            answers_file.flush()
+            with lock:
+                done += 1
+                print(f"[{done}/{len(todo)}] {name}: {prompt['id']}", file=sys.stderr)
+                answers_file.write(json.dumps(line, ensure_ascii=False) + "\n")
+                answers_file.flush()
+
+        pool = TaskPool(args.parallel)
+        for style, prompt in todo:
+            pool.submit(partial(generate_one, style, prompt))
+        pool.drain()
 
     provenance = build_provenance(
         model=args.model,

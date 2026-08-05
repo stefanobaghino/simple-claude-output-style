@@ -216,6 +216,26 @@ def test_probe_rejects_absent_usage_fields(tmp_path):
         )
 
 
+def test_probe_rejects_a_zero_reading(tmp_path):
+    plugin = make_plugin(tmp_path / "plugin")
+    zero = {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 1,
+    }
+    first = iter([zero])
+
+    def run(argv, cwd):
+        default = UNSTYLED_USAGE if style_of(argv) == "default" else STYLED_USAGE
+        return probe_stream(style_of(argv), next(first, default))
+
+    with pytest.raises(GenerationError, match="zero input tokens"):
+        probe_overhead(
+            styles=["alpha"], model="sonnet", plugin_dir=plugin, workdir=tmp_path, run=run
+        )
+
+
 def test_an_unstable_unstyled_total_warns_but_reports(tmp_path):
     plugin = make_plugin(tmp_path / "plugin")
     moved = dict(UNSTYLED_USAGE, cache_creation_input_tokens=150)

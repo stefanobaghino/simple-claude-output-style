@@ -88,6 +88,10 @@ def _run_arm(
     for field in USAGE_FIELDS:
         arm[field] = int(usage[field])
     arm["total_input_tokens"] = sum(arm[field] for field in USAGE_FIELDS)
+    if arm["total_input_tokens"] == 0:
+        raise GenerationError(
+            f"{name}: the usage reports zero input tokens, so the reading is invalid"
+        )
     arm["output_tokens"] = int(usage.get("output_tokens", 0))
     return arm
 

@@ -5,7 +5,7 @@ This directory holds the evaluation harness for the output styles in
 the marketplace serves only the `plugin/` directory, so installers never
 receive the harness.
 
-The harness has seven components. The first is a deterministic linter.
+The harness has eight components. The first is a deterministic linter.
 It checks a Markdown text against the writing rules of a style and
 reports each violation, plus a rate per 100 sentences. The second is a
 pair runner. It produces, per prompt, one answer per style and one
@@ -26,8 +26,11 @@ in the styled answer, the facts that only the styled answer states,
 and each uncertain claim that lost its uncertainty. The seventh is a
 drift report. It runs a scripted long session per style, several
 times, lints every turn, and shows the violation rate over turn
-positions with a verdict per style: flat or growing. See the
-tracking issue in this repository for the other planned components.
+positions with a verdict per style: flat or growing. The eighth is a cross-run
+comparison. It reads several runs with identical conditions and
+states, per style and axis, the spread across the runs: the error
+bar of the harness. See the tracking issue in this repository for
+the other planned components.
 
 ## Rule files
 
@@ -82,6 +85,7 @@ uv run style-cost runs/<date> [--probe]
 uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-drift [--generate] [--out runs/<date>-drift]
+uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
 
 The linter exits with code 1 when it finds a violation.
@@ -200,6 +204,24 @@ every session is complete, every verdict is flat, and no warnings
 exist, 1 when a session failed or a verdict is "growing" or warnings
 exist, 2 when the run cannot run or cannot be scored.
 
+The cross-run comparison reads the stored artifacts of two or more
+runs and writes `compare.json` and `compare.md` into its own
+directory, because the comparison belongs to no single run. Per
+style and axis, the report states one value per run and the spread:
+minimum, mean, maximum, and the sample standard deviation. The axes
+are the headline scalars of the other reports: the styled violation
+rate and the gated pairs passed, the output-token ratio, the net
+wins (wins minus losses) per reader-value check, and the fact and
+hedge survival medians. The comparison is offline and makes no
+judge calls. The runs must share their conditions: the tool checks
+the prompt-set hash, the style and rule hashes, the writer model,
+the Claude CLI version, and the judge parameters, and a mismatch
+becomes a warning, because the reader must see how far apart the
+conditions are. A missing artifact drops the axes of that artifact
+for that run, and n states the run count per axis. Exit codes: 0
+when no warnings exist, 1 when warnings exist, 2 when the
+comparison cannot run.
+
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,
@@ -228,6 +250,10 @@ runs/<YYYY-MM-DD>-drift/
   sessions.jsonl    # one line per turn, with the session-id chain
   drift.json        # rate series, slope, and verdict per style, machine-readable
   drift.md          # the drift report for a human
+
+runs/<YYYY-MM-DD>-compare/
+  compare.json      # the spread per style and axis across runs, machine-readable
+  compare.md        # the cross-run comparison for a human
 ```
 
 A pair is not stored twice: it is the line for `(prompt, style)` plus

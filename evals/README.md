@@ -94,10 +94,15 @@ The pair runner reads the prompt set in `prompts/prompts.yaml` and calls
 the `claude` CLI once per answer, on the account of the person who runs
 it. The call is isolated as far as the CLI permits: no tools, no MCP
 servers, no hooks, one turn, and no dynamic system-prompt sections.
-Plugins from the user configuration still load; the run data records
-them, so a change in the environment stays visible. An interrupted run
-resumes when the same invocation runs again. The runner exits with code
-1 when the pair set is incomplete.
+Every call also runs in an empty temp directory outside the repository,
+because the CLI loads instruction files, the memory index, and the git
+state from the ancestor directories of its cwd. Thus no workspace
+context enters a call, and the provenance records the workdir mode.
+The probe calls, the judge calls, and the drift calls use the same
+kind of directory. Plugins from the user configuration still load; the
+run data records them, so a change in the environment stays visible.
+An interrupted run resumes when the same invocation runs again. The
+runner exits with code 1 when the pair set is incomplete.
 
 The gate reads the answers of a run and writes the fidelity files into
 the run directory. It checks every styled answer with the rules of its
@@ -219,7 +224,8 @@ wins (wins minus losses) per reader-value check, and the fact and
 hedge survival medians. The comparison is offline and makes no
 judge calls. The runs must share their conditions: the tool checks
 the prompt-set hash, the style and rule hashes, the writer model,
-the Claude CLI version, and the judge parameters, and a mismatch
+the Claude CLI version, the workdir mode, and the judge parameters,
+and a mismatch
 becomes a warning, because the reader must see how far apart the
 conditions are. A missing artifact drops the axes of that artifact
 for that run, and n states the run count per axis. Exit codes: 0

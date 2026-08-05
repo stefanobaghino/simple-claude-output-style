@@ -218,6 +218,24 @@ def test_cli_resumes_and_only_runs_the_missing_answers(project):
     assert len(answers_path.read_text().splitlines()) == 4
 
 
+def test_cli_calls_run_in_a_workdir_outside_the_project(project):
+    seen = []
+
+    class WorkdirProbe(FakeRunner):
+        def __call__(self, argv, cwd):
+            seen.append((Path(cwd), Path(cwd).is_dir()))
+            return super().__call__(argv, cwd)
+
+    assert run_cli(project, WorkdirProbe()) == 0
+    assert seen
+    workdirs = {cwd for cwd, _ in seen}
+    assert len(workdirs) == 1
+    assert all(existed for _, existed in seen)
+    workdir = workdirs.pop()
+    assert project.resolve() not in workdir.resolve().parents
+    assert not workdir.exists()
+
+
 def test_cli_reports_a_failed_call_and_keeps_going(project):
     def failing_runner(argv, cwd):
         if style_of(argv) == "alpha":
@@ -244,4 +262,5 @@ def test_provenance_holds_the_linter_toolchain(project):
     assert toolchain["en-core-web-sm"] == metadata.version("en-core-web-sm")
     assert provenance["prompt_set"]["sha256"]
     assert provenance["conditions"]["model_requested"] == "sonnet"
+    assert provenance["conditions"]["workdir"] == "temp"
     assert "--disallowedTools" in provenance["conditions"]["flags"]

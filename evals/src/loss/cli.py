@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from pathlib import Path
 
 from gate.cli import load_answers
-from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import sha256_of
 from value.analysis import select_pairs
 from value.cli import answer_index, load_fidelity, load_raw
@@ -75,9 +74,10 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
             meta = meta_stored
 
     raw_path = run_dir / "loss-raw.jsonl"
-    workdir = run_dir / ".judge-workdir-loss"
-    workdir.mkdir(exist_ok=True)
-    with raw_path.open("a", encoding="utf-8") as raw_file:
+    with (
+        raw_path.open("a", encoding="utf-8") as raw_file,
+        isolated_workdir("judge-loss") as workdir,
+    ):
         if meta_stored is None or meta_upgraded:
             raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
             raw_file.flush()
@@ -100,8 +100,6 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
             )
         except GenerationError as error:
             raise _fail(f"a judge call failed: {error}") from error
-        finally:
-            shutil.rmtree(workdir, ignore_errors=True)
     return meta, warnings
 
 

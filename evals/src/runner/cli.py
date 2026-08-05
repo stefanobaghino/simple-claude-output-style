@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
 
-from .generate import GenerationError, Runner, generate, subprocess_runner
+from .generate import GenerationError, Runner, generate, isolated_workdir, subprocess_runner
 from .provenance import build_provenance, claude_version
 from .report import arm_name, build_report
 
@@ -80,8 +79,6 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     out.mkdir(parents=True, exist_ok=True)
     answers_path = out / "answers.jsonl"
     existing = load_existing(answers_path)
-    workdir = out / ".workdir"
-    workdir.mkdir(exist_ok=True)
 
     arms: list[str | None] = [None, *styles]
     todo = [
@@ -95,7 +92,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         print(f"resuming: {skipped} answer(s) already present", file=sys.stderr)
 
     failures: list[str] = []
-    with answers_path.open("a", encoding="utf-8") as answers_file:
+    with (
+        answers_path.open("a", encoding="utf-8") as answers_file,
+        isolated_workdir("pairs") as workdir,
+    ):
         for index, (style, prompt) in enumerate(todo, start=1):
             name = arm_name(style)
             print(f"[{index}/{len(todo)}] {name}: {prompt['id']}", file=sys.stderr)
@@ -121,7 +121,6 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             }
             answers_file.write(json.dumps(line, ensure_ascii=False) + "\n")
             answers_file.flush()
-    shutil.rmtree(workdir, ignore_errors=True)
 
     provenance = build_provenance(
         model=args.model,

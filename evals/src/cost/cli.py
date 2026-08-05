@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from pathlib import Path
 
 from gate.cli import load_answers
-from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 
 from .analysis import analyze_ratios
 from .probe import probe_overhead
@@ -33,17 +32,14 @@ def _provenance(run_dir: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _run_probe(run_dir: Path, styles: list[str], model: str, plugin_dir: Path, run: Runner) -> dict:
-    workdir = run_dir / ".probe-workdir"
-    workdir.mkdir(exist_ok=True)
+def _run_probe(styles: list[str], model: str, plugin_dir: Path, run: Runner) -> dict:
     try:
-        return probe_overhead(
-            styles=styles, model=model, plugin_dir=plugin_dir, workdir=workdir, run=run
-        )
+        with isolated_workdir("probe") as workdir:
+            return probe_overhead(
+                styles=styles, model=model, plugin_dir=plugin_dir, workdir=workdir, run=run
+            )
     except GenerationError as error:
         raise _fail(f"the probe failed: {error}") from error
-    finally:
-        shutil.rmtree(workdir, ignore_errors=True)
 
 
 def _probe_warnings(probe: dict, styles: list[str], provenance: dict | None) -> list[str]:
@@ -94,7 +90,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         model = args.model or (provenance or {}).get("conditions", {}).get("model_requested")
         if not model:
             raise _fail(f"{run_dir}: no provenance.json with a model; pass --model")
-        probe = _run_probe(run_dir, styles, model, Path(args.plugin_dir).resolve(), run)
+        probe = _run_probe(styles, model, Path(args.plugin_dir).resolve(), run)
         probe_path.write_text(json.dumps(probe, indent=2) + "\n", encoding="utf-8")
     elif probe_path.exists():
         probe = json.loads(probe_path.read_text(encoding="utf-8"))

@@ -54,6 +54,10 @@ def _condition_entries(run: dict) -> dict[str, object]:
     conditions = provenance.get("conditions", {})
     entries["writer model"] = conditions.get("model_requested")
     entries["claude version"] = conditions.get("claude_version")
+    # A run before the temp-workdir change has no key here, so the
+    # entry is None there, and an old-versus-new comparison warns:
+    # the workdir mode marks a comparability era.
+    entries["workdir"] = conditions.get("workdir")
     entries["linter toolchain"] = provenance.get("linter_toolchain")
     fidelity = run["fidelity"]
     if fidelity is not None:

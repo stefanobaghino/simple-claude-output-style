@@ -21,6 +21,7 @@ style-gate = "gate.cli:main"
 style-cost = "cost.cli:main"
 style-value = "value.cli:main"
 style-loss = "loss.cli:main"
+style-rank = "rank.cli:main"
 style-drift = "drift.cli:main"
 style-compare = "compare.cli:main"
 
@@ -45,6 +46,7 @@ packages = [
     "src/cost",
     "src/value",
     "src/loss",
+    "src/rank",
     "src/drift",
     "src/compare",
 ]

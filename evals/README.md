@@ -5,7 +5,7 @@ This directory holds the evaluation harness for the output styles in
 the marketplace serves only the `plugin/` directory, so installers never
 receive the harness.
 
-The harness has eight components. The first is a deterministic linter.
+The harness has nine components. The first is a deterministic linter.
 It checks a Markdown text against the writing rules of a style and
 reports each violation, plus a rate per 100 sentences. The second is a
 pair runner. It produces, per prompt, one answer per style and one
@@ -29,7 +29,10 @@ times, lints every turn, and shows the violation rate over turn
 positions with a verdict per style: flat or growing. The eighth is a cross-run
 comparison. It reads several runs with identical conditions and
 states, per style and axis, the spread across the runs: the error
-bar of the harness. See the tracking issue in this repository for
+bar of the harness. The ninth is a clarity ranking. It runs blind
+head-to-head contests between the answers of a run, with the
+unstyled answer as a competitor, and fits one Bradley-Terry
+strength per competitor. See the tracking issue in this repository for
 the other planned components.
 
 ## Rule files
@@ -84,6 +87,7 @@ uv run style-gate runs/<date>
 uv run style-cost runs/<date> [--probe]
 uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
+uv run style-rank runs/<date> [--judge] [--parallel N]
 uv run style-drift [--generate] [--out runs/<date>-drift]
 uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
@@ -205,6 +209,37 @@ no barrier between the checks. Without `--judge` the tool rescores
 the stored raw data offline. The exit codes equal the exit codes of
 `style-value`.
 
+The clarity ranking also reads only the gated pairs, and the
+unstyled answer joins as its own competitor under the reserved name
+`unstyled`. Per prompt and per competitor pair, a blind judge sees
+the two texts side by side and picks the clearer one, in both
+orders, so a position preference cancels: the orders agree and the
+contest is a decisive win for the picked competitor, or the orders
+disagree and the contest is a split. A contest with an unusable
+pick is unscored, because a single scored order would reintroduce
+the position bias that the swap cancels. This tool relaxes one
+harness invariant on purpose: a clarity contest is a choice, so a
+judge call sees both answers of a prompt. Blindness holds through
+the absence of labels: no prompt names a style or an arm, and the
+position mapping lives only in the raw rows. The unstyled
+competitor is ungated, but every styled competitor passed its
+gate, and the report states the asymmetry. A Bradley-Terry fit
+turns the contests into one strength per competitor, anchored on
+the unstyled answer at 1.0, with a bootstrap interval per
+strength. The fit stays dormant below 3 competitors, and a
+competitor with zero wins or zero losses has no finite strength. The report also
+states the position bias of the judge, the matchups per task type,
+and the length confound: the correlation between the length ratio
+of a contest and the points of the longer text. The judge model
+must differ from the writer model of the run. `--judge` runs the
+live calls and appends the raw outputs to `rank-raw.jsonl`; an
+interrupted judge run resumes when the same invocation runs again.
+A failed judge call retries once here as well, with the same
+warning. The judge calls run several at a time (8 by default), and
+`--parallel` sets the count (1 runs one call at a time). Without
+`--judge` the tool rescores the stored raw data offline. The exit
+codes equal the exit codes of `style-value`.
+
 The drift report owns its own run directory, because it measures
 sessions, not pairs. A session is 15 scripted turns in one Claude Code
 session, with the style active: each turn resumes the session of the
@@ -264,6 +299,9 @@ runs/<YYYY-MM-DD>/
   loss-raw.jsonl    # judge provenance plus one line per raw judge call
   loss.json         # fact and hedge survival per style, machine-readable
   loss.md           # the content-loss report for a human
+  rank-raw.jsonl    # judge provenance plus one line per raw judge call
+  rank.json         # matchups, win matrix, and strengths, machine-readable
+  rank.md           # the clarity-ranking report for a human
 
 runs/<YYYY-MM-DD>-drift/
   provenance.json   # like the pair runs, plus the session script per repeat

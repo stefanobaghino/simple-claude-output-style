@@ -2,16 +2,21 @@
 
 The invocation isolates the call as far as the CLI permits: no tools,
 no MCP servers, no hooks, a single turn, no dynamic system-prompt
-sections, and no session persistence. Plugins from the user
-configuration still load; the caller records them in the provenance,
-so a change in the environment stays visible across runs.
+sections, and no session persistence. The call runs in an empty temp
+directory outside the repository, because the CLI loads instruction
+files, the memory index, and the git state from the ancestor
+directories of its cwd. Plugins from the user configuration still
+load; the caller records them in the provenance, so a change in the
+environment stays visible across runs.
 """
 
 from __future__ import annotations
 
 import json
 import subprocess
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,6 +40,18 @@ ISOLATION_FLAGS = (
 )
 
 TIMEOUT_SECONDS = 600
+
+# The workdir mode of a call, recorded in the provenance: the mode
+# marks the comparability era of a run, because a workdir inside the
+# repo tree leaks workspace context into every call.
+WORKDIR_MODE = "temp"
+
+
+@contextmanager
+def isolated_workdir(tool: str) -> Iterator[Path]:
+    """A scratch cwd outside the repo tree, so a call sees no workspace context."""
+    with tempfile.TemporaryDirectory(prefix=f"style-{tool}-") as name:
+        yield Path(name)
 
 
 class GenerationError(RuntimeError):

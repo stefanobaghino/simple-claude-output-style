@@ -458,8 +458,7 @@ def test_cli_parallel_below_1_exits_2(project):
     assert error.value.code == 2
 
 
-def test_cli_judge_works_in_a_tool_scoped_workdir(project):
-    expected = project / "run" / ".judge-workdir-loss"
+def test_cli_judge_works_in_a_workdir_outside_the_run(project):
     seen = []
 
     class WorkdirProbe(FakeLossRunner):
@@ -469,8 +468,12 @@ def test_cli_judge_works_in_a_tool_scoped_workdir(project):
 
     assert run_cli(project, "--judge", run=WorkdirProbe()) == 0
     assert seen
-    assert set(seen) == {(expected, True)}
-    assert not expected.exists()
+    workdirs = {cwd for cwd, _ in seen}
+    assert len(workdirs) == 1
+    assert all(existed for _, existed in seen)
+    workdir = workdirs.pop()
+    assert project.resolve() not in workdir.resolve().parents
+    assert not workdir.exists()
 
 
 def test_cli_meta_mismatch_exits_2(project):

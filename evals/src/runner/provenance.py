@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
 
-from .generate import ISOLATION_FLAGS
+from .generate import ISOLATION_FLAGS, WORKDIR_MODE
 
 LINTER_PACKAGES = ("spacy", "en-core-web-sm")
 
@@ -78,6 +78,7 @@ def build_provenance(
         "conditions": {
             "model_requested": model,
             "claude_version": cli_version,
+            "workdir": WORKDIR_MODE,
             "flags": list(ISOLATION_FLAGS),
             "settings": {
                 "base": {"disableAllHooks": True},

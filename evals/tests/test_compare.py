@@ -25,14 +25,18 @@ def write_run(
     hedge_median: float | None = 0.5,
     style_sha: str = "s" * 8,
     claude_version: str = "2.0.0 (Claude Code)",
+    workdir: str | None = "temp",
     skip: tuple[str, ...] = (),
 ) -> Path:
     run_dir = runs_dir / name
     run_dir.mkdir(parents=True)
+    conditions = {"model_requested": "sonnet", "claude_version": claude_version}
+    if workdir is not None:
+        conditions["workdir"] = workdir
     files = {
         "provenance": {
             "prompt_set": {"path": "prompts/prompts.yaml", "sha256": "p" * 8},
-            "conditions": {"model_requested": "sonnet", "claude_version": claude_version},
+            "conditions": conditions,
             "styles": {"alpha": {"file": "alpha.md", "sha256": style_sha}},
             "linter_toolchain": {"spacy": "1.0"},
         },
@@ -192,6 +196,17 @@ def test_a_condition_mismatch_warns(tmp_path):
             "condition mismatch on claude version: "
             "run-a 2.0.0 (Claude Code), run-b 2.0.1 (Claude Code)"
         ),
+    ]
+
+
+def test_a_run_without_a_workdir_mode_warns(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a", workdir=None)
+    write_run(runs, "run-b")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        "condition mismatch on workdir: run-a null, run-b temp",
     ]
 
 

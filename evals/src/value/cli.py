@@ -11,13 +11,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import shutil
 import sys
 from pathlib import Path
 
 from gate.cli import load_answers
 from loss.judges import FACT_MINE
-from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import sha256_of
 
 from .analysis import score_checks, select_pairs, shared_facts
@@ -181,9 +180,10 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
             meta = meta_stored
 
     raw_path = run_dir / "value-raw.jsonl"
-    workdir = run_dir / ".judge-workdir-value"
-    workdir.mkdir(exist_ok=True)
-    with raw_path.open("a", encoding="utf-8") as raw_file:
+    with (
+        raw_path.open("a", encoding="utf-8") as raw_file,
+        isolated_workdir("judge-value") as workdir,
+    ):
         if meta_stored is None or meta_upgraded:
             raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
             raw_file.flush()
@@ -213,8 +213,6 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
             )
         except GenerationError as error:
             raise _fail(f"a judge call failed: {error}") from error
-        finally:
-            shutil.rmtree(workdir, ignore_errors=True)
     return meta, warnings
 
 

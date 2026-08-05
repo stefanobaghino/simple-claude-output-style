@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 from linter import Linter, load_rules
 from runner.cli import discover_styles, load_prompts
-from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import build_provenance, claude_version, linter_toolchain, sha256_of
 
 from .analysis import load_sessions, score_sessions
@@ -49,12 +48,13 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
 
     out.mkdir(parents=True, exist_ok=True)
     existing = load_sessions(sessions_path)
-    workdir = out / ".workdir"
-    workdir.mkdir(exist_ok=True)
     wanted = set(range(1, args.turns + 1))
 
     failures: list[str] = []
-    with sessions_path.open("a", encoding="utf-8") as sessions_file:
+    with (
+        sessions_path.open("a", encoding="utf-8") as sessions_file,
+        isolated_workdir("drift") as workdir,
+    ):
         for style in styles:
             for repeat in range(1, args.repeats + 1):
                 present = {turn for (s, r, turn) in existing if s == style and r == repeat}
@@ -95,7 +95,6 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
                 except GenerationError as error:
                     failures.append(f"{style}: session {repeat} failed: {error}")
                     print(f"  failed: {error}", file=sys.stderr)
-    shutil.rmtree(workdir, ignore_errors=True)
 
     provenance = build_provenance(
         model=args.model,

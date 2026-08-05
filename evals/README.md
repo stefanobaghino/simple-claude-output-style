@@ -82,7 +82,7 @@ The harness uses [uv](https://docs.astral.sh/uv/). From this directory:
 ```
 uv run pytest
 uv run style-lint FILE.md --rules rules/technical-simplified.rules.yaml
-uv run style-pairs
+uv run style-pairs [--parallel N]
 uv run style-gate runs/<date>
 uv run style-cost runs/<date> [--probe]
 uv run style-value runs/<date> [--judge] [--parallel N]
@@ -105,6 +105,11 @@ context enters a call, and the provenance records the workdir mode.
 The probe calls, the judge calls, and the drift calls use the same
 kind of directory. Plugins from the user configuration still load; the
 run data records them, so a change in the environment stays visible.
+The generation calls run several at a time (8 by default), and
+`--parallel` sets the count (1 runs one call at a time). The calls do
+not interact, so the concurrency changes no condition of a run. The
+answers land in completion order, and every reader of the answers
+reads them by key, so the row order carries no meaning.
 An interrupted run resumes when the same invocation runs again. When
 the default directory already holds a complete run, a repeat without
 `--out` starts the next free letter suffix (`runs/<date>b`, then `c`,

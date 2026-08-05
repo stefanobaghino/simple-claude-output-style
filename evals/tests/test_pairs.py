@@ -3,6 +3,7 @@ subprocess is replaced with a fake runner that returns canned
 stream-json output."""
 
 import json
+import threading
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
@@ -166,7 +167,7 @@ def project(tmp_path, monkeypatch):
     return tmp_path
 
 
-def run_cli(project, runner, out="run"):
+def run_cli(project, runner, out="run", *extra):
     return cli.main(
         [
             "--prompts",
@@ -177,6 +178,7 @@ def run_cli(project, runner, out="run"):
             str(project / "plugin"),
             "--out",
             str(project / out),
+            *extra,
         ],
         run=runner,
     )
@@ -233,6 +235,48 @@ def test_cli_resumes_and_only_runs_the_missing_answers(project):
     assert run_cli(project, second) == 0
     assert len(second.calls) == 3
     assert len(answers_path.read_text().splitlines()) == 4
+
+
+def test_cli_runs_the_calls_in_parallel(project):
+    # All 4 calls must be live at once to pass the barrier. A serial
+    # runner blocks on the first call, the barrier times out, and the
+    # test fails.
+    barrier = threading.Barrier(4, timeout=10)
+
+    class BlockingRunner(FakeRunner):
+        def __call__(self, argv, cwd):
+            barrier.wait()
+            return super().__call__(argv, cwd)
+
+    runner = BlockingRunner()
+    assert run_cli(project, runner) == 0
+    assert len(runner.calls) == 4
+
+
+def test_cli_with_parallel_one_runs_serially(project):
+    live = {"now": 0, "peak": 0}
+    lock = threading.Lock()
+
+    class CountingRunner(FakeRunner):
+        def __call__(self, argv, cwd):
+            with lock:
+                live["now"] += 1
+                live["peak"] = max(live["peak"], live["now"])
+            try:
+                return super().__call__(argv, cwd)
+            finally:
+                with lock:
+                    live["now"] -= 1
+
+    runner = CountingRunner()
+    assert run_cli(project, runner, "run", "--parallel", "1") == 0
+    assert len(runner.calls) == 4
+    assert live["peak"] == 1
+
+
+def test_cli_rejects_a_parallel_below_one(project):
+    with pytest.raises(SystemExit, match="--parallel"):
+        run_cli(project, FakeRunner(), "run", "--parallel", "0")
 
 
 def test_cli_calls_run_in_a_workdir_outside_the_project(project):

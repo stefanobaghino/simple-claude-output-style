@@ -172,7 +172,10 @@ fails runs once more, and the retry becomes a warning, because one
 transient failure must not abort a whole pass. A second failure
 stops the pass. The judge calls
 run several at a time (8 by default), and `--parallel` sets the
-count (1 runs one call at a time). Without `--judge`
+count (1 runs one call at a time). One pool spans the checks: a
+call that consumes the output of an earlier call waits for that
+call only, and every other call starts as soon as a worker is
+free. Without `--judge`
 the tool rescores the stored raw data offline. Exit codes: 0 when
 the checks are scored and no warnings exist, 1 when warnings exist
 (for example, a check without judge data), 2 when the run cannot be
@@ -196,7 +199,9 @@ outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
 the same invocation runs again. A failed judge call retries once
 here as well, with the same warning. The judge calls run several at a
 time (8 by default), and `--parallel` sets the count (1 runs one
-call at a time). Without `--judge` the tool rescores
+call at a time). One pool spans the checks here as well, and a
+check call starts as soon as its own extraction is complete, with
+no barrier between the checks. Without `--judge` the tool rescores
 the stored raw data offline. The exit codes equal the exit codes of
 `style-value`.
 

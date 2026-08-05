@@ -16,6 +16,11 @@ run resumes without loss. With parallel judge calls, the session lock
 serializes the row writes, and the rows land in completion order, not
 in call order. The loaders read the rows by key, so the row order in
 the raw file carries no meaning.
+
+One task pool spans the checks of a pass. A call that depends on an
+earlier call stays behind that call in one task, and every other call
+goes to the pool as its own task, so a call runs as soon as its
+inputs exist.
 """
 
 from __future__ import annotations
@@ -218,32 +223,93 @@ def build_meta(
     }
 
 
-def run_parallel(tasks: list[Callable[[], None]], workers: int) -> None:
-    """Run the tasks, at most workers at a time.
+class TaskPool:
+    """Runs tasks, at most workers at a time; a task can submit more tasks.
 
     With workers at 1 or below, the tasks run in order in the thread
-    of the caller, exactly like a plain loop, and the first error
-    stops the loop. Else the tasks run on a thread pool. An error
-    cancels every task that did not start, and the helper waits for
-    the live tasks, then re-raises the error. Thus no task is live
-    after the helper returns, and the caller can close a shared file
-    directly after the helper.
+    of the caller, like a plain loop over a queue that can grow, and
+    the first error stops the loop. Else the tasks run on a thread
+    pool. An error cancels every task that did not start, a later
+    submit becomes a no-op, and drain waits for the live tasks, then
+    re-raises the error. Thus no task is live after drain, and the
+    caller can close a shared file directly after drain. A submit or
+    a drain after drain raises, because a late task would write past
+    a closed sink.
+
+    A task must submit and return, never wait on a submitted task:
+    a wait would starve the workers. Thus submit returns None, not
+    a handle.
     """
-    if workers <= 1:
-        for task in tasks:
-            task()
-        return
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(task) for task in tasks]
+
+    def __init__(self, workers: int) -> None:
+        self._lock = threading.Lock()
+        self._failed = False
+        self._closed = False
+        self._queue: list[Callable[[], None]] = []
+        self._futures: list = []
+        self._pool = ThreadPoolExecutor(max_workers=workers) if workers > 1 else None
+
+    def submit(self, task: Callable[[], None]) -> None:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("the pool is drained")
+            if self._failed:
+                return
+            if self._pool is None:
+                self._queue.append(task)
+            else:
+                self._futures.append(self._pool.submit(task))
+
+    def drain(self) -> None:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("the pool is drained")
+        if self._pool is None:
+            self._drain_serial()
+        else:
+            self._drain_parallel()
+
+    def _drain_serial(self) -> None:
+        index = 0
         try:
-            for future in futures:
+            while index < len(self._queue):
+                task = self._queue[index]
+                index += 1
+                task()
+        except BaseException:
+            with self._lock:
+                self._failed = True
+            raise
+        finally:
+            with self._lock:
+                self._closed = True
+
+    def _drain_parallel(self) -> None:
+        # A child future lands in the list before the future of its
+        # parent resolves, so when the length check under the lock
+        # finds no new future, no task runs and the length is final.
+        index = 0
+        try:
+            while True:
+                with self._lock:
+                    if index == len(self._futures):
+                        break
+                    future = self._futures[index]
+                index += 1
                 future.result()
         except BaseException:
             # A KeyboardInterrupt must also cancel the queue, so the
-            # catch takes BaseException, not Exception.
-            for future in futures:
-                future.cancel()
+            # catch takes BaseException, not Exception. The failed
+            # flag goes first, under the lock, so no parent submits
+            # into the shutdown.
+            with self._lock:
+                self._failed = True
+            self._pool.shutdown(wait=True, cancel_futures=True)
             raise
+        finally:
+            self._pool.shutdown(wait=True)
+            with self._lock:
+                self._closed = True
 
 
 RowSink = Callable[[dict], None]
@@ -355,6 +421,7 @@ def _grade_items(questions: list[dict], answers: list[str]) -> str:
 
 def _judge_comprehension(
     session: JudgeSession,
+    pool: TaskPool,
     pairs: dict[str, list[str]],
     answers: dict[tuple[str, str | None], dict],
     facts_by_pair: dict[tuple[str, str], dict[str, list[str]]],
@@ -362,24 +429,24 @@ def _judge_comprehension(
     reader_model: str,
     questions_cap: int,
     replicates: int,
-    parallel: int,
 ) -> None:
     """One quiz per pair, from the shared facts, read by both answers.
 
     A pair without an entry in facts_by_pair was warned about by the
-    caller and is skipped here. Each remaining pair is one task, and
-    the calls of a pair run in order inside the task.
+    caller and is skipped here. Each remaining pair is one task that
+    writes the questions, and the task submits one reader-and-grade
+    task per arm and replicate.
     """
-    tasks = []
     for style in sorted(pairs):
         for prompt_id in pairs[style]:
             survivors = facts_by_pair.get((style, prompt_id))
             if survivors is None:
                 continue
-            tasks.append(
+            pool.submit(
                 partial(
                     _judge_comprehension_pair,
                     session,
+                    pool,
                     answers,
                     survivors,
                     grader_model=grader_model,
@@ -390,11 +457,11 @@ def _judge_comprehension(
                     prompt_id=prompt_id,
                 )
             )
-    run_parallel(tasks, parallel)
 
 
 def _judge_comprehension_pair(
     session: JudgeSession,
+    pool: TaskPool,
     answers: dict[tuple[str, str | None], dict],
     survivors: dict[str, list[str]],
     *,
@@ -405,13 +472,14 @@ def _judge_comprehension_pair(
     style: str,
     prompt_id: str,
 ) -> None:
-    """The question, reader, and grade calls of one pair.
+    """The question call of one pair, then one task per replicate.
 
     The facts of a pair come in the two wordings of the answers, and
     the quiz takes half of its cap from each wording. The reference
     answer of a question is the fact that produced the question. Both
     arms answer the same question list, so the question order carries
-    no arm bias.
+    no arm bias. Every reader replicate depends only on the questions,
+    so each (arm, replicate) goes to the pool as its own task.
     """
     total = len(survivors["unstyled"]) + len(survivors["styled"])
     if total < FACTS_FLOOR:
@@ -445,41 +513,76 @@ def _judge_comprehension_pair(
     for arm, arm_key in (("styled", (prompt_id, style)), ("unstyled", (prompt_id, None))):
         text = answers[arm_key]
         for replicate in range(replicates):
-            replies = session.structured(
-                validate=partial(parse_strings, n=len(facts)),
-                key=f"comprehension:v3:reader:{style}:{prompt_id}:{arm}:{replicate}",
-                check="comprehension",
-                role="reader",
-                model=reader_model,
-                prompt=READER_PROMPT.format(text=text["text"], questions=_numbered(questions)),
-                prompt_id=prompt_id,
-                answer_sha256=text["sha256"],
-                index=replicate,
-            )
-            if replies is None:
-                session.warnings.append(
-                    f"{prompt_id}: the reader returned no usable answers for the "
-                    f"text {text['sha256'][:12]}, so comprehension skips the "
-                    "replicate"
+            pool.submit(
+                partial(
+                    _read_and_grade,
+                    session,
+                    questions,
+                    references,
+                    text,
+                    grader_model=grader_model,
+                    reader_model=reader_model,
+                    style=style,
+                    prompt_id=prompt_id,
+                    arm=arm,
+                    replicate=replicate,
                 )
-                continue
-            grades = session.structured(
-                validate=partial(parse_bools, n=len(facts)),
-                key=f"comprehension:v3:grades:{style}:{prompt_id}:{arm}:{replicate}",
-                check="comprehension",
-                role="grades",
-                model=grader_model,
-                prompt=GRADES_PROMPT.format(items=_grade_items(references, replies)),
-                prompt_id=prompt_id,
-                answer_sha256=text["sha256"],
-                index=replicate,
             )
-            if grades is None:
-                session.warnings.append(
-                    f"{prompt_id}: the grader returned no usable grades for the "
-                    f"text {text['sha256'][:12]}, so comprehension skips the "
-                    "replicate"
-                )
+
+
+def _read_and_grade(
+    session: JudgeSession,
+    questions: list[str],
+    references: list[dict],
+    text: dict,
+    *,
+    grader_model: str,
+    reader_model: str,
+    style: str,
+    prompt_id: str,
+    arm: str,
+    replicate: int,
+) -> None:
+    """The reader call and the grade call of one replicate, one task.
+
+    The grade call consumes the replies of the reader call, so the
+    two calls stay in one task.
+    """
+    replies = session.structured(
+        validate=partial(parse_strings, n=len(questions)),
+        key=f"comprehension:v3:reader:{style}:{prompt_id}:{arm}:{replicate}",
+        check="comprehension",
+        role="reader",
+        model=reader_model,
+        prompt=READER_PROMPT.format(text=text["text"], questions=_numbered(questions)),
+        prompt_id=prompt_id,
+        answer_sha256=text["sha256"],
+        index=replicate,
+    )
+    if replies is None:
+        session.warnings.append(
+            f"{prompt_id}: the reader returned no usable answers for the "
+            f"text {text['sha256'][:12]}, so comprehension skips the "
+            "replicate"
+        )
+        return
+    grades = session.structured(
+        validate=partial(parse_bools, n=len(questions)),
+        key=f"comprehension:v3:grades:{style}:{prompt_id}:{arm}:{replicate}",
+        check="comprehension",
+        role="grades",
+        model=grader_model,
+        prompt=GRADES_PROMPT.format(items=_grade_items(references, replies)),
+        prompt_id=prompt_id,
+        answer_sha256=text["sha256"],
+        index=replicate,
+    )
+    if grades is None:
+        session.warnings.append(
+            f"{prompt_id}: the grader returned no usable grades for the "
+            f"text {text['sha256'][:12]}, so comprehension skips the "
+            "replicate"
+        )
 
 
 def _paraphrase_call(session: JudgeSession, model: str, text: dict, index: int) -> None:
@@ -547,14 +650,17 @@ def run_judges(
     one dict with prompt_id, sha256, and text per unique sha256. The
     comprehension check works per pair instead, with the shared facts
     from facts_by_pair. The rows mapping is read for reuse and
-    extended in place; every new row also goes to the sink. The
-    parallel count sets how many tasks run at a time, per check.
+    extended in place; every new row also goes to the sink. One pool
+    spans the checks, the parallel count sets how many tasks run at
+    a time, and a call runs as soon as its inputs exist.
     """
     session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
+    pool = TaskPool(parallel)
 
     if "comprehension" in checks:
         _judge_comprehension(
             session,
+            pool,
             pairs,
             answers,
             facts_by_pair,
@@ -562,23 +668,16 @@ def run_judges(
             reader_model,
             questions_n,
             replicates,
-            parallel,
         )
 
     if "paraphrase" in checks:
-        run_parallel(
-            [
-                partial(_paraphrase_call, session, reader_model, text, index)
-                for text in texts
-                for index in range(paraphrases_k)
-            ],
-            parallel,
-        )
+        for text in texts:
+            for index in range(paraphrases_k):
+                pool.submit(partial(_paraphrase_call, session, reader_model, text, index))
 
     if "roundtrip" in checks:
-        run_parallel(
-            [partial(_roundtrip_chain, session, reader_model, language, text) for text in texts],
-            parallel,
-        )
+        for text in texts:
+            pool.submit(partial(_roundtrip_chain, session, reader_model, language, text))
 
+    pool.drain()
     return session.warnings

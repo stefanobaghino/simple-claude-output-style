@@ -25,7 +25,7 @@ from pathlib import Path
 
 from runner.generate import ISOLATION_FLAGS, Runner, subprocess_runner
 from runner.provenance import claude_version
-from value.judges import JudgeSession, RowSink, extract_json, parse_bools, run_parallel
+from value.judges import JudgeSession, RowSink, TaskPool, extract_json, parse_bools
 
 CHECKS = ("completeness", "hedging")
 VERDICTS = ("hedged", "certain", "absent")
@@ -140,58 +140,100 @@ def _styled_arms(
     return [arms[sha] for sha in sorted(arms)]
 
 
-def _extract(
+def _dependents(
+    pairs: dict[str, list[str]],
+    answers: dict[tuple[str, str | None], dict],
+    *,
+    reverse: bool,
+) -> dict[str, list[tuple[str, dict, dict]]]:
+    """The pairs behind each source sha: (prompt_id, styled, checked).
+
+    Forward, the styled text is checked against the facts of the
+    unstyled answer. In reverse, the unstyled text is checked against
+    the facts of the styled answer. The check key carries the styled
+    sha in both directions, so two styles that share one unstyled
+    answer never share a check row. Two pairs with byte-identical
+    styled texts do share a key, and each pair keeps its own entry
+    here, so both tasks run and can both miss the row fast path. The
+    key gets two rows, the last row wins at load, and the marks
+    agree, so the duplicate is harmless.
+    """
+    grouped: dict[str, list[tuple[str, dict, dict]]] = {}
+    for style in sorted(pairs):
+        for prompt_id in pairs[style]:
+            styled = answers[(prompt_id, style)]
+            unstyled = answers[(prompt_id, None)]
+            source, checked = (styled, unstyled) if reverse else (unstyled, styled)
+            grouped.setdefault(source["sha256"], []).append((prompt_id, styled, checked))
+    return grouped
+
+
+def _submit_extractions(
     session: JudgeSession,
+    pool: TaskPool,
     arms: list[tuple[str, dict]],
+    dependents: dict[str, list[tuple[str, dict, dict]]],
     *,
     check: str,
     role: str,
+    check_role: str,
     prompt_template: str,
+    check_template: str,
+    validate_factory,
     model: str,
     noun: str,
-    parallel: int,
+    reverse: bool,
     consequence: str | None = None,
-) -> dict[str, list[str]]:
-    """One extraction call per unique text, one task each. Returns lists by sha."""
-    lists: dict[str, list[str]] = {}
+) -> None:
+    """One extraction task per unique text; each submits its check tasks."""
     consequence = consequence or f"{check} skips its pairs"
-    tasks = [
-        partial(
-            _extract_one,
-            session,
-            lists,
-            prompt_id,
-            arm,
-            check=check,
-            role=role,
-            prompt_template=prompt_template,
-            model=model,
-            noun=noun,
-            consequence=consequence,
+    for prompt_id, arm in arms:
+        pool.submit(
+            partial(
+                _extract_one,
+                session,
+                pool,
+                prompt_id,
+                arm,
+                dependents.get(arm["sha256"], []),
+                check=check,
+                role=role,
+                check_role=check_role,
+                prompt_template=prompt_template,
+                check_template=check_template,
+                validate_factory=validate_factory,
+                model=model,
+                noun=noun,
+                reverse=reverse,
+                consequence=consequence,
+            )
         )
-        for prompt_id, arm in arms
-    ]
-    run_parallel(tasks, parallel)
-    return lists
 
 
 def _extract_one(
     session: JudgeSession,
-    lists: dict[str, list[str]],
+    pool: TaskPool,
     prompt_id: str,
     arm: dict,
+    dependents: list[tuple[str, dict, dict]],
     *,
     check: str,
     role: str,
+    check_role: str,
     prompt_template: str,
+    check_template: str,
+    validate_factory,
     model: str,
     noun: str,
+    reverse: bool,
     consequence: str,
 ) -> None:
-    """One extraction call.
+    """One extraction call; a non-empty list submits the dependent checks.
 
-    The arms carry unique shas, so parallel tasks never write one
-    lists entry twice.
+    The arms carry unique shas, so one extraction serves every pair
+    with the same source text. An empty list is a valid extraction
+    (routine for hedging), and the pairs behind it get no check call
+    and no warning, as before.
     """
     items = session.structured(
         validate=parse_string_list,
@@ -209,62 +251,26 @@ def _extract_one(
             f"{arm['sha256'][:12]}, so {consequence}"
         )
         return
-    lists[arm["sha256"]] = items
-
-
-def _check_pairs(
-    session: JudgeSession,
-    pairs: dict[str, list[str]],
-    answers: dict[tuple[str, str | None], dict],
-    lists: dict[str, list[str]],
-    *,
-    check: str,
-    prompt_template: str,
-    validate_factory,
-    model: str,
-    noun: str,
-    parallel: int,
-    reverse: bool = False,
-) -> None:
-    """One check call per pair whose source arm has a non-empty list.
-
-    Forward, the styled text is checked against the facts of the
-    unstyled answer. In reverse, the unstyled text is checked against
-    the facts of the styled answer. The key carries the styled sha in
-    both directions, so two styles that share one unstyled answer
-    never share a check row. Two pairs with byte-identical styled
-    texts do share a key, and parallel tasks can then both miss the
-    row fast path. The key gets two rows, the last row wins at load,
-    and the marks agree, so the duplicate is harmless.
-    """
-    role = "reverse" if reverse else "check"
-    tasks = []
-    for style in sorted(pairs):
-        for prompt_id in pairs[style]:
-            styled = answers[(prompt_id, style)]
-            unstyled = answers[(prompt_id, None)]
-            source, checked = (styled, unstyled) if reverse else (unstyled, styled)
-            items = lists.get(source["sha256"])
-            if not items:
-                continue
-            tasks.append(
-                partial(
-                    _check_pair,
-                    session,
-                    items,
-                    styled,
-                    checked,
-                    prompt_id,
-                    check=check,
-                    role=role,
-                    prompt_template=prompt_template,
-                    validate_factory=validate_factory,
-                    model=model,
-                    noun=noun,
-                    reverse=reverse,
-                )
+    if not items:
+        return
+    for pair_prompt_id, styled, checked in dependents:
+        pool.submit(
+            partial(
+                _check_pair,
+                session,
+                items,
+                styled,
+                checked,
+                pair_prompt_id,
+                check=check,
+                role=check_role,
+                prompt_template=check_template,
+                validate_factory=validate_factory,
+                model=model,
+                noun=noun,
+                reverse=reverse,
             )
-    run_parallel(tasks, parallel)
+        )
 
 
 def _check_pair(
@@ -318,82 +324,63 @@ def run_judges(
 
     The answers mapping goes from (prompt_id, style or None) to a dict
     with text and sha256. The rows mapping is read for reuse and
-    extended in place; every new row also goes to the sink. The
-    parallel count sets how many tasks run at a time, per phase, and
-    a check phase starts only when its extraction phase is complete.
+    extended in place; every new row also goes to the sink. One pool
+    spans the checks, the parallel count sets how many tasks run at
+    a time, and a check call starts as soon as its own extraction is
+    complete.
     """
     session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
+    pool = TaskPool(parallel)
 
     if "completeness" in checks:
-        facts = _extract(
+        _submit_extractions(
             session,
+            pool,
             _unstyled_arms(pairs, answers),
+            _dependents(pairs, answers, reverse=False),
             check="completeness",
             role="facts",
+            check_role="check",
             prompt_template=FACTS_PROMPT,
-            model=model,
-            noun="fact",
-            parallel=parallel,
-        )
-        _check_pairs(
-            session,
-            pairs,
-            answers,
-            facts,
-            check="completeness",
-            prompt_template=FACTS_CHECK_PROMPT,
+            check_template=FACTS_CHECK_PROMPT,
             validate_factory=lambda n: partial(parse_bools, n=n),
             model=model,
             noun="fact",
-            parallel=parallel,
+            reverse=False,
         )
-        styled_facts = _extract(
+        _submit_extractions(
             session,
+            pool,
             _styled_arms(pairs, answers),
+            _dependents(pairs, answers, reverse=True),
             check="completeness",
             role="facts",
+            check_role="reverse",
             prompt_template=FACTS_PROMPT,
-            model=model,
-            noun="fact",
-            parallel=parallel,
-            consequence="the additions of its pairs are unscored",
-        )
-        _check_pairs(
-            session,
-            pairs,
-            answers,
-            styled_facts,
-            check="completeness",
-            prompt_template=FACTS_CHECK_PROMPT,
+            check_template=FACTS_CHECK_PROMPT,
             validate_factory=lambda n: partial(parse_bools, n=n),
             model=model,
             noun="fact",
-            parallel=parallel,
             reverse=True,
+            consequence="the additions of its pairs are unscored",
         )
 
     if "hedging" in checks:
-        claims = _extract(
+        _submit_extractions(
             session,
+            pool,
             _unstyled_arms(pairs, answers),
+            _dependents(pairs, answers, reverse=False),
             check="hedging",
             role="claims",
+            check_role="check",
             prompt_template=CLAIMS_PROMPT,
-            model=model,
-            noun="claim",
-            parallel=parallel,
-        )
-        _check_pairs(
-            session,
-            pairs,
-            answers,
-            claims,
-            check="hedging",
-            prompt_template=CLAIMS_CHECK_PROMPT,
+            check_template=CLAIMS_CHECK_PROMPT,
             validate_factory=lambda n: partial(parse_verdicts, n=n),
             model=model,
             noun="claim",
-            parallel=parallel,
+            reverse=False,
         )
 
+    pool.drain()
     return session.warnings

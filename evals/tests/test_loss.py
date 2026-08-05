@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from loss import cli, parse_string_list, parse_verdicts, score_checks
+from loss.judges import run_judges
 from runner.provenance import sha256_of
 
 STYLED_TEXT = "The quick brown fox jumps."
@@ -83,6 +84,33 @@ class FakeLossRunner:
         if prompt.startswith("For each uncertain claim"):
             return '["hedged", "certain"]' if "fox" in prompt else '["hedged", "absent"]'
         raise AssertionError(f"unrouted judge prompt: {prompt[:60]}")
+
+
+def test_a_hedging_extraction_runs_before_a_completeness_check(tmp_path):
+    # At one worker the order is breadth-first: every extraction of
+    # every check goes to the pool first, and each check call lands
+    # behind its own extraction only. The old phase structure ran the
+    # whole completeness check before the first hedging call.
+    keys = []
+    warnings = run_judges(
+        pairs={"alpha": ["p-01"]},
+        answers={
+            ("p-01", "alpha"): {"text": STYLED_TEXT, "sha256": sha(STYLED_TEXT)},
+            ("p-01", None): {"text": UNSTYLED_TEXT, "sha256": sha(UNSTYLED_TEXT)},
+        },
+        checks=["completeness", "hedging"],
+        model="opus",
+        rows={},
+        sink=lambda row: keys.append(row["key"]),
+        workdir=tmp_path,
+        run=FakeLossRunner(),
+        parallel=1,
+    )
+    assert warnings == []
+    assert len(keys) == 6
+    assert keys.index(f"hedging:claims:{sha(UNSTYLED_TEXT)}") < keys.index(
+        f"completeness:check:{sha(STYLED_TEXT)}"
+    )
 
 
 def test_parse_string_list_accepts_any_length():

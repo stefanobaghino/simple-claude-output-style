@@ -16,7 +16,14 @@ from runner.generate import GenerationError
 from runner.provenance import sha256_of
 from value import cli, extract_json, judge_argv, score_checks, select_pairs
 from value.analysis import shared_facts
-from value.judges import JudgeSession, parse_bools, run_parallel, select_balanced, select_facts
+from value.judges import (
+    JudgeSession,
+    TaskPool,
+    parse_bools,
+    run_judges,
+    select_balanced,
+    select_facts,
+)
 from value.report import build_value_report, build_value_summary
 from value.similarity import mean_pairwise_f1, unigram_f1
 
@@ -651,7 +658,7 @@ def test_a_second_call_failure_propagates(tmp_path):
     assert session.rows == {}
 
 
-def test_run_parallel_runs_every_task():
+def test_the_pool_runs_every_task():
     lock = threading.Lock()
     done = []
 
@@ -659,11 +666,14 @@ def test_run_parallel_runs_every_task():
         with lock:
             done.append(number)
 
-    run_parallel([partial(record, number) for number in range(10)], 3)
+    pool = TaskPool(3)
+    for number in range(10):
+        pool.submit(partial(record, number))
+    pool.drain()
     assert sorted(done) == list(range(10))
 
 
-def test_run_parallel_serial_keeps_the_order_and_stops_at_the_first_error():
+def test_the_serial_pool_keeps_the_order_and_stops_at_the_first_error():
     done = []
 
     def record(number):
@@ -672,12 +682,15 @@ def test_run_parallel_serial_keeps_the_order_and_stops_at_the_first_error():
     def boom():
         raise ValueError("boom")
 
+    pool = TaskPool(1)
+    for task in (partial(record, 0), partial(record, 1), boom, partial(record, 2)):
+        pool.submit(task)
     with pytest.raises(ValueError):
-        run_parallel([partial(record, 0), partial(record, 1), boom, partial(record, 2)], 1)
+        pool.drain()
     assert done == [0, 1]
 
 
-def test_run_parallel_propagates_a_base_exception_and_joins_the_live_tasks():
+def test_the_pool_propagates_a_base_exception_and_joins_the_live_tasks():
     lock = threading.Lock()
     state = {"entered": 0, "exited": 0}
 
@@ -693,9 +706,123 @@ def test_run_parallel_propagates_a_base_exception_and_joins_the_live_tasks():
     def boom():
         raise Cancel("stop")
 
+    pool = TaskPool(3)
+    pool.submit(boom)
+    for _ in range(30):
+        pool.submit(task)
     with pytest.raises(Cancel):
-        run_parallel([boom] + [task] * 30, 3)
+        pool.drain()
     assert state["entered"] == state["exited"]
+
+
+def test_a_serial_task_can_submit_a_task_and_the_order_is_breadth_first():
+    done = []
+    pool = TaskPool(1)
+
+    def child():
+        done.append("child")
+
+    def parent():
+        done.append("parent")
+        pool.submit(child)
+
+    pool.submit(parent)
+    pool.submit(partial(done.append, "sibling"))
+    pool.drain()
+    assert done == ["parent", "sibling", "child"]
+
+
+def test_the_drain_waits_for_a_task_submitted_during_the_drain():
+    # A snapshot of the futures at the start of the drain would never
+    # call result() on the child, and the error of the child would be
+    # lost. The growing list must surface the error.
+    pool = TaskPool(2)
+
+    def child():
+        raise ValueError("late boom")
+
+    def parent():
+        pool.submit(child)
+
+    pool.submit(parent)
+    with pytest.raises(ValueError):
+        pool.drain()
+
+
+def test_a_live_parent_can_submit_during_an_abort_without_an_error():
+    # The boom task releases the parent and then raises. The parent
+    # then submits while the pool fails or aborts. A raise from that
+    # submit would surface as the error of the parent instead of the
+    # ValueError of the boom task.
+    release = threading.Event()
+    pool = TaskPool(2)
+
+    def parent():
+        release.wait(timeout=10)
+        pool.submit(lambda: None)
+
+    def boom():
+        release.set()
+        raise ValueError("boom")
+
+    pool.submit(parent)
+    pool.submit(boom)
+    with pytest.raises(ValueError):
+        pool.drain()
+
+
+def test_a_drained_pool_rejects_a_submit_and_a_second_drain():
+    pool = TaskPool(1)
+    pool.drain()
+    with pytest.raises(RuntimeError):
+        pool.submit(lambda: None)
+    with pytest.raises(RuntimeError):
+        pool.drain()
+
+
+def test_the_comprehension_grain_is_smaller_than_a_pair(tmp_path):
+    # At one worker the order is breadth-first, so the questions call
+    # of the second pair must land before the grade call of the first
+    # pair. The old per-pair task ran all thirteen calls of a pair
+    # before the next pair started.
+    def run(argv, cwd):
+        prompt = argv[2]
+        if prompt.startswith("You write a quiz"):
+            return stream('["q1", "q2", "q3"]')
+        if prompt.startswith("Answer the questions"):
+            return stream('["a1", "a2", "a3"]')
+        return stream("[true, true, true]")
+
+    facts = {"unstyled": ["f1", "f2", "f3"], "styled": []}
+    keys = []
+    warnings = run_judges(
+        texts=[],
+        pairs={"alpha": ["p-01", "p-02"]},
+        answers={
+            ("p-01", "alpha"): {"text": STYLED_TEXT, "sha256": sha(STYLED_TEXT)},
+            ("p-01", None): {"text": UNSTYLED_TEXT, "sha256": sha(UNSTYLED_TEXT)},
+            ("p-02", "alpha"): {"text": STYLED_TEXT, "sha256": sha(STYLED_TEXT)},
+            ("p-02", None): {"text": UNSTYLED_TEXT, "sha256": sha(UNSTYLED_TEXT)},
+        },
+        facts_by_pair={("alpha", "p-01"): facts, ("alpha", "p-02"): facts},
+        checks=["comprehension"],
+        reader_model="haiku",
+        grader_model="opus",
+        questions_n=6,
+        paraphrases_k=0,
+        replicates=1,
+        language="Italian",
+        rows={},
+        sink=lambda row: keys.append(row["key"]),
+        workdir=tmp_path,
+        run=run,
+        parallel=1,
+    )
+    assert warnings == []
+    assert len(keys) == 10
+    assert keys.index("comprehension:v3:questions:alpha:p-02") < keys.index(
+        "comprehension:v3:grades:alpha:p-01:styled:0"
+    )
 
 
 def write_jsonl(path, rows):

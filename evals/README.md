@@ -281,6 +281,47 @@ for that run, and n states the run count per axis. Exit codes: 0
 when no warnings exist, 1 when warnings exist, 2 when the
 comparison cannot run.
 
+### Campaign overlap
+
+A campaign is several runs under identical conditions, produced for
+the cross-run comparison. The stages of a campaign can overlap,
+because only four dependencies exist:
+
+- The gate needs the complete pair set of its run.
+- The cost report needs the complete pair set of its run.
+- The judged reports need the gate marks of their run.
+- `style-value --judge` needs the complete `loss-raw.jsonl` of its
+  run, as the reader-value section above states.
+
+Everything else runs at the same time without conflict. Each tool
+works in its own scratch directory, and each judge pass appends to
+its own raw file, so the judge tools of one run can run together,
+and the tools of two different runs can too. The pair generation of
+the next run can start while the judge passes of the previous run
+are live, because the calls of different tools never share a file.
+
+The schedule of one run inside a campaign:
+
+```
+pairs ─→ gate ─→ loss ─→ value
+              ├─→ rank
+              └─→ cost
+```
+
+The next run starts its `pairs` stage when the previous `pairs`
+stage is complete, the judge stages of the runs overlap without
+constraint, and the comparison runs last, over the complete runs.
+
+Two limits apply. First, do not run two `style-pairs` invocations
+at the same time. Without `--out`, both invocations pick the same
+run directory, because the picker takes the first incomplete run,
+and the two processes then write duplicate rows and spend duplicate
+calls. Second, the concurrent CLI calls add up across the live
+tools: each tool holds 8 workers by default, so three live tools
+produce 24 concurrent calls. When the account limit rejects calls,
+a judge call that fails twice stops its pass, so lower `--parallel`
+per tool. An interrupted pass resumes, so a stop loses no data.
+
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,

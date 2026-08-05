@@ -7,6 +7,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from string import ascii_lowercase
 
 import yaml
 
@@ -47,6 +48,29 @@ def load_existing(answers_path: Path) -> dict[tuple[str, str], dict]:
     return existing
 
 
+def _is_complete(answers_path: Path, arms: list[str | None], prompts: list[dict]) -> bool:
+    existing = load_existing(answers_path)
+    return all((p["id"], arm_name(s)) in existing for s in arms for p in prompts)
+
+
+def pick_default_out(
+    runs_dir: Path, date: str, arms: list[str | None], prompts: list[dict]
+) -> Path:
+    """The first date-named directory that is not a complete run.
+
+    The bare date counts as the first slot, then the letter suffixes
+    b through z. A missing directory and an incomplete run both stop
+    the search, so an interrupted run still resumes. Only a complete
+    run pushes the runner to the next slot, because a silent reuse of
+    a complete run produces no new sample.
+    """
+    for suffix in ("", *ascii_lowercase[1:]):
+        candidate = runs_dir / f"{date}{suffix}"
+        if not _is_complete(candidate / "answers.jsonl", arms, prompts):
+            return candidate
+    raise SystemExit(f"{runs_dir / date}: every letter suffix holds a complete run; pass --out")
+
+
 def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     parser = argparse.ArgumentParser(
         prog="style-pairs",
@@ -61,7 +85,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     parser.add_argument("--plugin-dir", default="../plugin", help="the plugin directory")
     parser.add_argument("--model", default="sonnet", help="model for all answers")
     parser.add_argument("--styles", nargs="*", help="styles to run (default: all rule files)")
-    parser.add_argument("--out", help="run directory (default: runs/<date>)")
+    parser.add_argument(
+        "--out",
+        help="run directory (default: runs/<date>, next letter suffix on a same-day repeat)",
+    )
     args = parser.parse_args(argv)
 
     prompts_path = Path(args.prompts)
@@ -75,12 +102,18 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         if not style_file.exists():
             raise SystemExit(f"{style_file}: the style file does not exist")
 
-    out = Path(args.out) if args.out else Path("runs") / datetime.now(UTC).strftime("%Y-%m-%d")
+    arms: list[str | None] = [None, *styles]
+    if args.out:
+        out = Path(args.out)
+    else:
+        date = datetime.now(UTC).strftime("%Y-%m-%d")
+        out = pick_default_out(Path("runs"), date, arms, prompts)
+        if out.name != date:
+            print(f"runs/{date} is complete; starting {out}", file=sys.stderr)
     out.mkdir(parents=True, exist_ok=True)
     answers_path = out / "answers.jsonl"
     existing = load_existing(answers_path)
 
-    arms: list[str | None] = [None, *styles]
     todo = [
         (style, prompt)
         for style in arms

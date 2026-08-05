@@ -101,7 +101,11 @@ context enters a call, and the provenance records the workdir mode.
 The probe calls, the judge calls, and the drift calls use the same
 kind of directory. Plugins from the user configuration still load; the
 run data records them, so a change in the environment stays visible.
-An interrupted run resumes when the same invocation runs again. The
+An interrupted run resumes when the same invocation runs again. When
+the default directory already holds a complete run, a repeat without
+`--out` starts the next free letter suffix (`runs/<date>b`, then `c`,
+and so on) and tells the choice, because a silent reuse of a complete
+run produces no new sample. The
 runner exits with code 1 when the pair set is incomplete.
 
 The gate reads the answers of a run and writes the fidelity files into
@@ -235,7 +239,8 @@ comparison cannot run.
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,
-with a letter suffix when more than one run happens on one date:
+with a letter suffix when more than one run happens on one date. The
+pair runner picks the suffix on a same-day repeat:
 
 ```
 runs/<YYYY-MM-DD>/

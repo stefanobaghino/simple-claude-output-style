@@ -3,8 +3,10 @@ subprocess is replaced with a fake runner that returns canned
 stream-json output."""
 
 import json
+from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
+from string import ascii_lowercase
 
 import pytest
 import yaml
@@ -180,6 +182,21 @@ def run_cli(project, runner, out="run"):
     )
 
 
+def run_cli_default_out(project, runner):
+    """Invoke the CLI without --out; the caller must chdir into the project."""
+    return cli.main(
+        [
+            "--prompts",
+            str(project / "prompts.yaml"),
+            "--rules-dir",
+            str(project / "rules"),
+            "--plugin-dir",
+            str(project / "plugin"),
+        ],
+        run=runner,
+    )
+
+
 def test_cli_produces_a_complete_run(project):
     runner = FakeRunner()
     assert run_cli(project, runner) == 0
@@ -234,6 +251,56 @@ def test_cli_calls_run_in_a_workdir_outside_the_project(project):
     workdir = workdirs.pop()
     assert project.resolve() not in workdir.resolve().parents
     assert not workdir.exists()
+
+
+def test_cli_same_day_repeats_pick_the_next_letter_suffix(project, monkeypatch, capsys):
+    monkeypatch.chdir(project)
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    first = FakeRunner()
+    assert run_cli_default_out(project, first) == 0
+    assert len(first.calls) == 4
+    assert (project / "runs" / date / "answers.jsonl").exists()
+
+    second = FakeRunner()
+    assert run_cli_default_out(project, second) == 0
+    assert len(second.calls) == 4
+    assert (project / "runs" / f"{date}b" / "answers.jsonl").exists()
+    assert f"runs/{date} is complete; starting" in capsys.readouterr().err
+
+    third = FakeRunner()
+    assert run_cli_default_out(project, third) == 0
+    assert len(third.calls) == 4
+    assert (project / "runs" / f"{date}c" / "answers.jsonl").exists()
+
+
+def test_cli_a_same_day_incomplete_run_still_resumes(project, monkeypatch):
+    monkeypatch.chdir(project)
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    first = FakeRunner()
+    assert run_cli_default_out(project, first) == 0
+    answers_path = project / "runs" / date / "answers.jsonl"
+    lines = answers_path.read_text().splitlines()
+    answers_path.write_text("\n".join(lines[:1]) + "\n")
+
+    second = FakeRunner()
+    assert run_cli_default_out(project, second) == 0
+    assert len(second.calls) == 3
+    assert len(answers_path.read_text().splitlines()) == 4
+    assert not (project / "runs" / f"{date}b").exists()
+
+
+def test_pick_default_out_refuses_when_every_suffix_is_complete(tmp_path):
+    prompts = [{"id": "p1"}]
+    arms = [None]
+    runs = tmp_path / "runs"
+    for suffix in ("", *ascii_lowercase[1:]):
+        run_dir = runs / f"2026-01-01{suffix}"
+        run_dir.mkdir(parents=True)
+        answer = {"prompt_id": "p1", "style": None}
+        (run_dir / "answers.jsonl").write_text(json.dumps(answer) + "\n")
+    with pytest.raises(SystemExit, match="--out"):
+        cli.pick_default_out(runs, "2026-01-01", arms, prompts)
 
 
 def test_cli_reports_a_failed_call_and_keeps_going(project):

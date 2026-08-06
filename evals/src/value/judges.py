@@ -358,6 +358,7 @@ class JudgeSession:
         except GenerationError as error:
             init, result, wall_ms = self._attempt(key, model, prompt)
             self.warnings.append(f"{key}: the first call failed and the retry succeeded: {error}")
+        usage = result.get("usage") or {}
         row = {
             "type": "call",
             "date": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -370,7 +371,10 @@ class JudgeSession:
             "model_requested": model,
             "model_resolved": str(init.get("model", "")),
             "output": str(result.get("result", "")),
-            "output_tokens": int((result.get("usage") or {}).get("output_tokens", 0)),
+            "output_tokens": int(usage.get("output_tokens", 0)),
+            "input_tokens": int(usage.get("input_tokens", 0)),
+            "cache_creation_input_tokens": int(usage.get("cache_creation_input_tokens", 0)),
+            "cache_read_input_tokens": int(usage.get("cache_read_input_tokens", 0)),
             "duration_ms": int(result.get("duration_ms", 0)),
             "wall_ms": wall_ms,
         }

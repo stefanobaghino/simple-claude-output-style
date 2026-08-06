@@ -18,6 +18,7 @@ from gate.cli import load_answers
 from loss.judges import FACT_MINE
 from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import sha256_of
+from runner.spend import spend_summary
 from runner.timing import timing_summary
 
 from .analysis import score_checks, select_pairs, shared_facts
@@ -295,7 +296,8 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     )
     (run_dir / "value.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     timing = timing_summary(rows.values())
-    (run_dir / "value.md").write_text(build_value_report(summary, timing), encoding="utf-8")
+    spend = spend_summary(rows.values())
+    (run_dir / "value.md").write_text(build_value_report(summary, timing, spend), encoding="utf-8")
 
     for style in sorted(pairs):
         parts = []

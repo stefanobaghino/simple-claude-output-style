@@ -18,6 +18,7 @@ from linter import Linter, load_rules
 from runner.cli import discover_styles, load_prompts
 from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import build_provenance, claude_version, linter_toolchain, sha256_of
+from runner.spend import spend_summary
 
 from .analysis import load_sessions, score_sessions
 from .report import build_drift_report, build_drift_summary
@@ -220,7 +221,9 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         warnings=warnings,
     )
     (out / "drift.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    (out / "drift.md").write_text(build_drift_report(summary), encoding="utf-8")
+    (out / "drift.md").write_text(
+        build_drift_report(summary, spend_summary(rows.values())), encoding="utf-8"
+    )
 
     growing = False
     for style in sorted(result.styles):

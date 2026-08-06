@@ -47,7 +47,12 @@ def stream(result_text, output_style="default"):
         "type": "result",
         "is_error": False,
         "result": result_text,
-        "usage": {"output_tokens": 5},
+        "usage": {
+            "output_tokens": 5,
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 2,
+            "cache_read_input_tokens": 1,
+        },
         "duration_ms": 10,
     }
     return "\n".join(json.dumps(event) for event in (init, result))
@@ -952,8 +957,12 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     call_rows = [row for row in raw_rows if row.get("type") == "call"]
     assert call_rows
     assert all(isinstance(row["wall_ms"], int) for row in call_rows)
+    assert all(row["input_tokens"] == 3 for row in call_rows)
+    assert all(row["cache_creation_input_tokens"] == 2 for row in call_rows)
+    assert all(row["cache_read_input_tokens"] == 1 for row in call_rows)
     report = (project / "run" / "value.md").read_text()
     assert "## Call timing" in report
+    assert "## Harness spend" in report
     assert report.count("| alpha | 1 | 0 | 0 |\n") == 2
     assert "worded by both answers in balance" in report
     assert "| alpha | 1 | 0 | 0 | 0.167 | 1.0 | 0.0 | 0.167 |" in report
@@ -1003,6 +1012,19 @@ def test_cli_offline_rescore_without_wall_states_not_measured(project):
     write_jsonl(raw_path, rows)
     assert run_cli(project) == 0
     assert "The wall is not measured" in (project / "run" / "value.md").read_text()
+
+
+def test_cli_offline_rescore_without_tokens_states_not_measured(project):
+    run_cli(project, "--judge")
+    raw_path = project / "run" / "value-raw.jsonl"
+    rows = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    for row in rows:
+        row.pop("input_tokens", None)
+        row.pop("cache_creation_input_tokens", None)
+        row.pop("cache_read_input_tokens", None)
+    write_jsonl(raw_path, rows)
+    assert run_cli(project) == 0
+    assert "The spend is not measured" in (project / "run" / "value.md").read_text()
 
 
 def test_cli_resume_makes_no_new_calls(project):

@@ -47,7 +47,12 @@ def stream(result_text, output_style="default"):
         "type": "result",
         "is_error": False,
         "result": result_text,
-        "usage": {"output_tokens": 5},
+        "usage": {
+            "output_tokens": 5,
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 2,
+            "cache_read_input_tokens": 1,
+        },
         "duration_ms": 10,
     }
     return "\n".join(json.dumps(event) for event in (init, result))
@@ -441,8 +446,12 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     call_rows = [row for row in raw_rows if row.get("type") == "call"]
     assert call_rows
     assert all(isinstance(row["wall_ms"], int) for row in call_rows)
+    assert all(row["input_tokens"] == 3 for row in call_rows)
+    assert all(row["cache_creation_input_tokens"] == 2 for row in call_rows)
+    assert all(row["cache_read_input_tokens"] == 1 for row in call_rows)
     report = (project / "run" / "rank.md").read_text()
     assert "## Call timing" in report
+    assert "## Harness spend" in report
     assert "| alpha | beta | 1 | 0 | 1 | 0 | 0 | -1 |" in report
     assert "The scale is anchored on unstyled at strength 1.0." in report
     assert "| alpha | 1.0 | [1.0, 1.0] |" in report

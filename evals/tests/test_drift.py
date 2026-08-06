@@ -359,5 +359,6 @@ def test_report_md_holds_the_turn_table_and_verdict(project):
     assert "# Drift report" in report
     assert "| Turn | Mean rate | Repeat 1 | Repeat 2 |" in report
     assert "- Verdict: flat" in report
+    assert "## Harness spend" in report
     assert "## Warnings" in report
     assert "- none" in report

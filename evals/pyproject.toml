@@ -24,6 +24,7 @@ style-loss = "loss.cli:main"
 style-rank = "rank.cli:main"
 style-drift = "drift.cli:main"
 style-compare = "compare.cli:main"
+style-campaign = "campaign.cli:main"
 
 [dependency-groups]
 dev = [
@@ -49,6 +50,7 @@ packages = [
     "src/rank",
     "src/drift",
     "src/compare",
+    "src/campaign",
 ]
 
 [tool.pytest.ini_options]

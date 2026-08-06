@@ -5,7 +5,7 @@ This directory holds the evaluation harness for the output styles in
 the marketplace serves only the `plugin/` directory, so installers never
 receive the harness.
 
-The harness has nine components. The first is a deterministic linter.
+The harness has ten components. The first is a deterministic linter.
 It checks a Markdown text against the writing rules of a style and
 reports each violation, plus a rate per 100 sentences. The second is a
 pair runner. It produces, per prompt, one answer per style and one
@@ -32,7 +32,11 @@ states, per style and axis, the spread across the runs: the error
 bar of the harness. The ninth is a clarity ranking. It runs blind
 head-to-head contests between the answers of a run, with the
 unstyled answer as a competitor, and fits one Bradley-Terry
-strength per competitor. See the tracking issue in this repository for
+strength per competitor. The tenth is a campaign driver. It runs
+several full runs under one schedule: the pair stages run one at a
+time, the judge stages overlap, the value pass splits around the
+loss pass, and every stage pool takes its size from one worker
+budget. See the tracking issue in this repository for
 the other planned components.
 
 ## Rule files
@@ -88,6 +92,7 @@ uv run style-cost runs/<date> [--probe]
 uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-rank runs/<date> [--judge] [--parallel N]
+uv run style-campaign [--runs N] [--budget W]
 uv run style-drift [--generate] [--out runs/<date>-drift]
 uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
@@ -284,26 +289,38 @@ comparison cannot run.
 ### Campaign overlap
 
 A campaign is several runs under identical conditions, produced for
-the cross-run comparison. The stages of a campaign can overlap,
-because only four dependencies exist:
+the cross-run comparison. The campaign driver produces one with one
+command: `style-campaign` runs N full runs (3 by default), and
+`--budget` sets the total worker count across every stage (32 by
+default). The driver retries a stopped stage once, prints the wall
+clock per stage at the end, and exits 0 only when every stage is
+clean. An interrupted campaign resumes through `--dirs`, with the
+run directories of the interrupted campaign. The first value
+invocation of a run exits 1 by design, because its comprehension
+check is not judged yet; the driver reports that exit code but does
+not count it.
+
+The schedule rests on four dependencies:
 
 - The gate needs the complete pair set of its run.
 - The cost report needs the complete pair set of its run.
 - The judged reports need the gate marks of their run.
-- `style-value --judge` needs the complete `loss-raw.jsonl` of its
-  run, as the reader-value section above states.
+- Only the comprehension check of `style-value` needs the complete
+  `loss-raw.jsonl` of its run. Thus the paraphrase check and the
+  round-trip check run next to the loss pass, and only the
+  comprehension pass follows the loss pass.
 
 Everything else runs at the same time without conflict. Each tool
 works in its own scratch directory, and each judge pass appends to
 its own raw file, so the judge tools of one run can run together,
-and the tools of two different runs can too. The pair generation of
-the next run can start while the judge passes of the previous run
-are live, because the calls of different tools never share a file.
-
-The schedule of one run inside a campaign:
+and the tools of two different runs can too. The two value
+invocations of one run are the one exception: both append to
+`value-raw.jsonl`, so the comprehension pass also waits for the
+paraphrase and round-trip pass. The schedule of one run:
 
 ```
-pairs ─→ gate ─→ loss ─→ value
+pairs ─→ gate ─→ loss ───────────────────→ value (comprehension)
+              ├─→ value (paraphrase, round-trip) ─↗
               ├─→ rank
               └─→ cost
 ```
@@ -312,15 +329,18 @@ The next run starts its `pairs` stage when the previous `pairs`
 stage is complete, the judge stages of the runs overlap without
 constraint, and the comparison runs last, over the complete runs.
 
-Two limits apply. First, do not run two `style-pairs` invocations
-at the same time. Without `--out`, both invocations pick the same
-run directory, because the picker takes the first incomplete run,
-and the two processes then write duplicate rows and spend duplicate
-calls. Second, the concurrent CLI calls add up across the live
-tools: each tool holds 8 workers by default, so three live tools
-produce 24 concurrent calls. When the account limit rejects calls,
-a judge call that fails twice stops its pass, so lower `--parallel`
-per tool. An interrupted pass resumes, so a stop loses no data.
+The driver enforces two limits by construction, and the limits stay
+the rule for a manual run of the tools. First, do not run two
+`style-pairs` invocations at the same time. Without `--out`, both
+invocations pick the same run directory, because the picker takes
+the first incomplete run, and the two processes then write
+duplicate rows and spend duplicate calls. Second, the concurrent
+CLI calls add up across the live tools: each tool holds 8 workers
+by default, so three live tools produce 24 concurrent calls, and
+workers above the account throughput add latency, not throughput.
+When the account limit rejects calls, a judge call that fails twice
+stops its pass, so lower the worker count. An interrupted pass
+resumes, so a stop loses no data.
 
 ## Run data
 

@@ -1,0 +1,1084 @@
+{
+  "date": "2026-08-06T09:20:00+00:00",
+  "run": "2026-08-06d",
+  "judge": {
+    "model": "opus",
+    "judged_date": "2026-08-06T09:14:27+00:00",
+    "claude_version": "2.1.223 (Claude Code)"
+  },
+  "pairs": {
+    "plain-language": [
+      "code-review-01",
+      "code-review-02",
+      "code-review-03",
+      "code-review-04",
+      "code-review-05",
+      "debugging-01",
+      "debugging-02",
+      "debugging-03",
+      "debugging-04",
+      "debugging-05",
+      "explanation-01",
+      "explanation-02",
+      "explanation-03",
+      "explanation-04",
+      "explanation-05",
+      "summarization-01",
+      "summarization-02",
+      "summarization-03",
+      "summarization-04",
+      "summarization-05"
+    ],
+    "technical-simplified": [
+      "code-review-01",
+      "code-review-02",
+      "code-review-03",
+      "code-review-04",
+      "code-review-05",
+      "debugging-01",
+      "debugging-02",
+      "debugging-03",
+      "debugging-05",
+      "explanation-01",
+      "explanation-02",
+      "explanation-03",
+      "explanation-05",
+      "summarization-01",
+      "summarization-02",
+      "summarization-03",
+      "summarization-04",
+      "summarization-05"
+    ]
+  },
+  "checks": {
+    "completeness": {
+      "judged": true,
+      "per_style": {
+        "plain-language": {
+          "median": 0.798,
+          "additions_median": 1.0,
+          "pairs": {
+            "code-review-01": {
+              "facts": 32,
+              "survived": 23,
+              "fraction": 0.719,
+              "lost": [
+                "Nothing in the function prevents duplicate users or empty names.",
+                "The function has no duplicate-role check.",
+                "The function does too much and has poor separation of concerns.",
+                "The function silently mixes validation, mutation, and persistence.",
+                "Mixing validation, mutation, and persistence makes the function hard to test or reason about failure modes.",
+                "The fixed version copies `roles` with `list(roles)` when `roles` is truthy, and otherwise uses an empty list.",
+                "The fixed version appends \"member\" only if \"member\" is not already in `roles`.",
+                "The fixed version lets real errors propagate.",
+                "Specific exceptions, such as `db`-related ones, can be caught at the call site."
+              ],
+              "styled_facts": 28,
+              "additions": 3,
+              "added": [
+                "The fixed version computes `roles = (roles or []) + [\"member\"]`.",
+                "The fixed version calls `db.insert({\"name\": name, \"roles\": roles})` inside a `try` block and returns `True` on success.",
+                "The fixed version catches `ConnectionError`, logs the error with the user's name, and returns `False`."
+              ]
+            },
+            "code-review-02": {
+              "facts": 20,
+              "survived": 16,
+              "fraction": 0.8,
+              "lost": [
+                "Calling `res.json()` on an error response body may fail or return unexpected data.",
+                "Because `res.ok` is not checked, a failed request still tries to parse JSON and proceed as if it succeeded.",
+                "The code assumes `data` and `profile` have a `.name` property without checking.",
+                "A malformed API response would throw because the response shape is not validated."
+              ],
+              "styled_facts": 19,
+              "additions": 2,
+              "added": [
+                "The code has four problems.",
+                "Without a `.catch()`, failures would produce an unhandled promise rejection instead of a clear error."
+              ]
+            },
+            "code-review-03": {
+              "facts": 28,
+              "survived": 21,
+              "fraction": 0.75,
+              "lost": [
+                "An input value like `'; DROP TABLE orders; --` can exploit the concatenation.",
+                "SQL injection lets an attacker destroy arbitrary data.",
+                "The `status` parameter presumably comes from a fixed set of values such as \"pending\" and \"shipped\".",
+                "Whether to catch and log exceptions or let them propagate depends on the caller's needs.",
+                "String equality on `customer_name` and `status` may fail to match due to case differences.",
+                "String equality on `customer_name` and `status` may fail to match due to whitespace differences.",
+                "Case-sensitivity behavior in string comparison depends on the database collation."
+              ],
+              "styled_facts": 19,
+              "additions": 6,
+              "added": [
+                "With parameterized queries, the database driver inserts the values safely.",
+                "The psycopg2 driver uses `%s` as its placeholder.",
+                "Pulling every column wastes bandwidth.",
+                "If the query fails, `cursor.execute` raises an exception with no context about what went wrong.",
+                "The function name `find_orders` does not indicate that it filters by customer and status.",
+                "A more specific function name would let readers understand what the function does without checking its arguments."
+              ]
+            },
+            "code-review-04": {
+              "facts": 22,
+              "survived": 12,
+              "fraction": 0.545,
+              "lost": [
+                "The read and the write in `increment()` are two separate bytecode operations.",
+                "The GIL only guarantees that each individual bytecode instruction runs atomically.",
+                "The GIL can switch threads between the read and the write in `increment()`.",
+                "A `reset()` can occur between `increment()`'s read and write, causing the in-flight increment to overwrite the reset with `1` instead of leaving it at `0`.",
+                "Using `self.value += 1` would not fix the race condition.",
+                "`self.value += 1` is still a non-atomic read-modify-write operation under the hood.",
+                "The design relies on undocumented GIL behavior rather than explicit synchronization.",
+                "The correctness of the single-write cases is only accidentally OK because of the GIL.",
+                "The code's correctness would not hold up on a free-threaded (no-GIL) CPython build or another Python implementation.",
+                "No lock is exposed for callers who need to perform compound atomic operations such as reading and resetting together."
+              ],
+              "styled_facts": 16,
+              "additions": 0,
+              "added": []
+            },
+            "code-review-05": {
+              "facts": 39,
+              "survived": 31,
+              "fraction": 0.795,
+              "lost": [
+                "`cd \"$BACKUP_DIR\" || exit 1` is the recommended way to make `cd` failure fatal.",
+                "In most shells, `cd \"\"` changes to `$HOME`.",
+                "A missing argument causes the script to silently `rm -rf` `*.tmp` in the user's home directory.",
+                "The script should check `[ -n \"$1\" ] && [ -d \"$1\" ]` before proceeding.",
+                "With zero matches, `ls` prints an error to stderr.",
+                "If there are no `*.log` files, the `ls` inside `$(...)` errors to stderr.",
+                "The suggested rewrite checks `[ -d \"$BACKUP_DIR\" ]` and exits 1 with an error on stderr otherwise.",
+                "The suggested rewrite loops over `*.tmp` and `*.log` globs directly, guarding each with `[ -e \"$f\" ]`."
+              ],
+              "styled_facts": 34,
+              "additions": 3,
+              "added": [
+                "With an empty BACKUP_DIR, `cd $BACKUP_DIR` fails and the script continues running in its starting directory.",
+                "When the loop runs with the literal `*.log`, gzip fails with a \"no such file\" error.",
+                "`set -u` catches unset variables."
+              ]
+            },
+            "debugging-01": {
+              "facts": 7,
+              "survived": 7,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 9,
+              "additions": 1,
+              "added": [
+                "The corrected function get_url(cfg) returns the f-string \"http://{cfg['host']}:{cfg['port']}/api\"."
+              ]
+            },
+            "debugging-02": {
+              "facts": 13,
+              "survived": 9,
+              "fraction": 0.692,
+              "lost": [
+                "The global object is `window` in browsers or `globalThis` generally.",
+                "The resulting `NaN` is assigned back to `this.seconds`.",
+                "Calling `.bind(this)` on the function expression is an alternative fix.",
+                "Capturing `const self = this;` before the callback and using `self.seconds` is an alternative fix."
+              ],
+              "styled_facts": 14,
+              "additions": 1,
+              "added": [
+                "In strict mode, `this` inside a regular function is `undefined`."
+              ]
+            },
+            "debugging-03": {
+              "facts": 8,
+              "survived": 8,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 8,
+              "additions": 0,
+              "added": []
+            },
+            "debugging-04": {
+              "facts": 13,
+              "survived": 7,
+              "fraction": 0.538,
+              "lost": [
+                "The actual encoding is usually UTF-8.",
+                "Passing `errors=\"replace\"` or `errors=\"ignore\"` to `open` prevents decoding from failing.",
+                "The encoding of a file can be detected programmatically.",
+                "`chardet` and `charset-normalizer` are libraries that detect file encoding.",
+                "Counting lines does not require decoding the file's contents.",
+                "Opening the file in binary mode with `open(path, \"rb\")` is the simplest robust fix for counting lines."
+              ],
+              "styled_facts": 13,
+              "additions": 3,
+              "added": [
+                "The error identifies byte 0xc3 at position 512.",
+                "ASCII is a subset of UTF-8.",
+                "Because ASCII is a subset of UTF-8, opening with UTF-8 works for both plain ASCII files and files with non-ASCII characters."
+              ]
+            },
+            "debugging-05": {
+              "facts": 22,
+              "survived": 20,
+              "fraction": 0.909,
+              "lost": [
+                "In the full suite the list becomes [\"draft\", \"post\", \"post\"], failing the equality check.",
+                "The fix builds a new list inside the function with list(DEFAULT_TAGS) when tags is None."
+              ],
+              "styled_facts": 12,
+              "additions": 0,
+              "added": []
+            },
+            "explanation-01": {
+              "facts": 36,
+              "survived": 30,
+              "fraction": 0.833,
+              "lost": [
+                "Open addressing lookup follows the probe sequence until it finds the key or hits an empty slot.",
+                "Hitting an empty slot during an open addressing lookup means the key is not present.",
+                "Deletion in open addressing usually requires tombstone markers.",
+                "Go's map uses open addressing.",
+                "Open addressing requires careful tuning, including resizing before the table gets too full.",
+                "Open addressing tables are usually resized at around 70-75% load factor."
+              ],
+              "styled_facts": 39,
+              "additions": 2,
+              "added": [
+                "Load factor refers to the number of entries per slot.",
+                "Most general-purpose hash map implementations use chaining."
+              ]
+            },
+            "explanation-02": {
+              "facts": 30,
+              "survived": 26,
+              "fraction": 0.867,
+              "lost": [
+                "Pessimistic locking suits workflows where retrying a failed transaction is costly or user-facing.",
+                "Editing a document or profile record is an example use case for optimistic locking.",
+                "Updating a shopping cart is an example use case for optimistic locking.",
+                "Holding locks carries throughput and deadlock costs."
+              ],
+              "styled_facts": 25,
+              "additions": 4,
+              "added": [
+                "In the version-column example, an update of a product read at version 3 includes `WHERE version = 3` in its query.",
+                "If no other party changed the row, the versioned update succeeds and the version becomes 4.",
+                "If another party already updated the row, the `WHERE version = 3` clause matches no rows.",
+                "While a row is locked with `SELECT ... FOR UPDATE`, no other transaction can read or modify the balance at the same time."
+              ]
+            },
+            "explanation-03": {
+              "facts": 36,
+              "survived": 21,
+              "fraction": 0.583,
+              "lost": [
+                "When a TCP connection starts, the sender has no knowledge of the path to the receiver, including link speeds, how many other connections share the links, and how much router buffering exists.",
+                "If a TCP sender sent data limited only by the receiver's buffer, it could send faster than the network can carry.",
+                "Routers queue excess packets and drop packets once their queues fill up.",
+                "Dropped packets cause retransmissions, which wastes bandwidth.",
+                "Congestion collapse is a state where most traffic on a link is retransmissions of dropped packets and almost no data gets through.",
+                "Congestion collapse actually occurred on the early internet in the mid-1980s.",
+                "The mid-1980s congestion collapse motivated the development of TCP congestion control.",
+                "Slow start is also used after certain events, such as a timeout.",
+                "Historically, a connection began slow start with a cwnd of 1 segment.",
+                "Increasing cwnd by one segment per round-trip would take a very long time to reach a reasonable rate on a fast, high-latency path.",
+                "ssthresh is usually based on the last known safe rate from before congestion was last detected.",
+                "In congestion avoidance, cwnd grows roughly linearly, adding about one segment per round-trip.",
+                "On detecting loss, TCP lowers ssthresh to roughly half the window size that caused the loss.",
+                "Guessing a fixed safe rate is too conservative and wastes bandwidth.",
+                "Sending as fast as possible is too aggressive and causes congestion collapse."
+              ],
+              "styled_facts": 28,
+              "additions": 1,
+              "added": [
+                "Ten segments is roughly 14KB."
+              ]
+            },
+            "explanation-04": {
+              "facts": 41,
+              "survived": 24,
+              "fraction": 0.585,
+              "lost": [
+                "A process has its own file descriptors.",
+                "A process has its own OS-level resources.",
+                "All threads in a process share the same file descriptors.",
+                "Each thread has its own stack.",
+                "Each thread has its own register state.",
+                "Nginx uses multiple worker processes.",
+                "Postgres uses multiple processes per connection.",
+                "OS-level permission boundaries such as different users, seccomp filters, and capabilities can be enforced between processes.",
+                "One thread cannot be sandboxed differently from another thread in the same process because they share everything.",
+                "Ruby historically had a GIL.",
+                "Each process gets its own interpreter and lock.",
+                "Processes can be killed, restarted, or scaled independently by the OS or a supervisor without coordinating with other components.",
+                "systemd, Kubernetes, and supervisord are supervisors that can manage process lifecycles.",
+                "Microservices and container-based architectures favor process-level separation.",
+                "Shared memory only exists within a single machine.",
+                "Processes have heavier context switches than threads.",
+                "Processes have higher memory overhead than threads because each process has its own address space."
+              ],
+              "styled_facts": 29,
+              "additions": 1,
+              "added": [
+                "Web browsers run each tab, or each site, in its own process for security reasons."
+              ]
+            },
+            "explanation-05": {
+              "facts": 17,
+              "survived": 17,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 16,
+              "additions": 3,
+              "added": [
+                "A program with a memory leak uses more and more memory over time.",
+                "Increasing memory use from a leak can slow a program down.",
+                "Increasing memory use from a leak can crash a program."
+              ]
+            },
+            "summarization-01": {
+              "facts": 6,
+              "survived": 5,
+              "fraction": 0.833,
+              "lost": [
+                "Cold start time has been reduced by approximately 40%."
+              ],
+              "styled_facts": 6,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-02": {
+              "facts": 9,
+              "survived": 5,
+              "fraction": 0.556,
+              "lost": [
+                "The connection pool size that shipped to production was 5 instead of the intended 50.",
+                "A 10x reduction in connection pool size went unnoticed until it caused an outage.",
+                "The time from page to rollback was 34 minutes.",
+                "The time from error onset to page was 7 minutes."
+              ],
+              "styled_facts": 17,
+              "additions": 6,
+              "added": [
+                "The deployment copied a database connection pool size from the staging template.",
+                "Staging intentionally uses low configuration values.",
+                "About 12% of requests experienced checkout errors.",
+                "The team detected the issue at 09:14 UTC.",
+                "On-call was paged at 09:21.",
+                "The issue was fixed at 09:48."
+              ]
+            },
+            "summarization-03": {
+              "facts": 12,
+              "survived": 12,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 12,
+              "additions": 1,
+              "added": [
+                "Generating thumbnails during upload currently ties up web workers."
+              ]
+            },
+            "summarization-04": {
+              "facts": 14,
+              "survived": 11,
+              "fraction": 0.786,
+              "lost": [
+                "After choosing the PDF option, nothing happens initially.",
+                "One error banner appears per click, so four clicks produce four banners.",
+                "The bug was reproduced on different machines."
+              ],
+              "styled_facts": 11,
+              "additions": 0,
+              "added": []
+            },
+            "summarization-05": {
+              "facts": 10,
+              "survived": 10,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 9,
+              "additions": 1,
+              "added": [
+                "Ada is to run the payments database migration dry run."
+              ]
+            }
+          }
+        },
+        "technical-simplified": {
+          "median": 0.778,
+          "additions_median": 1.5,
+          "pairs": {
+            "code-review-01": {
+              "facts": 32,
+              "survived": 24,
+              "fraction": 0.75,
+              "lost": [
+                "Errors swallowed by the bare except could include an `AttributeError` if `db` is `None`, a DB connection error, or a validation error.",
+                "Nothing in the function prevents duplicate users or empty names.",
+                "Mutating the caller's list in place is a surprising side effect for the caller.",
+                "The function does too much and has poor separation of concerns.",
+                "The function silently mixes validation, mutation, and persistence.",
+                "Mixing validation, mutation, and persistence makes the function hard to test or reason about failure modes.",
+                "The fixed version copies `roles` with `list(roles)` when `roles` is truthy, and otherwise uses an empty list.",
+                "The fixed version doesn't mutate the caller's list."
+              ],
+              "styled_facts": 26,
+              "additions": 0,
+              "added": []
+            },
+            "code-review-02": {
+              "facts": 20,
+              "survived": 14,
+              "fraction": 0.7,
+              "lost": [
+                "The `async` keyword makes the function return a Promise.",
+                "The promise returned by the function rejects immediately due to the crash rather than resolving after the fetch completes.",
+                "The fixed version awaits the fetch call.",
+                "The fixed version checks the response status via `res.ok` and throws an `Error` including `res.status` when the response is not OK.",
+                "The fixed version lets errors propagate as a rejected promise.",
+                "Callers of the fixed version can handle errors with `try/catch` or `.catch()`."
+              ],
+              "styled_facts": 14,
+              "additions": 1,
+              "added": [
+                "The `async` keyword has no effect in this function."
+              ]
+            },
+            "code-review-03": {
+              "facts": 28,
+              "survived": 22,
+              "fraction": 0.786,
+              "lost": [
+                "Whether to catch and log exceptions or let them propagate depends on the caller's needs.",
+                "The code has no LIMIT or pagination.",
+                "Without a LIMIT, a customer with many orders causes the function to return everything at once.",
+                "String equality on `customer_name` and `status` may fail to match due to case differences.",
+                "String equality on `customer_name` and `status` may fail to match due to whitespace differences.",
+                "Case-sensitivity behavior in string comparison depends on the database collation."
+              ],
+              "styled_facts": 16,
+              "additions": 2,
+              "added": [
+                "`%s` is the parameter placeholder for MySQL and psycopg2.",
+                "The correct placeholder should be confirmed in the database driver's documentation."
+              ]
+            },
+            "code-review-04": {
+              "facts": 22,
+              "survived": 14,
+              "fraction": 0.636,
+              "lost": [
+                "`increment()` reads `self.value` into a local variable `current` and then writes `current + 1` back to `self.value`.",
+                "The GIL only guarantees that each individual bytecode instruction runs atomically.",
+                "Using `self.value += 1` would not fix the race condition.",
+                "`self.value += 1` is still a non-atomic read-modify-write operation under the hood.",
+                "The design relies on undocumented GIL behavior rather than explicit synchronization.",
+                "The correctness of the single-write cases is only accidentally OK because of the GIL.",
+                "The code's correctness would not hold up on a free-threaded (no-GIL) CPython build or another Python implementation.",
+                "No lock is exposed for callers who need to perform compound atomic operations such as reading and resetting together."
+              ],
+              "styled_facts": 23,
+              "additions": 6,
+              "added": [
+                "Callers must read `self.value` directly because there is no `get` method.",
+                "Reading `self.value` directly is not safe.",
+                "The fixed `Counter.__init__` sets `self._value` to 0 and `self._lock` to a `threading.Lock()`.",
+                "The fixed `increment` performs `self._value += 1` while holding `self._lock`.",
+                "The fixed `reset` sets `self._value` to 0 while holding `self._lock`.",
+                "The fixed `get` returns `self._value` while holding `self._lock`."
+              ]
+            },
+            "code-review-05": {
+              "facts": 39,
+              "survived": 30,
+              "fraction": 0.769,
+              "lost": [
+                "The script should check `[ -n \"$1\" ] && [ -d \"$1\" ]` before proceeding.",
+                "`cd $BACKUP_DIR` breaks on paths containing spaces or glob characters.",
+                "Unquoted `$BACKUP_DIR` is subject to word splitting and pathname expansion.",
+                "With zero matches, the literal `*.log` is left unless nullglob-like behavior applies.",
+                "The script does not check whether the `.log` or `.tmp` globs matched anything.",
+                "If there are no `*.tmp` files, `rm -rf *.tmp` errors.",
+                "The error from `rm -rf *.tmp` with no matches is harmless but noisy.",
+                "The suggested rewrite checks `[ -d \"$BACKUP_DIR\" ]` and exits 1 with an error on stderr otherwise.",
+                "The suggested rewrite loops over `*.tmp` and `*.log` globs directly, guarding each with `[ -e \"$f\" ]`."
+              ],
+              "styled_facts": 31,
+              "additions": 8,
+              "added": [
+                "Using `for f in *.log` avoids an unneeded extra process.",
+                "If no file matches *.log, the loop body does not run.",
+                "The error message printed when no *.log file matches can confuse the user.",
+                "Without `set -u`, use of an unset variable does not raise an error.",
+                "Parsing ls output and the unquoted $f in gzip are high-risk problems.",
+                "The missing check for existing *.log files and the missing `set -e`/`set -u` are medium-risk problems.",
+                "A suggested fix uses `BACKUP_DIR=${1:?Usage: $0 <backup_dir>}` and `cd \"$BACKUP_DIR\" || exit 1`.",
+                "The suggested fix uses `rm -f -- *.tmp`, a `for f in *.log` loop with an `[ -e \"$f\" ] || continue` guard, and `gzip -- \"$f\"`."
+              ]
+            },
+            "debugging-01": {
+              "facts": 7,
+              "survived": 7,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 9,
+              "additions": 3,
+              "added": [
+                "The config dictionary is {\"host\": \"localhost\", \"port\": 8080}.",
+                "The function get_url takes a parameter named cfg.",
+                "The code calls print(get_url(config))."
+              ]
+            },
+            "debugging-02": {
+              "facts": 13,
+              "survived": 9,
+              "fraction": 0.692,
+              "lost": [
+                "The global object is `window` in browsers or `globalThis` generally.",
+                "The resulting `NaN` is assigned back to `this.seconds`.",
+                "Calling `.bind(this)` on the function expression is an alternative fix.",
+                "Capturing `const self = this;` before the callback and using `self.seconds` is an alternative fix."
+              ],
+              "styled_facts": 11,
+              "additions": 1,
+              "added": [
+                "In strict mode, `this` inside the callback is `undefined`."
+              ]
+            },
+            "debugging-03": {
+              "facts": 8,
+              "survived": 6,
+              "fraction": 0.75,
+              "lost": [
+                "With `len(values) = 4` and `window = 2`, the original loop skips the final window `[3, 4]`.",
+                "`moving_sum([1, 2, 3, 4], 2)` returns `[3, 5, 7]`."
+              ],
+              "styled_facts": 8,
+              "additions": 0,
+              "added": []
+            },
+            "debugging-05": {
+              "facts": 22,
+              "survived": 20,
+              "fraction": 0.909,
+              "lost": [
+                "In the full suite the list becomes [\"draft\", \"post\", \"post\"], failing the equality check.",
+                "The fix builds a new list inside the function with list(DEFAULT_TAGS) when tags is None."
+              ],
+              "styled_facts": 14,
+              "additions": 0,
+              "added": []
+            },
+            "explanation-01": {
+              "facts": 36,
+              "survived": 16,
+              "fraction": 0.444,
+              "lost": [
+                "There are usually more possible keys than array slots in a hash map.",
+                "Separate chaining is simple to implement.",
+                "Deletion in separate chaining is easy because the entry is just removed from the list.",
+                "Worst-case lookup in separate chaining degrades to O(n) when too many keys pile up in one bucket.",
+                "Quadratic probing tries index+1, index+4, index+9, and so on.",
+                "Quadratic probing spreads out clusters better than linear probing.",
+                "Double hashing uses a second hash function to determine the step size.",
+                "Open addressing has better cache locality because everything is in one contiguous array with no pointer chasing.",
+                "Deletion in open addressing is trickier because emptying a slot could break the probe chain for other keys.",
+                "Deletion in open addressing usually requires tombstone markers.",
+                "Chaining has memory overhead per entry from pointers, while open addressing is compact and cache-friendly.",
+                "Chaining has worse cache performance than open addressing due to pointer chasing.",
+                "Chaining is more forgiving and simpler to reason about than open addressing.",
+                "Chaining is common in general-purpose libraries.",
+                "Java's HashMap uses chaining.",
+                "Open addressing is faster in practice when memory locality matters and the load factor is kept low.",
+                "Python's dict uses open addressing.",
+                "Go's map uses open addressing.",
+                "Open addressing requires careful tuning, including resizing before the table gets too full.",
+                "Open addressing tables are usually resized at around 70-75% load factor."
+              ],
+              "styled_facts": 22,
+              "additions": 1,
+              "added": [
+                "Two keys must not share one slot in a hash map."
+              ]
+            },
+            "explanation-02": {
+              "facts": 30,
+              "survived": 26,
+              "fraction": 0.867,
+              "lost": [
+                "Seat and inventory reservation systems are example use cases for pessimistic locking.",
+                "Editing a document or profile record is an example use case for optimistic locking.",
+                "Updating a shopping cart is an example use case for optimistic locking.",
+                "Holding locks carries throughput and deadlock costs."
+              ],
+              "styled_facts": 27,
+              "additions": 5,
+              "added": [
+                "In the example, a table named `products` has a column named `version`.",
+                "In the example, a user reads a product row with `version = 3`.",
+                "In the example, the update query is `UPDATE products SET price = 20, version = 4 WHERE id = 1 AND version = 3;`.",
+                "If another user changed the row first, the row's `version` is no longer 3.",
+                "Under pessimistic locking, the database can also block concurrent reads, depending on the lock type."
+              ]
+            },
+            "explanation-03": {
+              "facts": 36,
+              "survived": 17,
+              "fraction": 0.472,
+              "lost": [
+                "When a TCP connection starts, the sender has no knowledge of the path to the receiver, including link speeds, how many other connections share the links, and how much router buffering exists.",
+                "If a TCP sender sent data limited only by the receiver's buffer, it could send faster than the network can carry.",
+                "Dropped packets cause retransmissions, which wastes bandwidth.",
+                "Congestion collapse is a state where most traffic on a link is retransmissions of dropped packets and almost no data gets through.",
+                "Congestion collapse actually occurred on the early internet in the mid-1980s.",
+                "The mid-1980s congestion collapse motivated the development of TCP congestion control.",
+                "Slow start is also used after certain events, such as a timeout.",
+                "Historically, a connection began slow start with a cwnd of 1 segment.",
+                "Modern TCP implementations often start with a cwnd of around 10 segments.",
+                "The name 'slow start' is somewhat ironic because the window starts tiny but ramps up fast.",
+                "Increasing cwnd by one segment per round-trip would take a very long time to reach a reasonable rate on a fast, high-latency path.",
+                "ssthresh is usually based on the last known safe rate from before congestion was last detected.",
+                "In congestion avoidance, cwnd grows roughly linearly, adding about one segment per round-trip.",
+                "On detecting loss, TCP cuts cwnd back down.",
+                "On detecting loss, TCP lowers ssthresh to roughly half the window size that caused the loss.",
+                "Lowering ssthresh after loss makes future slow start and congestion avoidance phases start from a more conservative estimate.",
+                "Guessing a fixed safe rate is too conservative and wastes bandwidth.",
+                "Sending as fast as possible is too aggressive and causes congestion collapse.",
+                "Slow start lets each connection ramp up exponentially to quickly find a reasonable operating point while backing off promptly on signs of overshoot."
+              ],
+              "styled_facts": 22,
+              "additions": 2,
+              "added": [
+                "The event of routers filling buffers and dropping packets is called congestion.",
+                "Congestion causes delay and packet loss for every connection that uses the same path."
+              ]
+            },
+            "explanation-05": {
+              "facts": 17,
+              "survived": 16,
+              "fraction": 0.941,
+              "lost": [
+                "UI event handlers, observers, and pub/sub subscriptions are examples of callbacks that can leak."
+              ],
+              "styled_facts": 11,
+              "additions": 1,
+              "added": [
+                "In a memory leak, memory use grows over time even though the garbage collector runs."
+              ]
+            },
+            "summarization-01": {
+              "facts": 6,
+              "survived": 5,
+              "fraction": 0.833,
+              "lost": [
+                "Cold start time has been reduced by approximately 40%."
+              ],
+              "styled_facts": 5,
+              "additions": 2,
+              "added": [
+                "Each button's tooltip shows that button's keyboard shortcut.",
+                "The app starts up to 40% faster."
+              ]
+            },
+            "summarization-02": {
+              "facts": 9,
+              "survived": 6,
+              "fraction": 0.667,
+              "lost": [
+                "The connection pool size that shipped to production was 5 instead of the intended 50.",
+                "A 10x reduction in connection pool size went unnoticed until it caused an outage.",
+                "The time from page to rollback was 34 minutes."
+              ],
+              "styled_facts": 13,
+              "additions": 4,
+              "added": [
+                "The page went out at 09:21.",
+                "The rollback finished at 09:48.",
+                "The rollback finished 27 minutes after the page went out.",
+                "The team's response time was good."
+              ]
+            },
+            "summarization-03": {
+              "facts": 12,
+              "survived": 12,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 13,
+              "additions": 1,
+              "added": [
+                "Thumbnail generation currently uses web workers."
+              ]
+            },
+            "summarization-04": {
+              "facts": 14,
+              "survived": 11,
+              "fraction": 0.786,
+              "lost": [
+                "One error banner appears per click, so four clicks produce four banners.",
+                "The bug was reproduced on the latest version of Firefox.",
+                "The bug was reproduced on different machines."
+              ],
+              "styled_facts": 13,
+              "additions": 1,
+              "added": [
+                "A second user sees the same failure on Chrome."
+              ]
+            },
+            "summarization-05": {
+              "facts": 10,
+              "survived": 10,
+              "fraction": 1.0,
+              "lost": [],
+              "styled_facts": 8,
+              "additions": 2,
+              "added": [
+                "Ada is assigned to run the payments database migration dry run.",
+                "The payments database migration dry run is due before Thursday."
+              ]
+            }
+          }
+        }
+      }
+    },
+    "hedging": {
+      "judged": true,
+      "per_style": {
+        "plain-language": {
+          "median": 1.0,
+          "pairs": {
+            "code-review-01": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 0,
+              "survival": 0.0,
+              "lost": [
+                "The listed issues are ordered roughly in order of severity."
+              ]
+            },
+            "code-review-02": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 1,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-03": {
+              "claims": 3,
+              "hedged": 1,
+              "certain": 0,
+              "absent": 2,
+              "survival": 1.0,
+              "lost": []
+            },
+            "code-review-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-04": {
+              "claims": 2,
+              "hedged": 2,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "debugging-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-01": {
+              "claims": 1,
+              "hedged": 1,
+              "certain": 0,
+              "absent": 0,
+              "survival": 1.0,
+              "lost": []
+            },
+            "explanation-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-03": {
+              "claims": 7,
+              "hedged": 1,
+              "certain": 2,
+              "absent": 4,
+              "survival": 0.333,
+              "lost": [
+                "Modern TCP implementations often start with a congestion window of around 10 segments.",
+                "On each ACK confirming delivered data, the sender increases cwnd roughly by one segment per ACK."
+              ]
+            },
+            "explanation-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-02": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 1,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            }
+          }
+        },
+        "technical-simplified": {
+          "median": 0.0,
+          "pairs": {
+            "code-review-01": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 1,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-02": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 0,
+              "survival": 0.0,
+              "lost": [
+                "`res.json()` on an error body may fail or return unexpected data"
+              ]
+            },
+            "code-review-03": {
+              "claims": 3,
+              "hedged": 0,
+              "certain": 1,
+              "absent": 2,
+              "survival": 0.0,
+              "lost": [
+                "`status` presumably comes from a fixed set of values (e.g. \"pending\", \"shipped\")"
+              ]
+            },
+            "code-review-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "code-review-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "debugging-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-01": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 1,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-02": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "explanation-03": {
+              "claims": 7,
+              "hedged": 2,
+              "certain": 2,
+              "absent": 3,
+              "survival": 0.5,
+              "lost": [
+                "On each ACK confirming delivered data, the sender increases cwnd roughly by one segment per ACK.",
+                "By the time it enters congestion avoidance, the sender has a rough estimate of the network's capacity."
+              ]
+            },
+            "explanation-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-01": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-02": {
+              "claims": 1,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 1,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-03": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-04": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            },
+            "summarization-05": {
+              "claims": 0,
+              "hedged": 0,
+              "certain": 0,
+              "absent": 0,
+              "survival": null,
+              "lost": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "warnings": [
+    "technical-simplified/explanation-04: the pair failed the gate, excluded",
+    "technical-simplified/debugging-04: the pair failed the gate, excluded",
+    "completeness:reverse:9f3a7b0ceb018a29e4aa2838d95b871ec2cc9061b8acaa7081a55090eb6ba541: the first call failed and the retry succeeded: claude exited with code 1: {\"type\":\"system\",\"subtype\":\"init\",\"cwd\":\"/private/var/folders/tt/jh9lk8gs6_sfn5fhz4rp7pch0000gn/T/style-judge-loss-_v4m5i9t\",\"session_id\":\"5f6350f5-00f6-4579-bb88-03b74388ee16\",\"tools\":[],\"mcp_servers\":[],\"model\":\"claude-opus-5\",\"permissionMode\":\"auto\",\"slash_commands\":[\"deep-research\",\"design-sync\",\"dataviz\",\"update-config\",\"verify\",\"debug\",\"code-review\",\"simplify\",\"batch\",\"fewer-permission-prompts\",\"doctor\",\"loop\",\"schedule\",\"claude-api\",\"run\",\"run-skill-generator\",\"agents\",\"autocompact\",\"clea"
+  ]
+}

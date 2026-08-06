@@ -1,0 +1,47 @@
+{
+  "date": "2026-08-06T09:15:15+00:00",
+  "run": "2026-08-06e",
+  "thresholds": {
+    "plain-language": 5.0,
+    "technical-simplified": 15.0
+  },
+  "summary": {
+    "plain-language": {
+      "gated": 20,
+      "passed": 20,
+      "failed": 0,
+      "styled_rate": 0.0,
+      "baseline_rate": 8.98
+    },
+    "technical-simplified": {
+      "gated": 20,
+      "passed": 17,
+      "failed": 3,
+      "styled_rate": 6.01,
+      "baseline_rate": 65.71
+    }
+  },
+  "linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  },
+  "run_linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  },
+  "rules": {
+    "plain-language": {
+      "file": "rules/plain-language.rules.yaml",
+      "sha256": "b2175b219907fcf815762e53fd9c4ac11f86901b6bce590224aeb6d5db6485a8"
+    },
+    "technical-simplified": {
+      "file": "rules/technical-simplified.rules.yaml",
+      "sha256": "f7120e410a1863e07bda72bd5b0fe07c7ca0cbad642c9a093681e86497025fdd"
+    }
+  },
+  "gate_config": {
+    "file": "rules/gate.yaml",
+    "sha256": "83cd550d156d4703c57c137f892811caaeb0f5f7f7dd55197477f16577a6c7a7"
+  },
+  "warnings": []
+}

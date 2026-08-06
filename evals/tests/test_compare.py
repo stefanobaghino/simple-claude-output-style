@@ -23,6 +23,9 @@ def write_run(
     losses: int = 1,
     fact_median: float = 0.8,
     hedge_median: float | None = 0.5,
+    strength: float = 2.0,
+    net: int = 4,
+    rank_model: str = "opus",
     style_sha: str = "s" * 8,
     claude_version: str = "2.0.0 (Claude Code)",
     workdir: str | None = "temp",
@@ -78,6 +81,30 @@ def write_run(
                 "hedging": {"per_style": {"alpha": {"median": hedge_median}}},
             },
         },
+        "rank": {
+            "judge": {"model": rank_model},
+            "design": "clarity-v1",
+            "bradley_terry": {
+                "fitted": True,
+                "anchored_on": "unstyled",
+                "strengths": {
+                    "alpha": {"strength": strength},
+                    "unstyled": {"strength": 1.0, "ci_low": None, "ci_high": None},
+                },
+            },
+            "matchups": [
+                {
+                    "a": "alpha",
+                    "b": "unstyled",
+                    "contests": 8,
+                    "wins_a": 5,
+                    "wins_b": 1,
+                    "splits": 2,
+                    "unscored": 0,
+                    "net": net,
+                }
+            ],
+        },
     }
     for stem, content in files.items():
         if stem in skip:
@@ -96,9 +123,9 @@ def run_cli(tmp_path: Path, *names: str) -> tuple[int, dict, str]:
 
 def test_cli_states_the_spread_over_three_runs(tmp_path, capsys):
     runs = tmp_path / "runs"
-    write_run(runs, "run-a", rate=1.0, wins=3, losses=1)
-    write_run(runs, "run-b", rate=2.0, wins=2, losses=2)
-    write_run(runs, "run-c", rate=3.0, wins=1, losses=3)
+    write_run(runs, "run-a", rate=1.0, wins=3, losses=1, strength=1.5, net=4)
+    write_run(runs, "run-b", rate=2.0, wins=2, losses=2, strength=2.0, net=0)
+    write_run(runs, "run-c", rate=3.0, wins=1, losses=3, strength=2.5, net=-4)
     code, summary, report = run_cli(tmp_path, "run-a", "run-b", "run-c")
     assert code == 0
     assert summary["warnings"] == []
@@ -113,6 +140,8 @@ def test_cli_states_the_spread_over_three_runs(tmp_path, capsys):
         "value: net wins (roundtrip)",
         "loss: fact survival median",
         "loss: hedge survival median",
+        "rank: Bradley-Terry strength",
+        "rank: net wins vs unstyled",
     ]
     assert axes["fidelity: styled violation rate"] == {
         "n": 3,
@@ -130,7 +159,26 @@ def test_cli_states_the_spread_over_three_runs(tmp_path, capsys):
         "max": 2,
         "stdev": 2.0,
     }
-    assert capsys.readouterr().out == "alpha: 8 axes across 3 runs\n"
+    assert axes["rank: Bradley-Terry strength"] == {
+        "n": 3,
+        "per_run": {"run-a": 1.5, "run-b": 2.0, "run-c": 2.5},
+        "min": 1.5,
+        "mean": 2.0,
+        "max": 2.5,
+        "stdev": 0.5,
+    }
+    assert axes["rank: net wins vs unstyled"] == {
+        "n": 3,
+        "per_run": {"run-a": 4, "run-b": 0, "run-c": -4},
+        "min": -4,
+        "mean": 0.0,
+        "max": 4,
+        "stdev": 4.0,
+    }
+    # The unstyled anchor is a competitor, not a style, so it gets
+    # no section of its own.
+    assert list(summary["axes"]) == ["alpha"]
+    assert capsys.readouterr().out == "alpha: 10 axes across 3 runs\n"
     assert "| Axis | run-a | run-b | run-c | n | Min | Mean | Max | Stdev |" in report
     assert "| fidelity: styled violation rate | 1.0 | 2.0 | 3.0 | 3 | 1.0 | 2.0 | 3.0 | 1.0 |" in (
         report
@@ -182,6 +230,69 @@ def test_a_missing_artifact_warns_and_drops_only_its_axes(tmp_path):
     assert axes["loss: fact survival median"]["n"] == 2
     assert "run-b" not in axes["loss: fact survival median"]["per_run"]
     assert axes["fidelity: styled violation rate"]["n"] == 3
+
+
+def test_a_missing_rank_artifact_drops_only_the_rank_axes(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a")
+    write_run(runs, "run-b", skip=("rank",))
+    write_run(runs, "run-c")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b", "run-c")
+    assert code == 1
+    assert summary["warnings"] == [
+        "run-b: no rank.json, so the rank axes miss this run",
+    ]
+    axes = summary["axes"]["alpha"]
+    assert axes["rank: Bradley-Terry strength"]["n"] == 2
+    assert axes["rank: net wins vs unstyled"]["n"] == 2
+    assert "run-b" not in axes["rank: Bradley-Terry strength"]["per_run"]
+    assert axes["fidelity: styled violation rate"]["n"] == 3
+
+
+def test_an_unfitted_rank_drops_only_the_strength_sample(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a")
+    write_run(runs, "run-b")
+    run_c = write_run(runs, "run-c")
+    rank = json.loads((run_c / "rank.json").read_text(encoding="utf-8"))
+    rank["bradley_terry"] = {
+        "fitted": False,
+        "note": "the fit needs at least 3 competitors with a scored contest",
+    }
+    (run_c / "rank.json").write_text(json.dumps(rank), encoding="utf-8")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b", "run-c")
+    assert code == 0
+    axes = summary["axes"]["alpha"]
+    assert axes["rank: Bradley-Terry strength"]["n"] == 2
+    assert "run-c" not in axes["rank: Bradley-Terry strength"]["per_run"]
+    assert axes["rank: net wins vs unstyled"]["n"] == 3
+
+
+def test_a_matchup_with_the_style_on_the_b_side_flips_the_net(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a", net=4)
+    run_b = write_run(runs, "run-b")
+    rank = json.loads((run_b / "rank.json").read_text(encoding="utf-8"))
+    matchup = rank["matchups"][0]
+    matchup["a"], matchup["b"] = "unstyled", "alpha"
+    matchup["wins_a"], matchup["wins_b"] = matchup["wins_b"], matchup["wins_a"]
+    matchup["net"] = 4
+    (run_b / "rank.json").write_text(json.dumps(rank), encoding="utf-8")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 0
+    per_run = summary["axes"]["alpha"]["rank: net wins vs unstyled"]["per_run"]
+    assert per_run == {"run-a": 4, "run-b": -4}
+
+
+def test_a_rank_judge_mismatch_warns(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a")
+    write_run(runs, "run-b", rank_model="sonnet")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        "condition mismatch on rank judge model: run-a opus, run-b sonnet",
+    ]
 
 
 def test_a_condition_mismatch_warns(tmp_path):

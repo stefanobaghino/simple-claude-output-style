@@ -88,7 +88,7 @@ uv run pytest
 uv run style-lint FILE.md --rules rules/technical-simplified.rules.yaml
 uv run style-pairs [--parallel N]
 uv run style-gate runs/<date>
-uv run style-cost runs/<date> [--probe]
+uv run style-cost runs/<date> [--probe] [--repeats N]
 uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-rank runs/<date> [--judge] [--parallel N]
@@ -146,9 +146,18 @@ pair is the output-token count of the styled answer divided by the
 output-token count of the unstyled answer, reported as a distribution
 and per task type. The input-overhead part needs a live measurement,
 because a stored run holds no input-token data for it: `--probe` runs
-one minimal call per arm and takes the difference in input context
-tokens between a styled call and an unstyled call. Both probe arms load
-the plugin, so the difference isolates the style block; the probe data
+one minimal call per arm and repeat, and takes the difference in input
+context tokens between the styled call and the unstyled call of the
+same repeat. Both probe arms load the plugin, so the difference
+isolates the style block. `--repeats` sets the repeat count (3 by
+default), and the report states the mean and the spread per style.
+The report also states a weighted overhead per style: each token
+count times its price ratio against one uncached input token (a
+cache write costs 1.25, a cache read costs 0.1), so the unit is
+uncached-token equivalents and the number holds under any absolute
+price. The repeat count changes no call condition, so old runs stay
+comparable, and a stored probe in the old single-call format reads
+as one repeat. The probe data
 lands in `cost-probe.json`, and a later `style-cost` call without
 `--probe` reuses it. Exit codes: 0 when both numbers exist and no
 warnings exist, 1 when warnings exist (for example, the overhead is not

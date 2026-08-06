@@ -8,6 +8,9 @@ and the stored probe data.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from statistics import fmean
+
+from .probe import PRICE_WEIGHTS, overhead_stats
 
 SHORTNESS_WARNING = (
     "A lower ratio is not by itself a win: fewer tokens with less "
@@ -17,23 +20,32 @@ SHORTNESS_WARNING = (
 
 def _overhead_block(probe: dict | None, styles: list[str]) -> dict:
     if probe is None:
-        return {"measured": False, "per_style": None, "probe_date": None, "probe_model": None}
-    arms = {arm["arm"]: arm for arm in probe["arms"]}
-    baseline = probe["unstyled_totals"][0]
-    per_style = {
-        style: {
-            "overhead_tokens": probe["overhead"][style],
-            "styled_input_total": arms[style]["total_input_tokens"],
-            "unstyled_input_total": baseline,
+        return {
+            "measured": False,
+            "per_style": None,
+            "probe_date": None,
+            "probe_model": None,
+            "repeats": None,
+            "price_weights": None,
         }
-        for style in styles
-        if style in probe.get("overhead", {})
-    }
+    arms = probe["arms"]
+    unstyled_totals = [arm["total_input_tokens"] for arm in arms if arm["arm"] == "unstyled"]
+    per_style = {}
+    for style, stats in overhead_stats(arms, styles).items():
+        styled_totals = [arm["total_input_tokens"] for arm in arms if arm["arm"] == style]
+        per_style[style] = {
+            "tokens": stats["tokens"],
+            "weighted": stats["weighted"],
+            "styled_input_total_mean": round(fmean(styled_totals), 3),
+            "unstyled_input_total_mean": round(fmean(unstyled_totals), 3),
+        }
     return {
         "measured": True,
         "per_style": per_style,
         "probe_date": probe["date"],
         "probe_model": probe["model_requested"],
+        "repeats": probe.get("repeats") or len(unstyled_totals),
+        "price_weights": dict(PRICE_WEIGHTS),
     }
 
 
@@ -54,6 +66,12 @@ def build_cost_summary(
     }
 
 
+def _mean_spread(stats: dict) -> str:
+    if stats["stdev"] is None:
+        return f"{stats['mean']} (n = {stats['n']})"
+    return f"{stats['mean']} ± {stats['stdev']}"
+
+
 def build_cost_report(summary: dict) -> str:
     per_style = summary["answer_ratio"]["per_style"]
     overhead = summary["input_overhead"]
@@ -72,23 +90,33 @@ def build_cost_report(summary: dict) -> str:
     ]
 
     if overhead["measured"]:
+        weights = overhead["price_weights"]
         lines += [
             "The overhead is the difference in input context tokens between",
-            "a styled probe call and an unstyled probe call. Both probe arms",
-            "load the plugin, so the difference isolates the style block.",
-            "The count weighs cached and uncached input tokens equally; the",
-            "dollar cost of a cached token differs.",
+            "a styled probe call and an unstyled probe call of the same",
+            "repeat. Both probe arms load the plugin, so the difference",
+            "isolates the style block. The weighted overhead multiplies each",
+            "token count by its price ratio against one uncached input token",
+            (
+                f"(uncached {weights['input_tokens']}, cache write "
+                f"{weights['cache_creation_input_tokens']}, cache read "
+                f"{weights['cache_read_input_tokens']}), so the unit is"
+            ),
+            "uncached-token equivalents.",
             "",
-            "| Style | Overhead (input context tokens) |",
-            "|---|---|",
+            "| Style | Overhead tokens (mean ± stdev) | Weighted overhead (mean ± stdev) |",
+            "|---|---|---|",
         ]
         lines += [
-            f"| {style} | {stats['overhead_tokens']} |"
+            f"| {style} | {_mean_spread(stats['tokens'])} | {_mean_spread(stats['weighted'])} |"
             for style, stats in overhead["per_style"].items()
         ]
         lines += [
             "",
-            f"Probe: {overhead['probe_date']}, model {overhead['probe_model']}.",
+            (
+                f"Probe: {overhead['probe_date']}, model {overhead['probe_model']}, "
+                f"repeats {overhead['repeats']}."
+            ),
             "",
         ]
     else:

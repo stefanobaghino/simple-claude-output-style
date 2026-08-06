@@ -62,6 +62,18 @@ def main(argv: list[str] | None = None) -> int:
         raise _fail("style-compare needs at least 2 run directories")
     runs = load_runs([Path(run_dir) for run_dir in args.run_dirs])
 
+    # A screening run covers a prompt subset and one run, so its
+    # numbers are not comparable with the numbers of a full run.
+    # The mismatch is a hard stop, not a warning, because a spread
+    # over mixed run shapes measures the shape, not the harness.
+    marked = [run["name"] for run in runs if "screening" in run["provenance"]]
+    if marked and len(marked) < len(runs):
+        unmarked = [run["name"] for run in runs if "screening" not in run["provenance"]]
+        raise _fail(
+            "a screening run cannot compare with a full run: "
+            f"screening {', '.join(marked)}; full {', '.join(unmarked)}"
+        )
+
     result = compare_runs(runs)
     summary = build_compare_summary(
         run_names=[run["name"] for run in runs],

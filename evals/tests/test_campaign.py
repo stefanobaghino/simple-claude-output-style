@@ -335,6 +335,45 @@ def test_campaign_rejects_a_budget_below_one(project):
         run_campaign(project, CampaignRunner(), "--budget", "0")
 
 
+def test_campaign_screening_produces_one_reduced_run(project):
+    runner = CampaignRunner()
+    assert run_campaign(project, runner, "--screening", "--budget", "8") == 0
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    run_dir = project / "runs" / f"{date}-screening"
+    for artifact in ARTIFACTS:
+        assert (run_dir / artifact).exists(), f"{run_dir / artifact} is missing"
+    provenance = json.loads((run_dir / "provenance.json").read_text())
+    assert provenance["screening"] == {
+        "prompts_per_type": 2,
+        "seed": 0,
+        "prompt_ids": ["debugging-01", "explanation-01"],
+        "full_prompt_count": 2,
+    }
+    assert "**Screening run.**" in (run_dir / "rank.md").read_text()
+    assert not (project / "runs" / date).exists()
+
+
+def test_campaign_screening_rejects_an_explicit_runs_count(project):
+    with pytest.raises(SystemExit) as error:
+        run_campaign(project, CampaignRunner(), "--screening", "--runs", "2")
+    assert error.value.code == 2
+
+
+def test_campaign_dirs_flag_resumes_a_screening_run(project):
+    first = CampaignRunner()
+    assert run_campaign(project, first, "--screening", "--budget", "8") == 0
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    run_dir = project / "runs" / f"{date}-screening"
+
+    second = CampaignRunner()
+    args = ("--dirs", str(run_dir), "--screening", "--budget", "8")
+    assert run_campaign(project, second, *args) == 0
+    tags = {tag for tag, _, _, _ in second.events}
+    assert "pairs" not in tags
+    provenance = json.loads((run_dir / "provenance.json").read_text())
+    assert "screening" in provenance
+
+
 # --- Worker gate unit tests: fake runners behind wrapped leases. ---
 
 

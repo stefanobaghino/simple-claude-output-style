@@ -13,9 +13,10 @@ import json
 import sys
 from pathlib import Path
 
-from gate.cli import load_answers
+from gate.cli import load_answers, run_provenance
 from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import sha256_of
+from runner.screening import screening_section
 from runner.spend import spend_summary
 from runner.timing import timing_summary
 from value.analysis import select_pairs
@@ -154,7 +155,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     (run_dir / "rank.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     timing = timing_summary(rows.values())
     spend = spend_summary(rows.values())
-    (run_dir / "rank.md").write_text(build_rank_report(summary, timing, spend), encoding="utf-8")
+    report = build_rank_report(
+        summary, timing, spend, screening=screening_section(run_provenance(run_dir))
+    )
+    (run_dir / "rank.md").write_text(report, encoding="utf-8")
 
     totals = {name: {"wins": 0, "losses": 0, "splits": 0} for name in result.competitors}
     for matchup in result.matchups:

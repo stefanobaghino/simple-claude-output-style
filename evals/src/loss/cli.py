@@ -13,9 +13,10 @@ import json
 import sys
 from pathlib import Path
 
-from gate.cli import load_answers
+from gate.cli import load_answers, run_provenance
 from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import sha256_of
+from runner.screening import screening_section
 from runner.spend import spend_summary
 from runner.timing import timing_summary
 from value.analysis import select_pairs
@@ -170,7 +171,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     (run_dir / "loss.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     timing = timing_summary(rows.values())
     spend = spend_summary(rows.values())
-    (run_dir / "loss.md").write_text(build_loss_report(summary, timing, spend), encoding="utf-8")
+    report = build_loss_report(
+        summary, timing, spend, screening=screening_section(run_provenance(run_dir))
+    )
+    (run_dir / "loss.md").write_text(report, encoding="utf-8")
 
     for style in sorted(pairs):
         parts = []

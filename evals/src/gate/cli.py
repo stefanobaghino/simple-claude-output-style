@@ -14,6 +14,7 @@ from pathlib import Path
 
 from linter import Linter, load_rules
 from runner.provenance import linter_toolchain, sha256_of
+from runner.screening import screening_section
 
 from .config import load_gate_config
 from .report import build_fidelity_report, build_summary
@@ -39,12 +40,11 @@ def load_answers(path: Path) -> list[dict]:
     return list(deduplicated.values())
 
 
-def run_toolchain_of(run_dir: Path) -> dict | None:
+def run_provenance(run_dir: Path) -> dict | None:
     provenance_path = run_dir / "provenance.json"
     if not provenance_path.exists():
         return None
-    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
-    return provenance.get("linter_toolchain")
+    return json.loads(provenance_path.read_text(encoding="utf-8"))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -79,7 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     result = score_run(answers, linters, config)
 
     toolchain = linter_toolchain()
-    run_toolchain = run_toolchain_of(run_dir)
+    provenance = run_provenance(run_dir)
+    run_toolchain = (provenance or {}).get("linter_toolchain")
     if run_toolchain is not None and run_toolchain != toolchain:
         result.warnings.append(
             f"the linter toolchain differs from the run: gate {toolchain}, run {run_toolchain}"
@@ -104,7 +105,9 @@ def main(argv: list[str] | None = None) -> int:
         for row in result.rows:
             fidelity_file.write(json.dumps(row, ensure_ascii=False) + "\n")
     (run_dir / "fidelity.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    report = build_fidelity_report(result.rows, styles, summary, result.failing)
+    report = build_fidelity_report(
+        result.rows, styles, summary, result.failing, screening=screening_section(provenance)
+    )
     (run_dir / "fidelity.md").write_text(report, encoding="utf-8")
 
     for style in styles:

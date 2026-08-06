@@ -74,7 +74,9 @@ def _mean_spread(stats: dict) -> str:
     return f"{stats['mean']} ± {stats['stdev']}"
 
 
-def build_cost_report(summary: dict, spend: dict | None = None) -> str:
+def build_cost_report(
+    summary: dict, spend: dict | None = None, screening: list[str] | None = None
+) -> str:
     per_style = summary["answer_ratio"]["per_style"]
     overhead = summary["input_overhead"]
     styles = sorted(per_style)
@@ -82,6 +84,7 @@ def build_cost_report(summary: dict, spend: dict | None = None) -> str:
     lines = [
         "# Token cost report",
         "",
+        *(screening or []),
         "A style costs tokens in two ways: the style block adds a fixed",
         "quantity of input tokens to every request, and the style changes",
         "the answer length. The report states both numbers per style. The",

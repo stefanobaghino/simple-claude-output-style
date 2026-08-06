@@ -30,6 +30,7 @@ def write_run(
     style_sha: str = "s" * 8,
     claude_version: str = "2.0.0 (Claude Code)",
     workdir: str | None = "temp",
+    screening: dict | None = None,
     skip: tuple[str, ...] = (),
 ) -> Path:
     run_dir = runs_dir / name
@@ -107,6 +108,8 @@ def write_run(
             ],
         },
     }
+    if screening is not None:
+        files["provenance"]["screening"] = screening
     for stem, content in files.items():
         if stem in skip:
             continue
@@ -330,6 +333,48 @@ def test_a_run_without_a_workdir_mode_warns(tmp_path):
     assert code == 1
     assert summary["warnings"] == [
         "condition mismatch on workdir: run-a null, run-b temp",
+    ]
+
+
+SCREENING = {
+    "prompts_per_type": 2,
+    "seed": 0,
+    "prompt_ids": ["debugging-01", "explanation-01"],
+    "full_prompt_count": 20,
+}
+
+
+def test_a_screening_run_never_compares_with_a_full_run(tmp_path):
+    runs = tmp_path / "runs"
+    run_a = write_run(runs, "run-a")
+    run_b = write_run(runs, "run-b", screening=SCREENING)
+    with pytest.raises(SystemExit) as error:
+        cli.main([str(run_a), str(run_b)])
+    assert error.value.code == 2
+
+
+def test_two_screening_runs_with_the_same_subset_compare(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a", screening=SCREENING)
+    write_run(runs, "run-b", screening=SCREENING)
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 0
+    assert summary["warnings"] == []
+
+
+def test_two_screening_runs_with_different_subsets_warn(tmp_path):
+    runs = tmp_path / "runs"
+    other = dict(SCREENING, prompt_ids=["debugging-02", "explanation-01"])
+    write_run(runs, "run-a", screening=SCREENING)
+    write_run(runs, "run-b", screening=other)
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        (
+            "condition mismatch on screening: "
+            f"run-a {json.dumps(SCREENING, sort_keys=True)}, "
+            f"run-b {json.dumps(other, sort_keys=True)}"
+        ),
     ]
 
 

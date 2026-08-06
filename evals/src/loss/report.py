@@ -154,11 +154,17 @@ def _check_section(name: str, check: dict, run_name: str) -> list[str]:
     return lines
 
 
-def build_loss_report(summary: dict, timing: dict | None = None, spend: dict | None = None) -> str:
+def build_loss_report(
+    summary: dict,
+    timing: dict | None = None,
+    spend: dict | None = None,
+    screening: list[str] | None = None,
+) -> str:
     judge = summary["judge"]
     lines = [
         "# Content-loss report",
         "",
+        *(screening or []),
         "The checks measure what a rewrite loses relative to the unstyled",
         "answer of the same prompt, per gated pair. The judge extracts the",
         "facts and the uncertain claims from the unstyled answer, then",

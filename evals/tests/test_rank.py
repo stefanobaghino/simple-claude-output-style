@@ -464,6 +464,25 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert "unstyled: 1-1-0 (win-loss-split), strength 1.0" in out
 
 
+def test_the_report_shows_the_screening_note_of_the_run(project):
+    assert run_cli(project, "--judge") == 0
+    report = (project / "run" / "rank.md").read_text()
+    assert "**Screening run.**" not in report
+
+    provenance_path = project / "run" / "provenance.json"
+    provenance = json.loads(provenance_path.read_text())
+    provenance["screening"] = {
+        "prompts_per_type": 2,
+        "seed": 0,
+        "prompt_ids": ["explanation-01"],
+        "full_prompt_count": 20,
+    }
+    provenance_path.write_text(json.dumps(provenance))
+    assert run_cli(project) == 0
+    report = (project / "run" / "rank.md").read_text()
+    assert "**Screening run.** This run covers 1 of 20 prompts" in report
+
+
 def test_cli_judge_prompts_are_blind(project):
     runner = FakeRankRunner()
     run_cli(project, "--judge", run=runner)

@@ -16,7 +16,7 @@ from test_pairs import make_plugin, stream_output
 from test_rank import FakeRankRunner
 from test_value import FakeJudgeRunner
 
-from campaign import Scheduler, StageSpec
+from campaign import Scheduler, StageSpec, WorkerGate
 from campaign import cli as campaign_cli
 from runner import cli as runner_cli
 from runner.generate import GenerationError
@@ -234,6 +234,31 @@ def test_campaign_holds_the_worker_budget(project):
     assert runner.peak <= 4
 
 
+def test_campaign_tail_stage_uses_the_whole_budget(project):
+    class TailRunner(CampaignRunner):
+        """Blocks every reader call until 3 reader calls are live.
+
+        The fixture produces 12 reader calls, a multiple of 3, so
+        every barrier group fills. Under a fixed per-stage share of
+        budget // 4 = 1 worker, the barrier can never fill and the
+        campaign fails; with the shared gate, the lone comprehension
+        stage grows into the idle budget and the barrier releases.
+        """
+
+        def __init__(self):
+            super().__init__()
+            self.barrier = threading.Barrier(3, timeout=30)
+
+        def dispatch(self, prompt, argv, cwd):
+            if prompt.startswith("Answer the questions"):
+                self.barrier.wait()
+            return super().dispatch(prompt, argv, cwd)
+
+    runner = TailRunner()
+    assert run_campaign(project, runner, "--runs", "1", "--budget", "4") == 0
+    assert runner.peak >= 3
+
+
 def test_campaign_retries_a_stopped_stage_once(project, capsys):
     class StoppingRunner(CampaignRunner):
         """Fails the first loss extraction twice, past the in-tool retry."""
@@ -310,6 +335,110 @@ def test_campaign_rejects_a_budget_below_one(project):
         run_campaign(project, CampaignRunner(), "--budget", "0")
 
 
+# --- Worker gate unit tests: fake runners behind wrapped leases. ---
+
+
+def in_thread(target):
+    thread = threading.Thread(target=target)
+    thread.start()
+    return thread
+
+
+def wait_until(condition, timeout=10.0):
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline, "condition not met in time"
+        time.sleep(0.001)
+
+
+def test_gate_lets_a_lone_lease_use_the_whole_budget():
+    gate = WorkerGate(4)
+    lease = gate.lease("judge", priority=2)
+    barrier = threading.Barrier(4, timeout=10)
+
+    def call(argv, cwd):
+        barrier.wait()
+        return "ok"
+
+    gated = lease.wrap(call)
+    threads = [in_thread(lambda: gated([], None)) for _ in range(4)]
+    for thread in threads:
+        thread.join()
+    assert lease.peak == 4
+    assert gate.peak == 4
+    assert gate.free == 4
+    assert lease.live == 0
+
+
+def test_gate_prefers_the_lower_priority_number():
+    gate = WorkerGate(1)
+    release = threading.Event()
+    done = []
+
+    def holder(argv, cwd):
+        release.wait(timeout=10)
+        return "ok"
+
+    def call(name):
+        def run(argv, cwd):
+            done.append(name)
+            return "ok"
+
+        return run
+
+    hold = in_thread(lambda: gate.lease("hold", 0).wrap(holder)([], None))
+    wait_until(lambda: gate.free == 0)
+    late = in_thread(lambda: gate.lease("late", 5).wrap(call("late"))([], None))
+    wait_until(lambda: gate.waiting == 1)
+    early = in_thread(lambda: gate.lease("early", 1).wrap(call("early"))([], None))
+    wait_until(lambda: gate.waiting == 2)
+    release.set()
+    for thread in (hold, late, early):
+        thread.join()
+    assert done == ["early", "late"]
+
+
+def test_gate_keeps_arrival_order_at_equal_priority():
+    gate = WorkerGate(1)
+    release = threading.Event()
+    done = []
+
+    def holder(argv, cwd):
+        release.wait(timeout=10)
+        return "ok"
+
+    def call(name):
+        def run(argv, cwd):
+            done.append(name)
+            return "ok"
+
+        return run
+
+    hold = in_thread(lambda: gate.lease("hold", 0).wrap(holder)([], None))
+    wait_until(lambda: gate.free == 0)
+    first = in_thread(lambda: gate.lease("first", 3).wrap(call("first"))([], None))
+    wait_until(lambda: gate.waiting == 1)
+    second = in_thread(lambda: gate.lease("second", 3).wrap(call("second"))([], None))
+    wait_until(lambda: gate.waiting == 2)
+    release.set()
+    for thread in (hold, first, second):
+        thread.join()
+    assert done == ["first", "second"]
+
+
+def test_gate_returns_the_permit_on_an_error():
+    gate = WorkerGate(2)
+    lease = gate.lease("judge", 1)
+
+    def bad(argv, cwd):
+        raise GenerationError("injected failure")
+
+    with pytest.raises(GenerationError):
+        lease.wrap(bad)([], None)
+    assert gate.free == 2
+    assert lease.live == 0
+
+
 # --- Scheduler unit tests: stub actions, no fakes. ---
 
 
@@ -347,37 +476,16 @@ def test_scheduler_runs_dependencies_in_order():
             spec("a", action=recorder.action("a")),
             spec("b", action=recorder.action("b"), needs=(("a", 0),)),
         ],
-        budget=4,
     ).run()
     assert all(result.state == "done" for result in results.values())
     assert recorder.span("a")[3] <= recorder.span("b")[2]
 
 
-def test_scheduler_holds_the_budget_and_fixes_workers_at_launch():
+def test_scheduler_passes_the_threads_value_to_the_action():
     recorder = Recorder()
-    scheduler = Scheduler(
-        [
-            spec("a", action=recorder.action("a", delay=0.05), cap=3, floor=1),
-            spec("b", action=recorder.action("b", delay=0.05), cap=3, floor=1),
-        ],
-        budget=4,
-    )
-    results = scheduler.run()
-    assert scheduler.peak <= 4
-    assert results[("a", 0)].workers == 3
-    assert results[("b", 0)].workers == 1
-
-
-def test_scheduler_prefers_priority_when_the_budget_is_tight():
-    recorder = Recorder()
-    Scheduler(
-        [
-            spec("late", action=recorder.action("late"), priority=5),
-            spec("early", action=recorder.action("early"), priority=1),
-        ],
-        budget=1,
-    ).run()
-    assert recorder.span("early")[3] <= recorder.span("late")[2]
+    results = Scheduler([spec("a", action=recorder.action("a"), threads=5)]).run()
+    assert results[("a", 0)].state == "done"
+    assert recorder.span("a")[1] == 5
 
 
 def test_scheduler_retries_a_failure_once_and_not_a_warning():
@@ -393,9 +501,7 @@ def test_scheduler_retries_a_failure_once_and_not_a_warning():
         attempts["warning"] += 1
         return 1
 
-    results = Scheduler(
-        [spec("failing", action=failing), spec("warning", action=warning)], budget=2
-    ).run()
+    results = Scheduler([spec("failing", action=failing), spec("warning", action=warning)]).run()
     assert results[("failing", 0)].state == "done"
     assert results[("failing", 0)].attempts == 2
     assert results[("warning", 0)].state == "done"
@@ -407,7 +513,7 @@ def test_scheduler_normalizes_a_string_system_exit():
     def bad(workers):
         raise SystemExit("the picker refused")
 
-    results = Scheduler([spec("bad", action=bad)], budget=1).run()
+    results = Scheduler([spec("bad", action=bad)]).run()
     result = results[("bad", 0)]
     assert result.state == "failed"
     assert result.attempts == 2
@@ -426,7 +532,6 @@ def test_scheduler_skips_needs_dependents_and_keeps_after_dependents():
             spec("dependent", action=recorder.action("dependent"), needs=(("bad", 0),)),
             spec("follower", action=recorder.action("follower"), after=(("bad", 0),)),
         ],
-        budget=2,
     ).run()
     assert results[("bad", 0)].state == "failed"
     assert results[("dependent", 0)].state == "skipped"

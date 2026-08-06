@@ -3,9 +3,10 @@
 A campaign is several full pair runs under identical conditions. The
 driver runs the documented schedule: serialized pair stages,
 overlapped judge stages, the value pass split around the loss pass,
-and one worker budget across every stage.
+and one worker gate that meters every CLI call against one budget.
 """
 
+from .budget import WorkerGate, WorkerLease
 from .schedule import Scheduler, StageResult, StageSpec
 
-__all__ = ["Scheduler", "StageResult", "StageSpec"]
+__all__ = ["Scheduler", "StageResult", "StageSpec", "WorkerGate", "WorkerLease"]

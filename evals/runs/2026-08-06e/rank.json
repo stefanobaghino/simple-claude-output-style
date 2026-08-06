@@ -1,0 +1,234 @@
+{
+  "date": "2026-08-06T09:40:08+00:00",
+  "run": "2026-08-06e",
+  "judge": {
+    "model": "opus",
+    "judged_date": "2026-08-06T09:15:15+00:00",
+    "claude_version": "2.1.223 (Claude Code)"
+  },
+  "design": "clarity-v1",
+  "competitors": [
+    "plain-language",
+    "technical-simplified",
+    "unstyled"
+  ],
+  "matchups": [
+    {
+      "a": "plain-language",
+      "b": "technical-simplified",
+      "contests": 17,
+      "wins_a": 12,
+      "wins_b": 2,
+      "splits": 3,
+      "unscored": 0,
+      "net": 10
+    },
+    {
+      "a": "plain-language",
+      "b": "unstyled",
+      "contests": 20,
+      "wins_a": 8,
+      "wins_b": 6,
+      "splits": 6,
+      "unscored": 0,
+      "net": 2
+    },
+    {
+      "a": "technical-simplified",
+      "b": "unstyled",
+      "contests": 17,
+      "wins_a": 4,
+      "wins_b": 10,
+      "splits": 3,
+      "unscored": 0,
+      "net": -6
+    }
+  ],
+  "win_matrix": {
+    "plain-language": {
+      "technical-simplified": 13.5,
+      "unstyled": 11.0
+    },
+    "technical-simplified": {
+      "plain-language": 3.5,
+      "unstyled": 5.5
+    },
+    "unstyled": {
+      "plain-language": 9.0,
+      "technical-simplified": 11.5
+    }
+  },
+  "position_bias": {
+    "first_pick_rate": 0.444,
+    "picks": 108,
+    "split_rate": 0.222,
+    "contests": 54
+  },
+  "bradley_terry": {
+    "fitted": true,
+    "anchored_on": "unstyled",
+    "strengths": {
+      "plain-language": {
+        "strength": 1.353,
+        "ci_low": 0.704,
+        "ci_high": 2.802
+      },
+      "technical-simplified": {
+        "strength": 0.417,
+        "ci_low": 0.183,
+        "ci_high": 0.849
+      },
+      "unstyled": {
+        "strength": 1.0,
+        "ci_low": null,
+        "ci_high": null
+      }
+    },
+    "bootstrap": {
+      "resamples": 1000,
+      "seed": 0
+    }
+  },
+  "by_task_type": {
+    "code-review": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 5,
+        "wins_a": 4,
+        "wins_b": 0,
+        "splits": 1,
+        "unscored": 0,
+        "net": 4
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 3,
+        "wins_b": 1,
+        "splits": 1,
+        "unscored": 0,
+        "net": 2
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 1,
+        "wins_b": 3,
+        "splits": 1,
+        "unscored": 0,
+        "net": -2
+      }
+    ],
+    "debugging": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 4,
+        "wins_a": 2,
+        "wins_b": 0,
+        "splits": 2,
+        "unscored": 0,
+        "net": 2
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 2,
+        "wins_b": 3,
+        "splits": 0,
+        "unscored": 0,
+        "net": -1
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 4,
+        "wins_a": 0,
+        "wins_b": 3,
+        "splits": 1,
+        "unscored": 0,
+        "net": -3
+      }
+    ],
+    "explanation": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 3,
+        "wins_a": 3,
+        "wins_b": 0,
+        "splits": 0,
+        "unscored": 0,
+        "net": 3
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 1,
+        "wins_b": 2,
+        "splits": 2,
+        "unscored": 0,
+        "net": -1
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 3,
+        "wins_a": 0,
+        "wins_b": 3,
+        "splits": 0,
+        "unscored": 0,
+        "net": -3
+      }
+    ],
+    "summarization": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 5,
+        "wins_a": 3,
+        "wins_b": 2,
+        "splits": 0,
+        "unscored": 0,
+        "net": 1
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 2,
+        "wins_b": 0,
+        "splits": 3,
+        "unscored": 0,
+        "net": 2
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 3,
+        "wins_b": 1,
+        "splits": 1,
+        "unscored": 0,
+        "net": 2
+      }
+    ]
+  },
+  "length_confound": {
+    "n": 54,
+    "pearson": 0.34,
+    "spearman": 0.334,
+    "longer_win_rate": 0.648
+  },
+  "warnings": [
+    "technical-simplified/explanation-05: the pair failed the gate, excluded",
+    "technical-simplified/explanation-03: the pair failed the gate, excluded",
+    "technical-simplified/debugging-04: the pair failed the gate, excluded",
+    "clarity:explanation-01:738cfdf4e9ac844f57547a9e5a8d7554752747e20ec8d015ba0e1e771c138d9a:c606f73750cbeb62884291e6a0312293e2aacfd9beff5cc616460319c5956fb7: the first call failed and the retry succeeded: claude exited with code 1: {\"type\":\"system\",\"subtype\":\"init\",\"cwd\":\"/private/var/folders/tt/jh9lk8gs6_sfn5fhz4rp7pch0000gn/T/style-judge-rank-dkcunvg8\",\"session_id\":\"23837033-f039-4915-b9ab-ed2b44910b77\",\"tools\":[],\"mcp_servers\":[],\"model\":\"claude-opus-5\",\"permissionMode\":\"auto\",\"slash_commands\":[\"deep-research\",\"design-sync\",\"dataviz\",\"update-config\",\"verify\",\"debug\",\"code-review\",\"simplify\",\"batch\",\"fewer-permission-prompts\",\"doctor\",\"loop\",\"schedule\",\"claude-api\",\"run\",\"run-skill-generator\",\"agents\",\"autocompact\",\"clea"
+  ]
+}

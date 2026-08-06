@@ -85,6 +85,7 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
                         "cache_creation_input_tokens": turn.cache_creation_input_tokens,
                         "cache_read_input_tokens": turn.cache_read_input_tokens,
                         "duration_ms": turn.duration_ms,
+                        "wall_ms": turn.wall_ms,
                     }
                     sessions_file.write(json.dumps(row, ensure_ascii=False) + "\n")
                     sessions_file.flush()

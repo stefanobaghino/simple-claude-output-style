@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from runner.timing import timing_section
+
 from .judges import CHECKS
 
 CHECK_TITLES = {
@@ -149,7 +151,7 @@ def _check_section(name: str, check: dict, run_name: str) -> list[str]:
     return lines
 
 
-def build_loss_report(summary: dict) -> str:
+def build_loss_report(summary: dict, timing: dict | None = None) -> str:
     judge = summary["judge"]
     lines = [
         "# Content-loss report",
@@ -173,6 +175,7 @@ def build_loss_report(summary: dict) -> str:
     for name in CHECKS:
         lines += _check_section(name, summary["checks"][name], summary["run"])
 
+    lines += timing_section(timing)
     lines += ["## Warnings", ""]
     lines += [f"- {warning}" for warning in summary["warnings"]] or ["- none"]
     lines.append("")

@@ -14,6 +14,7 @@ import yaml
 
 from runner import GenerationError, build_argv, cli, generate, style_reference
 from runner.provenance import build_provenance
+from runner.report import build_report
 
 HERE = Path(__file__).parent
 PROMPTS = HERE.parent / "prompts" / "prompts.yaml"
@@ -129,6 +130,7 @@ def test_generate_parses_the_stream(tmp_path):
     assert result.cache_creation_input_tokens == 2
     assert result.cache_read_input_tokens == 1
     assert result.plugins == ("simple-output-styles",)
+    assert isinstance(result.wall_ms, int)
 
 
 def test_generate_rejects_a_wrong_active_style(tmp_path):
@@ -217,11 +219,26 @@ def test_cli_produces_a_complete_run(project):
         == (3, 2, 1)
         for a in answers
     )
+    assert all(isinstance(a["wall_ms"], int) for a in answers)
     provenance = json.loads((out / "provenance.json").read_text())
     assert provenance["styles"]["alpha"]["sha256"]
     report = (out / "report.md").read_text()
     assert "| unstyled | 2/2 | none |" in report
     assert "| alpha | 2/2 | none |" in report
+    assert "## Call timing" in report
+
+
+def test_report_states_not_measured_for_rows_without_wall(project):
+    runner = FakeRunner()
+    run_cli(project, runner)
+    out = project / "run"
+    rows = [json.loads(line) for line in (out / "answers.jsonl").read_text().splitlines()]
+    for row in rows:
+        row.pop("wall_ms", None)
+    prompts = yaml.safe_load((project / "prompts.yaml").read_text())["prompts"]
+    provenance = json.loads((out / "provenance.json").read_text())
+    report = build_report(prompts, ["alpha"], rows, provenance, [])
+    assert "The wall is not measured" in report
 
 
 def test_cli_resumes_and_only_runs_the_missing_answers(project):

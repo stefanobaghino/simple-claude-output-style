@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from runner.timing import timing_section
+
 PROXY_NOTE = (
     "The judge is a proxy reader: the picks state a model preference "
     "for clarity, not a measured human outcome."
@@ -143,7 +145,7 @@ def _length_section(confound: dict) -> list[str]:
     ]
 
 
-def build_rank_report(summary: dict) -> str:
+def build_rank_report(summary: dict, timing: dict | None = None) -> str:
     judge = summary["judge"]
     lines = [
         "# Clarity-ranking report",
@@ -176,6 +178,7 @@ def build_rank_report(summary: dict) -> str:
     lines += _position_bias_section(summary["position_bias"])
     lines += _task_type_section(summary["by_task_type"])
     lines += _length_section(summary["length_confound"])
+    lines += timing_section(timing)
     lines += ["## Warnings", ""]
     lines += [f"- {warning}" for warning in summary["warnings"]] or ["- none"]
     lines.append("")

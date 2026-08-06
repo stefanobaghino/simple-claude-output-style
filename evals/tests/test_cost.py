@@ -190,6 +190,9 @@ def test_probe_measures_the_overhead(tmp_path):
     assert probe["styles"]["alpha"]["sha256"] == sha256_of(plugin / "output-styles" / "alpha.md")
     assert probe["plugin"]["name"] == "test-plugin"
     assert probe["warnings"] == []
+    for arm in probe["arms"]:
+        assert isinstance(arm["duration_ms"], int)
+        assert isinstance(arm["wall_ms"], int)
 
 
 def test_probe_rejects_a_wrong_active_style(tmp_path):

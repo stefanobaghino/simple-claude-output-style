@@ -12,6 +12,7 @@ run. The code never deletes that user state.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,7 @@ class SessionTurn:
     cache_creation_input_tokens: int
     cache_read_input_tokens: int
     duration_ms: int
+    wall_ms: int
 
 
 Record = Callable[[int, dict, SessionTurn], None]
@@ -77,7 +79,9 @@ def generate_turn(
 ) -> SessionTurn:
     """Generate one turn and check that the intended style was active."""
     argv = build_session_argv(prompt, model, style, plugin_dir, resume_id)
+    start = time.monotonic()
     stdout = run(argv, workdir)
+    wall_ms = round((time.monotonic() - start) * 1000)
     init, result = parse_events(stdout)
 
     expected_style = style_reference(plugin_dir, style)
@@ -107,6 +111,7 @@ def generate_turn(
         cache_creation_input_tokens=int(usage.get("cache_creation_input_tokens", 0)),
         cache_read_input_tokens=int(usage.get("cache_read_input_tokens", 0)),
         duration_ms=int(result.get("duration_ms", 0)),
+        wall_ms=wall_ms,
     )
 
 

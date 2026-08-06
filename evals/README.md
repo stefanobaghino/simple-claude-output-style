@@ -115,6 +115,15 @@ The generation calls run several at a time (8 by default), and
 not interact, so the concurrency changes no condition of a run. The
 answers land in completion order, and every reader of the answers
 reads them by key, so the row order carries no meaning.
+Every stored call row holds two times: `duration_ms` is the model
+time that the CLI reports, and `wall_ms` is the wall clock of the
+subprocess. The difference is the startup cost of one CLI call. The
+generation rows, the probe arms, the judge rows, and the drift rows
+all hold both times, and the run report, the reader-value report,
+the content-loss report, and the clarity-ranking report state the
+means in a call-timing section. A row from before the `wall_ms`
+field reads as "not measured". The measurement changes no call
+condition, so old runs stay comparable.
 An interrupted run resumes when the same invocation runs again. When
 the default directory already holds a complete run, a repeat without
 `--out` starts the next free letter suffix (`runs/<date>b`, then `c`,
@@ -360,7 +369,7 @@ pair runner picks the suffix on a same-day repeat:
 runs/<YYYY-MM-DD>/
   provenance.json   # prompt-set hash, conditions, style hashes, linter toolchain
   answers.jsonl     # one line per answer; style null marks the unstyled answer
-  report.md         # completeness, volume, environment, warnings
+  report.md         # completeness, volume, call timing, environment, warnings
   fidelity.jsonl    # one line per (answer, rule set), with the pass or fail mark
   fidelity.json     # gate provenance and the per-style summary
   fidelity.md       # thresholds, marks, per-rule table, baseline comparison

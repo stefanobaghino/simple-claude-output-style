@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from runner.timing import timing_section
+
 from .judges import CHECKS
 
 COMPREHENSION_VERDICT = "The styled answer must not score worse than the unstyled answer."
@@ -241,7 +243,7 @@ def _comprehension_header(judges: dict) -> str:
     return f"Comprehension uses {judges['questions']} questions per prompt, "
 
 
-def build_value_report(summary: dict) -> str:
+def build_value_report(summary: dict, timing: dict | None = None) -> str:
     judges = summary["judges"]
     lines = [
         "# Reader-value report",
@@ -267,6 +269,7 @@ def build_value_report(summary: dict) -> str:
     for name in CHECKS:
         lines += _check_section(name, summary["checks"][name], summary["run"])
 
+    lines += timing_section(timing)
     lines += ["## Warnings", ""]
     lines += [f"- {warning}" for warning in summary["warnings"]] or ["- none"]
     lines.append("")

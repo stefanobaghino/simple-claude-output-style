@@ -357,7 +357,14 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert hedging["median"] == 0.5
     assert hedging["pairs"]["explanation-01"]["lost"] == ["the animal may swim"]
     assert summary["warnings"] == []
+    raw_rows = [
+        json.loads(line) for line in (project / "run" / "loss-raw.jsonl").read_text().splitlines()
+    ]
+    call_rows = [row for row in raw_rows if row.get("type") == "call"]
+    assert call_rows
+    assert all(isinstance(row["wall_ms"], int) for row in call_rows)
     report = (project / "run" / "loss.md").read_text()
+    assert "## Call timing" in report
     assert "| explanation-01 | 2 | 1 | 0.5 | 2 | 1 |" in report
     assert "Median fraction: 0.5 over 1 scored pairs." in report
     assert "Median additions: 1 over 1 scored pairs." in report

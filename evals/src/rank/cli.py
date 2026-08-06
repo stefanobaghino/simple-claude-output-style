@@ -16,6 +16,7 @@ from pathlib import Path
 from gate.cli import load_answers
 from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
 from runner.provenance import sha256_of
+from runner.spend import spend_summary
 from runner.timing import timing_summary
 from value.analysis import select_pairs
 from value.cli import answer_index, load_fidelity, load_raw
@@ -146,7 +147,8 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     summary = build_rank_summary(run_name=run_dir.name, meta=meta, result=result, warnings=warnings)
     (run_dir / "rank.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     timing = timing_summary(rows.values())
-    (run_dir / "rank.md").write_text(build_rank_report(summary, timing), encoding="utf-8")
+    spend = spend_summary(rows.values())
+    (run_dir / "rank.md").write_text(build_rank_report(summary, timing, spend), encoding="utf-8")
 
     totals = {name: {"wins": 0, "losses": 0, "splits": 0} for name in result.competitors}
     for matchup in result.matchups:

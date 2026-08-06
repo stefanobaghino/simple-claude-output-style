@@ -124,6 +124,16 @@ the content-loss report, and the clarity-ranking report state the
 means in a call-timing section. A row from before the `wall_ms`
 field reads as "not measured". The measurement changes no call
 condition, so old runs stay comparable.
+Every stored call row also holds four token counts: the uncached
+input tokens, the cache-write input tokens, the cache-read input
+tokens, and the output tokens. The counts show what the harness
+itself spends, apart from what the styles cost. The run report,
+the cost report, the reader-value report, the content-loss report,
+the clarity-ranking report, and the drift report state the totals
+of their own calls in a harness-spend section, with the cache-read
+share of the input. A row from before the token fields reads as
+"not measured" here as well, and this measurement also changes no
+call condition, so old runs stay comparable.
 An interrupted run resumes when the same invocation runs again. When
 the default directory already holds a complete run, a repeat without
 `--out` starts the next free letter suffix (`runs/<date>b`, then `c`,

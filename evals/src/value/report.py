@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from runner.spend import spend_section
 from runner.timing import timing_section
 
 from .judges import CHECKS
@@ -243,7 +244,7 @@ def _comprehension_header(judges: dict) -> str:
     return f"Comprehension uses {judges['questions']} questions per prompt, "
 
 
-def build_value_report(summary: dict, timing: dict | None = None) -> str:
+def build_value_report(summary: dict, timing: dict | None = None, spend: dict | None = None) -> str:
     judges = summary["judges"]
     lines = [
         "# Reader-value report",
@@ -270,6 +271,7 @@ def build_value_report(summary: dict, timing: dict | None = None) -> str:
         lines += _check_section(name, summary["checks"][name], summary["run"])
 
     lines += timing_section(timing)
+    lines += spend_section(spend)
     lines += ["## Warnings", ""]
     lines += [f"- {warning}" for warning in summary["warnings"]] or ["- none"]
     lines.append("")

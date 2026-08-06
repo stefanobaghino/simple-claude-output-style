@@ -7,6 +7,7 @@ directly; the report is for a human who opens the run directory.
 
 from __future__ import annotations
 
+from .spend import spend_section, spend_summary
 from .timing import timing_section, timing_summary
 
 UNSTYLED = "unstyled"
@@ -61,6 +62,7 @@ def build_report(
     lines.append("")
 
     lines += timing_section(timing_summary(answers))
+    lines += spend_section(spend_summary(answers))
 
     versions = sorted({a.get("claude_code_version", "") for a in answers} - {""})
     models = sorted({m for a in answers for m in a.get("models_used", [])})

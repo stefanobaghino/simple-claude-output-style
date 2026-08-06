@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from statistics import fmean
 
+from runner.spend import spend_section
+
 from .probe import PRICE_WEIGHTS, overhead_stats
 
 SHORTNESS_WARNING = (
@@ -72,7 +74,7 @@ def _mean_spread(stats: dict) -> str:
     return f"{stats['mean']} ± {stats['stdev']}"
 
 
-def build_cost_report(summary: dict) -> str:
+def build_cost_report(summary: dict, spend: dict | None = None) -> str:
     per_style = summary["answer_ratio"]["per_style"]
     overhead = summary["input_overhead"]
     styles = sorted(per_style)
@@ -125,6 +127,9 @@ def build_cost_report(summary: dict) -> str:
             "to measure it with live probe calls.",
             "",
         ]
+
+    if spend is not None:
+        lines += spend_section(spend)
 
     lines += [
         "## Answer-length ratio",

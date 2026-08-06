@@ -330,6 +330,7 @@ def test_cli_without_probe_data_reports_the_ratios_only(project, capsys):
     assert run_cli(project) == 1
     report = (project / "run" / "cost.md").read_text()
     assert "The overhead is not measured" in report
+    assert "## Harness spend" not in report
     assert SHORTNESS_WARNING in report
     assert "| explanation | 1 |" in report
     summary = json.loads((project / "run" / "cost.json").read_text())
@@ -357,6 +358,10 @@ def test_cli_with_probe_writes_both_numbers(project, capsys):
     report = (project / "run" / "cost.md").read_text()
     assert "| alpha | 300.0 ± 0.0 | 375.0 ± 0.0 |" in report
     assert "repeats 3." in report
+    assert "## Harness spend" in report
+    assert (
+        "Input tokens: 60 uncached, 1500 cache write, 6000 cache read. Output tokens: 6." in report
+    )
     assert SHORTNESS_WARNING in report
     out = capsys.readouterr().out
     assert (

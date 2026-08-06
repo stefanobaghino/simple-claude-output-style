@@ -226,6 +226,8 @@ def test_cli_produces_a_complete_run(project):
     assert "| unstyled | 2/2 | none |" in report
     assert "| alpha | 2/2 | none |" in report
     assert "## Call timing" in report
+    assert "## Harness spend" in report
+    assert "Input tokens: 12 uncached, 8 cache write, 4 cache read. Output tokens: 28." in report
 
 
 def test_report_states_not_measured_for_rows_without_wall(project):

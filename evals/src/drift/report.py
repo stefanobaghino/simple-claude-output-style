@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from runner.spend import spend_section
+
 HEADER = """\
 # Drift report
 
@@ -78,7 +80,7 @@ def _style_section(style: str, stats: dict, summary: dict) -> list[str]:
     return lines
 
 
-def build_drift_report(summary: dict) -> str:
+def build_drift_report(summary: dict, spend: dict | None = None) -> str:
     lines = [
         HEADER.format(
             run=summary["run"],
@@ -89,6 +91,7 @@ def build_drift_report(summary: dict) -> str:
     ]
     for style in sorted(summary["styles"]):
         lines += _style_section(style, summary["styles"][style], summary)
+    lines += spend_section(spend)
     lines.append("## Warnings")
     lines.append("")
     if summary["warnings"]:

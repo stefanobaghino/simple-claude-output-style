@@ -946,7 +946,14 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
         == 0.167
     )
     assert summary["warnings"] == []
+    raw_rows = [
+        json.loads(line) for line in (project / "run" / "value-raw.jsonl").read_text().splitlines()
+    ]
+    call_rows = [row for row in raw_rows if row.get("type") == "call"]
+    assert call_rows
+    assert all(isinstance(row["wall_ms"], int) for row in call_rows)
     report = (project / "run" / "value.md").read_text()
+    assert "## Call timing" in report
     assert report.count("| alpha | 1 | 0 | 0 |\n") == 2
     assert "worded by both answers in balance" in report
     assert "| alpha | 1 | 0 | 0 | 0.167 | 1.0 | 0.0 | 0.167 |" in report
@@ -985,6 +992,17 @@ def test_cli_offline_rescores_the_stored_rows(project):
     first.pop("date")
     second.pop("date")
     assert first == second
+
+
+def test_cli_offline_rescore_without_wall_states_not_measured(project):
+    run_cli(project, "--judge")
+    raw_path = project / "run" / "value-raw.jsonl"
+    rows = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    for row in rows:
+        row.pop("wall_ms", None)
+    write_jsonl(raw_path, rows)
+    assert run_cli(project) == 0
+    assert "The wall is not measured" in (project / "run" / "value.md").read_text()
 
 
 def test_cli_resume_makes_no_new_calls(project):

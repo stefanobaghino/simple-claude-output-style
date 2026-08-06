@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -353,9 +354,9 @@ class JudgeSession:
                 if key in self.rows:
                     return self.rows[key]
         try:
-            init, result = self._attempt(key, model, prompt)
+            init, result, wall_ms = self._attempt(key, model, prompt)
         except GenerationError as error:
-            init, result = self._attempt(key, model, prompt)
+            init, result, wall_ms = self._attempt(key, model, prompt)
             self.warnings.append(f"{key}: the first call failed and the retry succeeded: {error}")
         row = {
             "type": "call",
@@ -371,6 +372,7 @@ class JudgeSession:
             "output": str(result.get("result", "")),
             "output_tokens": int((result.get("usage") or {}).get("output_tokens", 0)),
             "duration_ms": int(result.get("duration_ms", 0)),
+            "wall_ms": wall_ms,
         }
         if extra:
             row.update(extra)
@@ -379,9 +381,11 @@ class JudgeSession:
             self.sink(row)
         return row
 
-    def _attempt(self, key: str, model: str, prompt: str) -> tuple[dict, dict]:
+    def _attempt(self, key: str, model: str, prompt: str) -> tuple[dict, dict, int]:
         """One live judge call: the subprocess, then the sanity checks."""
+        start = time.monotonic()
         stdout = self.run(judge_argv(prompt, model), self.workdir)
+        wall_ms = round((time.monotonic() - start) * 1000)
         init, result = parse_events(stdout)
         active = init.get("output_style")
         if active != "default":
@@ -392,7 +396,7 @@ class JudgeSession:
             raise GenerationError(
                 f"{key}: claude reported an error: {str(result.get('result', ''))[:500]}"
             )
-        return init, result
+        return init, result, wall_ms
 
     def structured(self, *, validate: Callable[[str], object | None], **call_kwargs) -> object:
         """A call whose output must pass the validator; one retry on failure."""

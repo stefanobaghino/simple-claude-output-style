@@ -12,6 +12,7 @@ unstyled arm of the runner does not.
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -64,7 +65,9 @@ def _run_arm(
     workdir: Path,
     run: Runner,
 ) -> dict:
+    start = time.monotonic()
     stdout = run(probe_argv(PROBE_PROMPT, model, style, plugin_dir), workdir)
+    wall_ms = round((time.monotonic() - start) * 1000)
     init, result = parse_events(stdout)
 
     expected = style_reference(plugin_dir, style) if style is not None else "default"
@@ -93,6 +96,8 @@ def _run_arm(
             f"{name}: the usage reports zero input tokens, so the reading is invalid"
         )
     arm["output_tokens"] = int(usage.get("output_tokens", 0))
+    arm["duration_ms"] = int(result.get("duration_ms", 0))
+    arm["wall_ms"] = wall_ms
     return arm
 
 

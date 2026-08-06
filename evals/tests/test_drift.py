@@ -158,6 +158,7 @@ def test_generate_turn_captures_session_id(tmp_path):
     assert turn.session_id == "sid-9"
     assert turn.resume_from is None
     assert turn.output_tokens == 7
+    assert isinstance(turn.wall_ms, int)
 
 
 def test_generate_turn_rejects_missing_session_id(tmp_path):
@@ -255,6 +256,7 @@ def test_cli_generates_complete_sessions(project):
         ("alpha", repeat, turn) for repeat in (1, 2) for turn in (1, 2, 3)
     }
     assert all(r["session_id"] for r in rows)
+    assert all(isinstance(r["wall_ms"], int) for r in rows)
 
     provenance = json.loads((project / "run" / "provenance.json").read_text())
     assert "--no-session-persistence" not in provenance["conditions"]["flags"]

@@ -176,6 +176,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
                 "cache_creation_input_tokens": result.cache_creation_input_tokens,
                 "cache_read_input_tokens": result.cache_read_input_tokens,
                 "duration_ms": result.duration_ms,
+                "wall_ms": result.wall_ms,
             }
             with lock:
                 done += 1

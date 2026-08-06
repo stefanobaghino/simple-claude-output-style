@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -73,6 +74,7 @@ class Generation:
     cache_creation_input_tokens: int
     cache_read_input_tokens: int
     duration_ms: int
+    wall_ms: int
 
 
 def style_reference(plugin_dir: Path, style: str) -> str:
@@ -128,7 +130,9 @@ def generate(
 ) -> Generation:
     """Generate one answer and check that the intended style was active."""
     argv = build_argv(prompt, model, style, plugin_dir)
+    start = time.monotonic()
     stdout = run(argv, workdir)
+    wall_ms = round((time.monotonic() - start) * 1000)
     init, result = parse_events(stdout)
 
     expected_style = style_reference(plugin_dir, style) if style is not None else "default"
@@ -153,6 +157,7 @@ def generate(
         cache_creation_input_tokens=int(usage.get("cache_creation_input_tokens", 0)),
         cache_read_input_tokens=int(usage.get("cache_read_input_tokens", 0)),
         duration_ms=int(result.get("duration_ms", 0)),
+        wall_ms=wall_ms,
     )
 
 

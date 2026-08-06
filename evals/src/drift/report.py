@@ -17,9 +17,18 @@ active. Each turn resumes the session of the previous turn, so the
 context grows. Each session runs {repeats} time(s), and each repeat
 rotates the prompt order, so a hard prompt does not always sit at the
 same turn position. The linter checks each answer with the rule set
-of the style. The verdict compares the slope of the mean rate series
-against the threshold: "growing" when the slope is more than
-{threshold} violations per 100 sentences per turn, else "flat".
+of the style. The rate of a turn position pools the complete
+sessions: 100 times the violations at that position over the
+sentences at that position. Thus a short answer weighs by its
+sentence count and cannot dominate the series. The verdict compares
+the slope of the pooled series against a per-style threshold:
+"growing" when the slope is larger, else "flat". The threshold comes
+from a permutation null: the turn order of each session shuffles,
+the pooled slope refits, and the threshold is a nearest-rank
+quantile of the shuffled slopes. The section of each style states
+the quantile, the permutation count, and the seed. The
+`--slope-threshold` flag replaces the derived threshold, and the
+section then states both values.
 """
 
 
@@ -28,7 +37,7 @@ def build_drift_summary(
     run_name: str,
     turns: int,
     repeats: int,
-    slope_threshold: float,
+    slope_threshold: float | None,
     styles: dict[str, dict],
     rules: dict[str, dict],
     toolchain: dict,
@@ -59,19 +68,25 @@ def _style_section(style: str, stats: dict, summary: dict) -> list[str]:
     if stats["complete_sessions"] == 0:
         lines += ["The style has no complete session, so the style has no verdict.", ""]
         return lines
+    null = stats["null"]
+    quantile = f"the {null['quantile']} quantile of {null['permutations']} shuffled slopes"
+    if stats["threshold_source"] == "derived":
+        threshold = f"{stats['threshold']} ({quantile}, seed {null['seed']})"
+    else:
+        threshold = f"{stats['threshold']} (override; the null quantile is {null['threshold']})"
     lines += [
         f"- Sessions: {stats['complete_sessions']}/{repeats} complete",
-        f"- Slope of the mean series: {stats['slope']} violations per 100 sentences per turn",
-        f"- Slope threshold: {summary['slope_threshold']}",
+        f"- Slope of the pooled series: {stats['slope']} violations per 100 sentences per turn",
+        f"- Slope threshold: {threshold}",
         f"- Verdict: {stats['verdict']}",
         "",
     ]
     by_repeat = {session["repeat"]: session["series"] for session in stats["sessions"]}
-    header = ["Turn", "Mean rate"] + [f"Repeat {repeat}" for repeat in range(1, repeats + 1)]
+    header = ["Turn", "Pooled rate"] + [f"Repeat {repeat}" for repeat in range(1, repeats + 1)]
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "---|" * len(header))
     for index in range(summary["turns"]):
-        cells = [str(index + 1), _rate(stats["mean_series"][index])]
+        cells = [str(index + 1), _rate(stats["pooled_series"][index])]
         for repeat in range(1, repeats + 1):
             series = by_repeat.get(repeat)
             cells.append(_rate(series[index]) if series is not None else "-")
@@ -86,7 +101,6 @@ def build_drift_report(summary: dict, spend: dict | None = None) -> str:
             run=summary["run"],
             turns=summary["turns"],
             repeats=summary["repeats"],
-            threshold=summary["slope_threshold"],
         )
     ]
     for style in sorted(summary["styles"]):

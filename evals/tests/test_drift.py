@@ -14,8 +14,10 @@ from drift import (
     cli,
     generate_turn,
     run_session,
+    score_sessions,
     session_script,
 )
+from linter import Linter, load_rules
 from runner.cli import load_prompts
 from runner.generate import GenerationError
 
@@ -316,11 +318,14 @@ def test_cli_without_sessions_and_without_generate_exits_2(project):
 
 def test_flat_series_gets_a_flat_verdict_and_exit_0(project, capsys):
     assert run_cli(project, FakeSessionRunner()) == 0
-    assert "alpha: slope 0.0, verdict flat (2/2 session(s))" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "alpha: slope 0.0, threshold 0.0 (derived), verdict flat (2/2 session(s))" in out
     summary = json.loads((project / "run" / "drift.json").read_text())
     stats = summary["styles"]["alpha"]
     assert stats["verdict"] == "flat"
-    assert stats["mean_series"] == [0.0, 0.0, 0.0]
+    assert stats["pooled_series"] == [0.0, 0.0, 0.0]
+    assert stats["threshold"] == 0.0
+    assert stats["threshold_source"] == "derived"
     assert stats["complete_sessions"] == 2
     assert summary["warnings"] == []
 
@@ -330,8 +335,11 @@ def test_growing_series_gets_a_growing_verdict_and_exit_1(project):
     summary = json.loads((project / "run" / "drift.json").read_text())
     stats = summary["styles"]["alpha"]
     # Four sentences per answer, turn - 1 contractions: rates 0, 25, 50.
-    assert stats["mean_series"] == [0.0, 25.0, 50.0]
+    assert stats["pooled_series"] == [0.0, 25.0, 50.0]
     assert stats["slope"] == 25.0
+    assert stats["threshold"] == 18.75
+    assert stats["threshold_source"] == "derived"
+    assert stats["null"] == {"permutations": 1000, "seed": 0, "quantile": 0.95, "threshold": 18.75}
     assert stats["verdict"] == "growing"
     rows = stats["turns"]
     assert {r["by_rule"].get("contraction", 0) for r in rows} == {0, 1, 2}
@@ -357,8 +365,80 @@ def test_report_md_holds_the_turn_table_and_verdict(project):
     run_cli(project, FakeSessionRunner())
     report = (project / "run" / "drift.md").read_text()
     assert "# Drift report" in report
-    assert "| Turn | Mean rate | Repeat 1 | Repeat 2 |" in report
+    assert "| Turn | Pooled rate | Repeat 1 | Repeat 2 |" in report
+    assert "- Slope threshold: 0.0 (the 0.95 quantile of 1000 shuffled slopes, seed 0)" in report
     assert "- Verdict: flat" in report
     assert "## Harness spend" in report
     assert "## Warnings" in report
     assert "- none" in report
+
+
+def score_answers(project, answers, turns=3, repeats=2):
+    """Score hand-built rows: answers maps (repeat, turn) to a text."""
+    rows = {
+        ("alpha", repeat, turn): {
+            "style": "alpha",
+            "repeat": repeat,
+            "turn": turn,
+            "prompt_id": "p",
+            "answer": answer,
+        }
+        for (repeat, turn), answer in answers.items()
+    }
+    linter = Linter(load_rules(project / "rules" / "alpha.rules.yaml"))
+    return score_sessions(rows=rows, linters={"alpha": linter}, turns=turns, repeats=repeats)
+
+
+def test_pooling_weights_the_turns_by_sentence_count(project):
+    # Turn 2 of repeat 1 has 1 sentence with 1 violation (rate 100),
+    # and turn 2 of repeat 2 has 4 clean sentences (rate 0). The pool
+    # is 1 violation over 5 sentences, not the mean of the rates.
+    result = score_answers(
+        project,
+        {
+            (1, 1): CLEAN,
+            (1, 2): "It doesn't work.",
+            (1, 3): CLEAN,
+            (2, 1): CLEAN,
+            (2, 2): CLEAN,
+            (2, 3): CLEAN,
+        },
+    )
+    stats = result.styles["alpha"]
+    assert stats["sessions"][0]["series"] == [0.0, 100.0, 0.0]
+    assert stats["pooled_series"] == [0.0, 20.0, 0.0]
+
+
+def test_a_zero_sentence_turn_pools_to_zero_with_a_warning(project):
+    result = score_answers(
+        project,
+        {
+            (1, 1): CLEAN,
+            (1, 2): "",
+            (1, 3): CLEAN,
+            (2, 1): CLEAN,
+            (2, 2): "",
+            (2, 3): CLEAN,
+        },
+    )
+    stats = result.styles["alpha"]
+    assert stats["pooled_series"] == [0.0, 0.0, 0.0]
+    assert stats["verdict"] == "flat"
+    assert sum("has no sentences" in warning for warning in result.warnings) == 2
+
+
+def test_threshold_flag_overrides_the_derived_threshold(project, capsys):
+    assert run_cli(project, FakeSessionRunner(answer_for=growing_answer)) == 1
+    idle = FakeSessionRunner()
+    assert run_cli(project, idle, "--slope-threshold", "30", generate=False) == 0
+    assert idle.calls == []
+    assert "threshold 30.0 (override)" in capsys.readouterr().out
+    summary = json.loads((project / "run" / "drift.json").read_text())
+    assert summary["slope_threshold"] == 30.0
+    stats = summary["styles"]["alpha"]
+    assert stats["threshold"] == 30.0
+    assert stats["threshold_source"] == "override"
+    assert stats["null"]["threshold"] == 18.75
+    assert stats["verdict"] == "flat"
+    report = (project / "run" / "drift.md").read_text()
+    assert "- Slope threshold: 30.0 (override; the null quantile is 18.75)" in report

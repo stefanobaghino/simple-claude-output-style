@@ -19,10 +19,11 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from itertools import combinations
-from math import ceil, prod
+from math import prod
 from statistics import StatisticsError, correlation
 
 from cost.analysis import task_type
+from runner.stats import nearest_rank
 from value.similarity import tokens
 
 from .judges import contest_key, parse_pick
@@ -163,11 +164,6 @@ def _fit_once(
     return strengths, False, notes
 
 
-def _nearest_rank(ordered: list[float], percentile: float) -> float:
-    rank = ceil(percentile / 100 * len(ordered))
-    return ordered[max(rank, 1) - 1]
-
-
 def _round3(value: float | None) -> float | None:
     return None if value is None else round(value, 3)
 
@@ -220,7 +216,7 @@ def fit_bradley_terry(
         for name in competitors:
             values = sorted(collected[name])
             if name != anchor and values:
-                intervals[name] = (_nearest_rank(values, 2.5), _nearest_rank(values, 97.5))
+                intervals[name] = (nearest_rank(values, 2.5), nearest_rank(values, 97.5))
     elif fitted_any and not anchored:
         warnings.append(
             f"the anchor {anchor!r} has no finite strength, so the strengths are "

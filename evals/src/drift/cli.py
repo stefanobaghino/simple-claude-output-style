@@ -154,9 +154,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     parser.add_argument(
         "--slope-threshold",
         type=float,
-        default=0.25,
-        help="the growing verdict starts above this slope, "
-        "in violations per 100 sentences per turn",
+        default=None,
+        help="override the derived per-style threshold, in violations "
+        "per 100 sentences per turn (default: the 0.95 quantile of a "
+        "per-style permutation null)",
     )
     parser.add_argument("--out", help="run directory (default: runs/<date>-drift)")
     args = parser.parse_args(argv)
@@ -233,7 +234,8 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             continue
         growing = growing or stats["verdict"] == "growing"
         print(
-            f"{style}: slope {stats['slope']}, verdict {stats['verdict']} "
+            f"{style}: slope {stats['slope']}, threshold {stats['threshold']} "
+            f"({stats['threshold_source']}), verdict {stats['verdict']} "
             f"({stats['complete_sessions']}/{args.repeats} session(s))"
         )
     return 0 if not warnings and not growing else 1

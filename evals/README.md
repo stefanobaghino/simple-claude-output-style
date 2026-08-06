@@ -284,9 +284,24 @@ session, with the style active: each turn resumes the session of the
 previous turn, so the context grows. The turns reuse 15 of the 20 pair
 prompts, and each repeat rotates the order, so a hard prompt does not
 always sit at the same turn position. The linter checks every turn
-with the rule set of the style. The verdict per style compares the
-slope of the mean rate series against a threshold: "growing" when the
-slope is above the threshold, else "flat". `--generate` runs the
+with the rule set of the style. The rate of a turn position pools
+the complete sessions: 100 times the violations at that position
+over the sentences at that position. Thus a short answer weighs by
+its sentence count and cannot dominate the series. The verdict per
+style compares the slope of the pooled series against a per-style
+threshold: "growing" when the slope is above the threshold, else
+"flat". The threshold comes from a permutation null: the turn order
+of each session shuffles 1000 times with a fixed seed, the pooled
+slope refits per shuffle, and the threshold is the 0.95 nearest-rank
+quantile of the shuffled slopes. A drift signal is thus a slope that
+the shuffled data almost never produces. The report states the
+quantile, the permutation count, and the seed per style.
+`--slope-threshold` replaces the derived threshold with one fixed
+value for every style, and the report then states both values. Few
+short sessions give a coarse null, and the quantile can then equal
+the largest possible slope, so the verdict needs enough complete
+sessions to be sensitive. The scoring is offline, so a rescore of an
+old run uses the derived threshold as well. `--generate` runs the
 missing sessions; an interrupted run restarts an incomplete session
 from turn 1. Session persistence stays on for these calls, so session
 files remain under `~/.claude` after a run. Without `--generate` the
@@ -410,7 +425,7 @@ runs/<YYYY-MM-DD>/
 runs/<YYYY-MM-DD>-drift/
   provenance.json   # like the pair runs, plus the session script per repeat
   sessions.jsonl    # one line per turn, with the session-id chain
-  drift.json        # rate series, slope, and verdict per style, machine-readable
+  drift.json        # pooled rate series, slope, derived threshold, and verdict per style
   drift.md          # the drift report for a human
 
 runs/<YYYY-MM-DD>-compare/

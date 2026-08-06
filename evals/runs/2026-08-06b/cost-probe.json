@@ -1,0 +1,84 @@
+{
+  "date": "2026-08-06T06:55:09+00:00",
+  "claude_version": "2.1.223 (Claude Code)",
+  "model_requested": "sonnet",
+  "probe_prompt": "Reply with the word OK.",
+  "flags": [
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--no-session-persistence",
+    "--max-turns",
+    "1",
+    "--disallowedTools",
+    "*",
+    "--exclude-dynamic-system-prompt-sections",
+    "--strict-mcp-config"
+  ],
+  "note": "Both probe arms load the plugin through --plugin-dir, unlike the unstyled arm of the runner. Thus the difference between a styled arm and the unstyled arm isolates the style block.",
+  "plugin": {
+    "dir": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin",
+    "name": "simple-output-styles"
+  },
+  "styles": {
+    "plain-language": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/plain-language.md",
+      "sha256": "d9acbffcfb85937603524c3defc7491f91e86f24fcc679ec1247313b80bcbc04"
+    },
+    "technical-simplified": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/technical-simplified.md",
+      "sha256": "69bf572f15b1b570bd8ace5e93960150ec5f0096f0b71b9f42f8833ccaa4f089"
+    }
+  },
+  "arms": [
+    {
+      "arm": "unstyled",
+      "output_style_active": "default",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 685,
+      "cache_read_input_tokens": 8162,
+      "total_input_tokens": 8849,
+      "output_tokens": 4
+    },
+    {
+      "arm": "plain-language",
+      "output_style_active": "simple-output-styles:plain-language",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 685,
+      "cache_read_input_tokens": 9622,
+      "total_input_tokens": 10309,
+      "output_tokens": 4
+    },
+    {
+      "arm": "technical-simplified",
+      "output_style_active": "simple-output-styles:technical-simplified",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 685,
+      "cache_read_input_tokens": 10150,
+      "total_input_tokens": 10837,
+      "output_tokens": 4
+    },
+    {
+      "arm": "unstyled-check",
+      "output_style_active": "default",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 8847,
+      "total_input_tokens": 8849,
+      "output_tokens": 4
+    }
+  ],
+  "unstyled_totals": [
+    8849,
+    8849
+  ],
+  "overhead": {
+    "plain-language": 1460,
+    "technical-simplified": 1988
+  },
+  "warnings": []
+}

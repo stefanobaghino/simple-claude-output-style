@@ -32,11 +32,16 @@ def _provenance(run_dir: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _run_probe(styles: list[str], model: str, plugin_dir: Path, run: Runner) -> dict:
+def _run_probe(styles: list[str], model: str, plugin_dir: Path, run: Runner, repeats: int) -> dict:
     try:
         with isolated_workdir("probe") as workdir:
             return probe_overhead(
-                styles=styles, model=model, plugin_dir=plugin_dir, workdir=workdir, run=run
+                styles=styles,
+                model=model,
+                plugin_dir=plugin_dir,
+                workdir=workdir,
+                run=run,
+                repeats=repeats,
             )
     except GenerationError as error:
         raise _fail(f"the probe failed: {error}") from error
@@ -75,7 +80,15 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     )
     parser.add_argument("--plugin-dir", default="../plugin", help="the plugin directory")
     parser.add_argument("--model", help="model for the probe (default: the model of the run)")
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=3,
+        help="probe calls per arm (with --probe)",
+    )
     args = parser.parse_args(argv)
+    if args.repeats < 1:
+        raise _fail("--repeats must be at least 1")
 
     run_dir = Path(args.run_dir)
     answers = load_answers(run_dir / "answers.jsonl")
@@ -90,7 +103,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         model = args.model or (provenance or {}).get("conditions", {}).get("model_requested")
         if not model:
             raise _fail(f"{run_dir}: no provenance.json with a model; pass --model")
-        probe = _run_probe(styles, model, Path(args.plugin_dir).resolve(), run)
+        probe = _run_probe(styles, model, Path(args.plugin_dir).resolve(), run, args.repeats)
         probe_path.write_text(json.dumps(probe, indent=2) + "\n", encoding="utf-8")
     elif probe_path.exists():
         probe = json.loads(probe_path.read_text(encoding="utf-8"))
@@ -115,7 +128,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         stats = ratios.per_style[style]
         measured = (overhead["per_style"] or {}).get(style)
         overhead_text = (
-            f"{measured['overhead_tokens']} input tokens" if measured else "not measured"
+            f"mean {measured['tokens']['mean']} input tokens, "
+            f"weighted mean {measured['weighted']['mean']}"
+            if measured
+            else "not measured"
         )
         print(f"{style}: ratio of totals {stats['ratio_of_totals']}, overhead {overhead_text}")
     return 0 if not warnings else 1

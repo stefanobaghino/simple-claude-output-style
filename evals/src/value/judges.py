@@ -47,6 +47,29 @@ from runner.provenance import claude_version
 
 CHECKS = ("comprehension", "paraphrase", "roundtrip")
 
+JUDGE_MODEL_PINS = {
+    "opus": "claude-opus-5",
+    "haiku": "claude-haiku-4-5-20251001",
+}
+"""The exact model ID that each judge alias must resolve to.
+
+Every live judge call checks the resolved ID of its init event
+against this table. An alias outside the table must resolve to
+itself, so an exact ID passes and an unpinned alias fails loudly.
+A pin change opens a new comparability era for the judged passes,
+like WORKDIR_MODE does for the generation calls.
+"""
+
+
+class JudgePinError(GenerationError):
+    """The resolved judge model differs from the pinned model.
+
+    The mismatch is deterministic, so the caller must not retry the
+    call. The subclass keeps the GenerationError handler of every
+    CLI intact, and the CLI exits with code 2.
+    """
+
+
 COMPREHENSION_DESIGNS = (None, "shared-facts-v2", "balanced-facts-v3")
 """Every comprehension design, oldest first.
 
@@ -325,7 +348,8 @@ class JudgeSession:
     rows. The subprocess runs outside the lock. A call that raises
     a GenerationError runs once more before the error propagates,
     because one transient failure must not abort a whole pass; the
-    retry becomes a warning.
+    retry becomes a warning. A pin mismatch is deterministic and
+    never retries.
     """
 
     rows: dict[str, dict]
@@ -355,6 +379,8 @@ class JudgeSession:
                     return self.rows[key]
         try:
             init, result, wall_ms = self._attempt(key, model, prompt)
+        except JudgePinError:
+            raise
         except GenerationError as error:
             init, result, wall_ms = self._attempt(key, model, prompt)
             self.warnings.append(f"{key}: the first call failed and the retry succeeded: {error}")
@@ -399,6 +425,13 @@ class JudgeSession:
         if result.get("is_error"):
             raise GenerationError(
                 f"{key}: claude reported an error: {str(result.get('result', ''))[:500]}"
+            )
+        expected = JUDGE_MODEL_PINS.get(model, model)
+        resolved = str(init.get("model", ""))
+        if resolved != expected:
+            raise JudgePinError(
+                f"{key}: the judge model {model!r} must resolve to {expected!r}, "
+                f"but the CLI resolved it to {resolved!r}"
             )
         return init, result, wall_ms
 

@@ -26,6 +26,7 @@ def write_run(
     strength: float = 2.0,
     net: int = 4,
     rank_model: str = "opus",
+    rank_resolved: str | None = None,
     style_sha: str = "s" * 8,
     claude_version: str = "2.0.0 (Claude Code)",
     workdir: str | None = "temp",
@@ -82,7 +83,7 @@ def write_run(
             },
         },
         "rank": {
-            "judge": {"model": rank_model},
+            "judge": {"model": rank_model, "model_resolved": rank_resolved},
             "design": "clarity-v1",
             "bradley_terry": {
                 "fitted": True,
@@ -292,6 +293,17 @@ def test_a_rank_judge_mismatch_warns(tmp_path):
     assert code == 1
     assert summary["warnings"] == [
         "condition mismatch on rank judge model: run-a opus, run-b sonnet",
+    ]
+
+
+def test_a_resolved_judge_model_mismatch_warns(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a", rank_resolved="claude-opus-5")
+    write_run(runs, "run-b", rank_resolved="claude-opus-6")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        "condition mismatch on rank judge model_resolved: run-a claude-opus-5, run-b claude-opus-6",
     ]
 
 

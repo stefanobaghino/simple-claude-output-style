@@ -207,7 +207,10 @@ outcomes, and the report states the replicate
 agreement next to a buried-fact rate per arm (a "NOT IN TEXT" reply
 to a shared fact). Every judge call sees one bare text without a
 style name or an arm label, and the judge models must differ from
-the writer model of the run. `--judge` runs the live calls and
+the writer model of the run. The harness pins each judge alias to
+one exact model ID. A live judge call that resolves to a different
+ID stops the pass, without a retry, because the mismatch is not
+transient. `--judge` runs the live calls and
 appends the raw outputs to `value-raw.jsonl`; an interrupted judge
 run resumes when the same invocation runs again. A judge call that
 fails runs once more, and the retry becomes a warning, because one
@@ -236,7 +239,9 @@ A styled fact that the unstyled answer does not state counts as an
 addition, reported per pair, because material that only the rewrite
 states is otherwise invisible. No judge call sees both answers of a
 pair: the extracted items travel between the calls, never the source
-text. The judge model must differ from the writer model of the run. `--judge` runs the live calls and appends the raw
+text. The judge model must differ from the writer model of the
+run, and the judge-model pin applies here as well. `--judge` runs
+the live calls and appends the raw
 outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
 the same invocation runs again. A failed judge call retries once
 here as well, with the same warning. The judge calls run several at a
@@ -269,7 +274,8 @@ competitor with zero wins or zero losses has no finite strength. The report also
 states the position bias of the judge, the matchups per task type,
 and the length confound: the correlation between the length ratio
 of a contest and the points of the longer text. The judge model
-must differ from the writer model of the run. `--judge` runs the
+must differ from the writer model of the run, and the judge-model
+pin applies here as well. `--judge` runs the
 live calls and appends the raw outputs to `rank-raw.jsonl`; an
 interrupted judge run resumes when the same invocation runs again.
 A failed judge call retries once here as well, with the same
@@ -323,13 +329,33 @@ wins against the unstyled competitor. The unstyled anchor gets no
 section of its own, because its strength is 1.0 by construction. The comparison is offline and makes no
 judge calls. The runs must share their conditions: the tool checks
 the prompt-set hash, the style and rule hashes, the writer model,
-the Claude CLI version, the workdir mode, and the judge parameters,
-and a mismatch
+the Claude CLI version, the workdir mode, the judge parameters,
+and the resolved judge models, and a mismatch
 becomes a warning, because the reader must see how far apart the
 conditions are. A missing artifact drops the axes of that artifact
 for that run, and n states the run count per axis. Exit codes: 0
 when no warnings exist, 1 when warnings exist, 2 when the
 comparison cannot run.
+
+### Human spot check
+
+The judges are models, so the verdicts need a human anchor. Run
+this protocol before you accept a candidate style, on the
+confirmation run of that style:
+
+1. Sort the contest keys of `rank-raw.jsonl` and draw 12 contests
+   with seed 0 (for example, `random.Random(0).sample(keys, 12)`).
+2. Read the two answers of each contest without the style names.
+3. Record a winner or a tie per contest, before you look at the
+   judge verdicts.
+4. Compute the agreement rate: the contests where your record
+   agrees with the judge outcome, divided by 12.
+5. Write the picks and the agreement rate to `spot-check.md` in
+   the run directory, and link that file in the acceptance PR.
+
+When the agreement rate is below 0.7, do not accept the style, and
+open an issue that lists the disagreements. The protocol is manual:
+no tool draws the sample or computes the rate.
 
 ### Campaign overlap
 
@@ -421,6 +447,7 @@ runs/<YYYY-MM-DD>/
   rank-raw.jsonl    # judge provenance plus one line per raw judge call
   rank.json         # matchups, win matrix, and strengths, machine-readable
   rank.md           # the clarity-ranking report for a human
+  spot-check.md     # the human spot-check record and the agreement rate (manual)
 
 runs/<YYYY-MM-DD>-drift/
   provenance.json   # like the pair runs, plus the session script per repeat

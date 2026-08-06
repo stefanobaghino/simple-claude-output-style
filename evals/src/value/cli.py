@@ -71,6 +71,26 @@ def load_raw(path: Path) -> tuple[dict | None, dict[str, dict]]:
     return meta, rows
 
 
+def resolved_models(rows: dict[str, dict]) -> dict[str, object]:
+    """The resolved model IDs of the stored call rows, per requested model.
+
+    The value is one string when the rows agree and a sorted list when
+    the rows differ. A row without a resolved ID contributes nothing,
+    so a run from before the model_resolved field yields an empty
+    mapping.
+    """
+    by_request: dict[str, set[str]] = {}
+    for row in rows.values():
+        requested = row.get("model_requested")
+        resolved = row.get("model_resolved")
+        if requested and resolved:
+            by_request.setdefault(requested, set()).add(resolved)
+    return {
+        requested: min(values) if len(values) == 1 else sorted(values)
+        for requested, values in by_request.items()
+    }
+
+
 def answer_index(answers: list[dict]) -> dict[tuple[str, str | None], dict]:
     return {
         (answer["prompt_id"], answer.get("style")): {
@@ -291,8 +311,14 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         replicates=meta.get("replicates", 1),
     )
     warnings = pair_warnings + judge_warnings + result.warnings
+    resolved = resolved_models(rows)
     summary = build_value_summary(
-        run_name=run_dir.name, meta=meta, pairs=pairs, checks=result.checks, warnings=warnings
+        run_name=run_dir.name,
+        meta=meta,
+        pairs=pairs,
+        checks=result.checks,
+        warnings=warnings,
+        models_resolved={role: resolved.get(alias) for role, alias in meta["models"].items()},
     )
     (run_dir / "value.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     timing = timing_summary(rows.values())

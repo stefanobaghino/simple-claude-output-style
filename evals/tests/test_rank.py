@@ -36,12 +36,12 @@ def arm(text):
     return {"text": text, "sha256": sha(text)}
 
 
-def stream(result_text, output_style="default"):
+def stream(result_text, output_style="default", model="claude-opus-5"):
     init = {
         "type": "system",
         "subtype": "init",
         "output_style": output_style,
-        "model": "claude-opus-5",
+        "model": model,
     }
     result = {
         "type": "result",
@@ -378,6 +378,7 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert run_cli(project, "--judge") == 0
     summary = json.loads((project / "run" / "rank.json").read_text())
     assert summary["design"] == "clarity-v1"
+    assert summary["judge"]["model_resolved"] == "claude-opus-5"
     assert summary["competitors"] == ["alpha", "beta", "unstyled"]
     assert summary["matchups"] == [
         {
@@ -574,6 +575,21 @@ def test_cli_judge_model_must_differ_from_the_writer(project):
     with pytest.raises(SystemExit) as error:
         run_cli(project, "--judge", "--model", "sonnet")
     assert error.value.code == 2
+
+
+def test_cli_a_pin_mismatch_exits_2_without_a_retry(project):
+    class WrongModel(FakeRankRunner):
+        def __call__(self, argv, cwd):
+            with self.lock:
+                self.calls.append(argv)
+                prompt = argv[argv.index("-p") + 1]
+                return stream(self.reply(prompt), model="claude-opus-4-1")
+
+    runner = WrongModel()
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge", "--parallel", "1", run=runner)
+    assert error.value.code == 2
+    assert len(runner.calls) == 1
 
 
 def test_cli_needs_gate_data(project):

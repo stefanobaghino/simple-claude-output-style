@@ -346,6 +346,7 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert run_cli(project, "--judge") == 0
     summary = json.loads((project / "run" / "loss.json").read_text())
     assert summary["pairs"] == {"alpha": ["explanation-01"]}
+    assert summary["judge"]["model_resolved"] == "claude-opus-5"
     completeness = summary["checks"]["completeness"]["per_style"]["alpha"]
     assert completeness["median"] == 0.5
     assert completeness["additions_median"] == 1

@@ -17,6 +17,7 @@ from runner.provenance import sha256_of
 from value import cli, extract_json, judge_argv, score_checks, select_pairs
 from value.analysis import shared_facts
 from value.judges import (
+    JudgePinError,
     JudgeSession,
     TaskPool,
     parse_bools,
@@ -31,17 +32,21 @@ STYLED_TEXT = "The quick brown fox jumps."
 UNSTYLED_TEXT = "The slow green turtle crawls."
 BETA_TEXT = "The big red bear sleeps."
 
+# Hardcoded on purpose, apart from JUDGE_MODEL_PINS: a silent pin
+# change must break these tests.
+RESOLVED = {"haiku": "claude-haiku-4-5-20251001", "opus": "claude-opus-5"}
+
 
 def sha(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def stream(result_text, output_style="default"):
+def stream(result_text, output_style="default", model="claude-haiku-4-5-20251001"):
     init = {
         "type": "system",
         "subtype": "init",
         "output_style": output_style,
-        "model": "claude-haiku-4-5",
+        "model": model,
     }
     result = {
         "type": "result",
@@ -78,7 +83,8 @@ class FakeJudgeRunner:
         with self.lock:
             self.calls.append(argv)
             prompt = argv[argv.index("-p") + 1]
-            return stream(self.reply(prompt))
+            model = argv[argv.index("--model") + 1]
+            return stream(self.reply(prompt), model=RESOLVED[model])
 
     @staticmethod
     def _numbered_count(prompt):
@@ -594,7 +600,7 @@ def test_structured_calls_retry_once(tmp_path):
     outputs = iter(["garbage", "[true, false]"])
 
     def run(argv, cwd):
-        return stream(next(outputs))
+        return stream(next(outputs), model="claude-opus-5")
 
     session = JudgeSession(rows={}, sink=lambda row: None, workdir=tmp_path, run=run)
     value = session.structured(
@@ -618,7 +624,7 @@ def test_a_call_retries_a_transient_failure_once(tmp_path):
         attempts.append(argv)
         if len(attempts) == 1:
             raise GenerationError("claude exited with code 1: transient")
-        return stream("[true, false]")
+        return stream("[true, false]", model="claude-opus-5")
 
     session = JudgeSession(rows={}, sink=lambda row: None, workdir=tmp_path, run=run)
     row = session.call(
@@ -661,6 +667,57 @@ def test_a_second_call_failure_propagates(tmp_path):
         )
     assert len(attempts) == 2
     assert session.rows == {}
+
+
+def test_a_pin_mismatch_raises_without_a_retry(tmp_path):
+    attempts = []
+
+    def run(argv, cwd):
+        attempts.append(argv)
+        return stream("[true]", model="claude-opus-4-1")
+
+    session = JudgeSession(rows={}, sink=lambda row: None, workdir=tmp_path, run=run)
+    with pytest.raises(JudgePinError):
+        session.call(
+            key="comprehension:grades:S",
+            check="comprehension",
+            role="grades",
+            model="opus",
+            prompt="Grade the quiz answers below.",
+            prompt_id="p-01",
+            answer_sha256="S",
+        )
+    assert len(attempts) == 1
+    assert session.rows == {}
+
+
+def test_an_exact_id_passes_and_an_unpinned_alias_fails(tmp_path):
+    def run(argv, cwd):
+        model = argv[argv.index("--model") + 1]
+        resolved = "claude-sonnet-5" if model == "sonnet" else model
+        return stream("[true]", model=resolved)
+
+    session = JudgeSession(rows={}, sink=lambda row: None, workdir=tmp_path, run=run)
+    row = session.call(
+        key="comprehension:grades:S",
+        check="comprehension",
+        role="grades",
+        model="claude-opus-5",
+        prompt="Grade the quiz answers below.",
+        prompt_id="p-01",
+        answer_sha256="S",
+    )
+    assert row["model_resolved"] == "claude-opus-5"
+    with pytest.raises(JudgePinError):
+        session.call(
+            key="comprehension:grades:U",
+            check="comprehension",
+            role="grades",
+            model="sonnet",
+            prompt="Grade the quiz answers below.",
+            prompt_id="p-01",
+            answer_sha256="U",
+        )
 
 
 def test_the_pool_runs_every_task():
@@ -792,11 +849,12 @@ def test_the_comprehension_grain_is_smaller_than_a_pair(tmp_path):
     # before the next pair started.
     def run(argv, cwd):
         prompt = argv[2]
+        model = RESOLVED[argv[argv.index("--model") + 1]]
         if prompt.startswith("You write a quiz"):
-            return stream('["q1", "q2", "q3"]')
+            return stream('["q1", "q2", "q3"]', model=model)
         if prompt.startswith("Answer the questions"):
-            return stream('["a1", "a2", "a3"]')
-        return stream("[true, true, true]")
+            return stream('["a1", "a2", "a3"]', model=model)
+        return stream("[true, true, true]", model=model)
 
     facts = {"unstyled": ["f1", "f2", "f3"], "styled": []}
     keys = []
@@ -928,6 +986,10 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert summary["pairs"] == {"alpha": ["explanation-01"]}
     assert summary["judges"]["replicates"] == 3
     assert summary["judges"]["comprehension_design"] == "balanced-facts-v3"
+    assert summary["judges"]["models_resolved"] == {
+        "reader": "claude-haiku-4-5-20251001",
+        "grader": "claude-opus-5",
+    }
     for check in ("comprehension", "paraphrase", "roundtrip"):
         stats = summary["checks"][check]["per_style"]["alpha"]
         assert (stats["wins"], stats["losses"], stats["ties"]) == (1, 0, 0)
@@ -1262,6 +1324,21 @@ def test_cli_judge_model_must_differ_from_the_writer(project):
     with pytest.raises(SystemExit) as error:
         run_cli(project, "--judge", "--model-reader", "sonnet")
     assert error.value.code == 2
+
+
+def test_cli_a_pin_mismatch_exits_2_without_a_retry(project):
+    class WrongModel(FakeJudgeRunner):
+        def __call__(self, argv, cwd):
+            with self.lock:
+                self.calls.append(argv)
+                prompt = argv[argv.index("-p") + 1]
+                return stream(self.reply(prompt), model="claude-haiku-4-0")
+
+    runner = WrongModel()
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge", "--parallel", "1", run=runner)
+    assert error.value.code == 2
+    assert len(runner.calls) == 1
 
 
 def test_cli_rejects_an_unknown_check(project):

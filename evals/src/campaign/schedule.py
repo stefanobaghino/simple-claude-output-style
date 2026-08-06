@@ -1,10 +1,12 @@
-"""Run stages with dependencies under one worker budget.
+"""Run stages with dependencies, with a retry per stage.
 
 A stage wraps one tool invocation. The scheduler launches a stage
-when its dependencies are met and the budget holds enough free
-workers, and the worker assignment stays fixed for the life of the
-stage. Thus the live worker total never rises above the budget, by
-construction, and the peak is a measured number, not a hope.
+when its dependencies are met. The scheduler does not meter the
+workers: the worker gate in budget.py bounds the live calls, so a
+launched stage waits at the gate, not in the scheduler. The threads
+value of a stage is the pool size that the action passes to its
+tool, and the gate decides how many of those threads run a call at
+any moment.
 
 Two dependency kinds exist. A "needs" dependency is a data
 dependency: the stage consumes the output of the other stage, so the
@@ -49,12 +51,13 @@ TERMINAL = (DONE, FAILED, SKIPPED, ABORTED)
 
 @dataclass(frozen=True)
 class StageSpec:
-    """One stage: an action plus its dependencies and its worker needs.
+    """One stage: an action plus its dependencies and its pool size.
 
-    The action receives the assigned worker count and returns an exit
-    code. The cap is the most workers the stage can use, and the
-    floor is the fewest free workers at which a launch makes sense;
-    the assignment at launch is the free count, clamped to the cap.
+    The action receives the threads value and returns an exit code.
+    The priority orders the launches of the ready stages; the same
+    priority also orders the calls at the worker gate, but the gate
+    receives it through the lease of the stage, not through the
+    scheduler.
     """
 
     key: StageKey
@@ -62,8 +65,7 @@ class StageSpec:
     needs: tuple[StageKey, ...] = ()
     after: tuple[StageKey, ...] = ()
     priority: int = 0
-    cap: int = 1
-    floor: int = 1
+    threads: int = 1
 
 
 @dataclass
@@ -71,22 +73,20 @@ class StageResult:
     state: str = PENDING
     exit_code: int | None = None
     attempts: int = 0
-    workers: int = 0
     wall: float = 0.0
     detail: str = ""
 
 
-StartHook = Callable[[StageSpec, int], None]
+StartHook = Callable[[StageSpec], None]
 EndHook = Callable[[StageSpec, StageResult], None]
 
 
 class Scheduler:
-    """Runs a fixed stage set to completion under the budget."""
+    """Runs a fixed stage set to completion."""
 
     def __init__(
         self,
         stages: list[StageSpec],
-        budget: int,
         on_start: StartHook | None = None,
         on_end: EndHook | None = None,
     ) -> None:
@@ -98,15 +98,10 @@ class Scheduler:
             for dep in (*stage.needs, *stage.after):
                 if dep not in known:
                     raise ValueError(f"{stage.key}: unknown dependency {dep}")
-            if not 1 <= stage.floor <= stage.cap:
-                raise ValueError(f"{stage.key}: the floor must be within [1, cap]")
-            if stage.floor > budget:
-                raise ValueError(f"{stage.key}: the floor is above the budget {budget}")
+            if stage.threads < 1:
+                raise ValueError(f"{stage.key}: threads must be 1 or more")
         self._stages = {stage.key: stage for stage in stages}
         self._results = {stage.key: StageResult() for stage in stages}
-        self._budget = budget
-        self._free = budget
-        self.peak = 0
         self._cond = threading.Condition()
         self._aborted = False
         self._on_start = on_start
@@ -167,30 +162,23 @@ class Scheduler:
         ]
         ready.sort(key=lambda stage: (stage.priority, stage.key[1]))
         for stage in ready:
-            if self._free < stage.floor:
-                continue
-            workers = min(stage.cap, self._free)
-            self._free -= workers
-            self.peak = max(self.peak, self._budget - self._free)
-            result = self._results[stage.key]
-            result.state = RUNNING
-            result.workers = workers
+            self._results[stage.key].state = RUNNING
             thread = threading.Thread(
-                target=self._run_stage, args=(stage, workers), name=f"stage-{stage.key}"
+                target=self._run_stage, args=(stage,), name=f"stage-{stage.key}"
             )
             threads.append(thread)
             thread.start()
 
-    def _run_stage(self, stage: StageSpec, workers: int) -> None:
+    def _run_stage(self, stage: StageSpec) -> None:
         if self._on_start is not None:
-            self._on_start(stage, workers)
+            self._on_start(stage)
         result = self._results[stage.key]
         start = time.monotonic()
         state = FAILED
         code: int | None = None
         for attempt in (1, 2):
             result.attempts = attempt
-            code, detail = self._attempt(stage, workers)
+            code, detail = self._attempt(stage)
             if code is not None and code <= 1:
                 state = DONE
                 result.detail = ""
@@ -203,14 +191,13 @@ class Scheduler:
         result.exit_code = code
         with self._cond:
             result.state = state
-            self._free += workers
             self._cond.notify_all()
         if self._on_end is not None:
             self._on_end(stage, result)
 
-    def _attempt(self, stage: StageSpec, workers: int) -> tuple[int | None, str]:
+    def _attempt(self, stage: StageSpec) -> tuple[int | None, str]:
         try:
-            return stage.action(workers), ""
+            return stage.action(stage.threads), ""
         except SystemExit as error:
             if isinstance(error.code, int):
                 return error.code, ""

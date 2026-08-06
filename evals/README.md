@@ -35,8 +35,8 @@ unstyled answer as a competitor, and fits one Bradley-Terry
 strength per competitor. The tenth is a campaign driver. It runs
 several full runs under one schedule: the pair stages run one at a
 time, the judge stages overlap, the value pass splits around the
-loss pass, and every stage pool takes its size from one worker
-budget. See the tracking issue in this repository for
+loss pass, and one worker gate meters every CLI call against one
+worker budget. See the tracking issue in this repository for
 the other planned components.
 
 ## Rule files
@@ -292,7 +292,15 @@ A campaign is several runs under identical conditions, produced for
 the cross-run comparison. The campaign driver produces one with one
 command: `style-campaign` runs N full runs (3 by default), and
 `--budget` sets the total worker count across every stage (32 by
-default). The driver retries a stopped stage once, prints the wall
+default). One worker gate meters every CLI call of the campaign:
+a call takes a permit before its subprocess starts and returns the
+permit when the subprocess ends. Thus the live call total never
+rises above the budget, and a stage that runs alone can use the
+whole budget, because an idle permit is free for any live stage.
+When calls compete, the permit goes to the stage that is earlier
+in the schedule, so the critical path stays fast. The workers
+column of the final table states the observed peak of live calls
+per stage. The driver retries a stopped stage once, prints the wall
 clock per stage at the end, and exits 0 only when every stage is
 clean. An interrupted campaign resumes through `--dirs`, with the
 run directories of the interrupted campaign. The first value

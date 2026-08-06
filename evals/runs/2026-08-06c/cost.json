@@ -1,0 +1,116 @@
+{
+  "date": "2026-08-06T06:55:54+00:00",
+  "run": "2026-08-06c",
+  "answer_ratio": {
+    "per_style": {
+      "plain-language": {
+        "pairs": 20,
+        "styled_output_tokens_total": 10019,
+        "unstyled_output_tokens_total": 11498,
+        "ratio_of_totals": 0.87,
+        "distribution": {
+          "n": 20,
+          "min": 0.59,
+          "p25": 0.81,
+          "median": 0.9,
+          "p75": 1.12,
+          "max": 1.32,
+          "mean": 0.94
+        },
+        "by_task_type": {
+          "code-review": {
+            "n": 5,
+            "min": 0.59,
+            "median": 0.88,
+            "mean": 0.87,
+            "max": 1.03
+          },
+          "debugging": {
+            "n": 5,
+            "min": 0.73,
+            "median": 0.91,
+            "mean": 0.93,
+            "max": 1.32
+          },
+          "explanation": {
+            "n": 5,
+            "min": 0.7,
+            "median": 0.84,
+            "mean": 0.88,
+            "max": 1.22
+          },
+          "summarization": {
+            "n": 5,
+            "min": 0.88,
+            "median": 1.12,
+            "mean": 1.1,
+            "max": 1.19
+          }
+        }
+      },
+      "technical-simplified": {
+        "pairs": 20,
+        "styled_output_tokens_total": 8783,
+        "unstyled_output_tokens_total": 11498,
+        "ratio_of_totals": 0.76,
+        "distribution": {
+          "n": 20,
+          "min": 0.5,
+          "p25": 0.62,
+          "median": 0.86,
+          "p75": 1.0,
+          "max": 1.49,
+          "mean": 0.83
+        },
+        "by_task_type": {
+          "code-review": {
+            "n": 5,
+            "min": 0.5,
+            "median": 0.84,
+            "mean": 0.9,
+            "max": 1.49
+          },
+          "debugging": {
+            "n": 5,
+            "min": 0.55,
+            "median": 0.77,
+            "mean": 0.84,
+            "max": 1.16
+          },
+          "explanation": {
+            "n": 5,
+            "min": 0.5,
+            "median": 0.62,
+            "mean": 0.63,
+            "max": 0.87
+          },
+          "summarization": {
+            "n": 5,
+            "min": 0.89,
+            "median": 0.99,
+            "mean": 0.97,
+            "max": 1.02
+          }
+        }
+      }
+    }
+  },
+  "input_overhead": {
+    "measured": true,
+    "per_style": {
+      "plain-language": {
+        "overhead_tokens": 1460,
+        "styled_input_total": 10303,
+        "unstyled_input_total": 8843
+      },
+      "technical-simplified": {
+        "overhead_tokens": 1988,
+        "styled_input_total": 10831,
+        "unstyled_input_total": 8843
+      }
+    },
+    "probe_date": "2026-08-06T06:55:54+00:00",
+    "probe_model": "sonnet"
+  },
+  "warnings": []
+}

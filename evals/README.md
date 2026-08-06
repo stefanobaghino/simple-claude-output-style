@@ -283,8 +283,10 @@ style and axis, the report states one value per run and the spread:
 minimum, mean, maximum, and the sample standard deviation. The axes
 are the headline scalars of the other reports: the styled violation
 rate and the gated pairs passed, the output-token ratio, the net
-wins (wins minus losses) per reader-value check, and the fact and
-hedge survival medians. The comparison is offline and makes no
+wins (wins minus losses) per reader-value check, the fact and
+hedge survival medians, the Bradley-Terry strength, and the net
+wins against the unstyled competitor. The unstyled anchor gets no
+section of its own, because its strength is 1.0 by construction. The comparison is offline and makes no
 judge calls. The runs must share their conditions: the tool checks
 the prompt-set hash, the style and rule hashes, the writer model,
 the Claude CLI version, the workdir mode, and the judge parameters,

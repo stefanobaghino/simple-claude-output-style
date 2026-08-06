@@ -24,9 +24,11 @@ AXIS_ORDER = (
     "value: net wins (roundtrip)",
     "loss: fact survival median",
     "loss: hedge survival median",
+    "rank: Bradley-Terry strength",
+    "rank: net wins vs unstyled",
 )
 
-ARTIFACTS = ("fidelity", "cost", "value", "loss")
+ARTIFACTS = ("fidelity", "cost", "value", "loss", "rank")
 
 VALUE_JUDGE_KEYS = (
     "models",
@@ -72,6 +74,10 @@ def _condition_entries(run: dict) -> dict[str, object]:
     loss = run["loss"]
     if loss is not None:
         entries["loss judge model"] = loss.get("judge", {}).get("model")
+    rank = run["rank"]
+    if rank is not None:
+        entries["rank judge model"] = rank.get("judge", {}).get("model")
+        entries["rank design"] = rank.get("design")
     return entries
 
 
@@ -136,6 +142,21 @@ def _axis_values(run: dict, style: str) -> dict[str, float | int | None]:
         hedging = checks.get("hedging", {}).get("per_style", {}).get(style)
         if hedging is not None:
             values["loss: hedge survival median"] = hedging.get("median")
+    rank = run["rank"]
+    if rank is not None:
+        strengths = rank.get("bradley_terry", {}).get("strengths") or {}
+        info = strengths.get(style)
+        if info is not None:
+            values["rank: Bradley-Terry strength"] = info.get("strength")
+        for matchup in rank.get("matchups") or []:
+            if {matchup.get("a"), matchup.get("b")} != {style, "unstyled"}:
+                continue
+            # The stored net is wins_a - wins_b, so the sign flips
+            # when the style sits on the b side of the matchup.
+            net = matchup.get("net")
+            if matchup.get("b") == style and net is not None:
+                net = -net
+            values["rank: net wins vs unstyled"] = net
     return values
 
 

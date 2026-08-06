@@ -1,0 +1,233 @@
+{
+  "date": "2026-08-05T21:09:24+00:00",
+  "run": "2026-08-05d",
+  "judge": {
+    "model": "opus",
+    "judged_date": "2026-08-05T21:07:59+00:00",
+    "claude_version": "2.1.222 (Claude Code)"
+  },
+  "design": "clarity-v1",
+  "competitors": [
+    "plain-language",
+    "technical-simplified",
+    "unstyled"
+  ],
+  "matchups": [
+    {
+      "a": "plain-language",
+      "b": "technical-simplified",
+      "contests": 17,
+      "wins_a": 10,
+      "wins_b": 4,
+      "splits": 3,
+      "unscored": 0,
+      "net": 6
+    },
+    {
+      "a": "plain-language",
+      "b": "unstyled",
+      "contests": 20,
+      "wins_a": 13,
+      "wins_b": 3,
+      "splits": 4,
+      "unscored": 0,
+      "net": 10
+    },
+    {
+      "a": "technical-simplified",
+      "b": "unstyled",
+      "contests": 17,
+      "wins_a": 3,
+      "wins_b": 7,
+      "splits": 7,
+      "unscored": 0,
+      "net": -4
+    }
+  ],
+  "win_matrix": {
+    "plain-language": {
+      "technical-simplified": 11.5,
+      "unstyled": 15.0
+    },
+    "technical-simplified": {
+      "plain-language": 5.5,
+      "unstyled": 6.5
+    },
+    "unstyled": {
+      "plain-language": 5.0,
+      "technical-simplified": 10.5
+    }
+  },
+  "position_bias": {
+    "first_pick_rate": 0.37,
+    "picks": 108,
+    "split_rate": 0.259,
+    "contests": 54
+  },
+  "bradley_terry": {
+    "fitted": true,
+    "anchored_on": "unstyled",
+    "strengths": {
+      "plain-language": {
+        "strength": 2.29,
+        "ci_low": 1.213,
+        "ci_high": 5.226
+      },
+      "technical-simplified": {
+        "strength": 0.805,
+        "ci_low": 0.409,
+        "ci_high": 1.603
+      },
+      "unstyled": {
+        "strength": 1.0,
+        "ci_low": null,
+        "ci_high": null
+      }
+    },
+    "bootstrap": {
+      "resamples": 1000,
+      "seed": 0
+    }
+  },
+  "by_task_type": {
+    "code-review": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 5,
+        "wins_a": 2,
+        "wins_b": 2,
+        "splits": 1,
+        "unscored": 0,
+        "net": 0
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 5,
+        "wins_b": 0,
+        "splits": 0,
+        "unscored": 0,
+        "net": 5
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 1,
+        "wins_b": 2,
+        "splits": 2,
+        "unscored": 0,
+        "net": -1
+      }
+    ],
+    "debugging": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 5,
+        "wins_a": 5,
+        "wins_b": 0,
+        "splits": 0,
+        "unscored": 0,
+        "net": 5
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 3,
+        "wins_b": 0,
+        "splits": 2,
+        "unscored": 0,
+        "net": 3
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 2,
+        "wins_b": 1,
+        "splits": 2,
+        "unscored": 0,
+        "net": 1
+      }
+    ],
+    "explanation": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 4,
+        "wins_a": 3,
+        "wins_b": 1,
+        "splits": 0,
+        "unscored": 0,
+        "net": 2
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 2,
+        "wins_b": 3,
+        "splits": 0,
+        "unscored": 0,
+        "net": -1
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 4,
+        "wins_a": 0,
+        "wins_b": 4,
+        "splits": 0,
+        "unscored": 0,
+        "net": -4
+      }
+    ],
+    "summarization": [
+      {
+        "a": "plain-language",
+        "b": "technical-simplified",
+        "contests": 3,
+        "wins_a": 0,
+        "wins_b": 1,
+        "splits": 2,
+        "unscored": 0,
+        "net": -1
+      },
+      {
+        "a": "plain-language",
+        "b": "unstyled",
+        "contests": 5,
+        "wins_a": 3,
+        "wins_b": 0,
+        "splits": 2,
+        "unscored": 0,
+        "net": 3
+      },
+      {
+        "a": "technical-simplified",
+        "b": "unstyled",
+        "contests": 3,
+        "wins_a": 0,
+        "wins_b": 0,
+        "splits": 3,
+        "unscored": 0,
+        "net": 0
+      }
+    ]
+  },
+  "length_confound": {
+    "n": 54,
+    "pearson": 0.432,
+    "spearman": 0.409,
+    "longer_win_rate": 0.574
+  },
+  "warnings": [
+    "technical-simplified/summarization-01: the pair failed the gate, excluded",
+    "technical-simplified/summarization-02: the pair failed the gate, excluded",
+    "technical-simplified/explanation-01: the pair failed the gate, excluded"
+  ]
+}

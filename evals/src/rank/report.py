@@ -28,12 +28,20 @@ LENGTH_NOTE = (
 )
 
 
-def build_rank_summary(*, run_name: str, meta: dict, result, warnings: list[str]) -> dict:
+def build_rank_summary(
+    *,
+    run_name: str,
+    meta: dict,
+    result,
+    warnings: list[str],
+    model_resolved: object = None,
+) -> dict:
     return {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "run": run_name,
         "judge": {
             "model": meta["model"],
+            "model_resolved": model_resolved,
             "judged_date": meta["date"],
             "claude_version": meta.get("claude_version"),
         },

@@ -32,6 +32,7 @@ ARTIFACTS = ("fidelity", "cost", "value", "loss", "rank")
 
 VALUE_JUDGE_KEYS = (
     "models",
+    "models_resolved",
     "questions",
     "paraphrases",
     "replicates",
@@ -74,9 +75,11 @@ def _condition_entries(run: dict) -> dict[str, object]:
     loss = run["loss"]
     if loss is not None:
         entries["loss judge model"] = loss.get("judge", {}).get("model")
+        entries["loss judge model_resolved"] = loss.get("judge", {}).get("model_resolved")
     rank = run["rank"]
     if rank is not None:
         entries["rank judge model"] = rank.get("judge", {}).get("model")
+        entries["rank judge model_resolved"] = rank.get("judge", {}).get("model_resolved")
         entries["rank design"] = rank.get("design")
     return entries
 

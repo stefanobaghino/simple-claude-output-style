@@ -48,12 +48,14 @@ def build_loss_summary(
     pairs: dict[str, list[str]],
     checks: dict[str, dict],
     warnings: list[str],
+    model_resolved: object = None,
 ) -> dict:
     return {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "run": run_name,
         "judge": {
             "model": meta["model"],
+            "model_resolved": model_resolved,
             "judged_date": meta["date"],
             "claude_version": meta.get("claude_version"),
         },

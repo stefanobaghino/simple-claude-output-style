@@ -19,7 +19,7 @@ from runner.provenance import sha256_of
 from runner.spend import spend_summary
 from runner.timing import timing_summary
 from value.analysis import select_pairs
-from value.cli import answer_index, load_fidelity, load_raw
+from value.cli import answer_index, load_fidelity, load_raw, resolved_models
 
 from .analysis import score_checks
 from .judges import CHECKS, build_meta, run_judges
@@ -160,7 +160,12 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     result = score_checks(pairs=pairs, answers=index, rows=rows, fact_mine=meta.get("fact_mine"))
     warnings = pair_warnings + judge_warnings + result.warnings
     summary = build_loss_summary(
-        run_name=run_dir.name, meta=meta, pairs=pairs, checks=result.checks, warnings=warnings
+        run_name=run_dir.name,
+        meta=meta,
+        pairs=pairs,
+        checks=result.checks,
+        warnings=warnings,
+        model_resolved=resolved_models(rows).get(meta["model"]),
     )
     (run_dir / "loss.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     timing = timing_summary(rows.values())

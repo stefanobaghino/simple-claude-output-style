@@ -95,12 +95,14 @@ def build_value_summary(
     pairs: dict[str, list[str]],
     checks: dict[str, dict],
     warnings: list[str],
+    models_resolved: dict | None = None,
 ) -> dict:
     return {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "run": run_name,
         "judges": {
             "models": meta["models"],
+            "models_resolved": models_resolved,
             "questions": meta["questions"],
             "paraphrases": meta["paraphrases"],
             "replicates": meta.get("replicates"),

@@ -24,7 +24,7 @@ from functools import partial
 from pathlib import Path
 
 from runner.generate import ISOLATION_FLAGS, Runner, subprocess_runner
-from runner.provenance import claude_version
+from runner.hermetic import CONFIG_MODE, manifest_sha256
 from value.judges import JudgeSession, RowSink, TaskPool, extract_json, parse_bools
 
 CHECKS = ("completeness", "hedging")
@@ -100,11 +100,13 @@ def parse_verdicts(output: str, n: int) -> list[str] | None:
     return value
 
 
-def build_meta(*, model: str, answers_sha256: str) -> dict:
+def build_meta(*, model: str, answers_sha256: str, cli_version: str | None = None) -> dict:
     return {
         "type": "meta",
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "claude_version": claude_version(),
+        "claude_version": cli_version,
+        "config": CONFIG_MODE,
+        "config_manifest_sha256": manifest_sha256(),
         "model": model,
         "fact_mine": FACT_MINE,
         "flags": list(ISOLATION_FLAGS),
@@ -318,6 +320,7 @@ def run_judges(
     sink: RowSink,
     workdir: Path,
     run: Runner = subprocess_runner,
+    env: dict[str, str] | None = None,
     parallel: int = 1,
 ) -> list[str]:
     """Run the judge calls for every pair and return the warnings.
@@ -329,7 +332,7 @@ def run_judges(
     a time, and a check call starts as soon as its own extraction is
     complete.
     """
-    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
+    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run, env=env)
     pool = TaskPool(parallel)
 
     if "completeness" in checks:

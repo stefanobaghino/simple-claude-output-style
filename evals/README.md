@@ -110,8 +110,27 @@ because the CLI loads instruction files, the memory index, and the git
 state from the ancestor directories of its cwd. Thus no workspace
 context enters a call, and the provenance records the workdir mode.
 The probe calls, the judge calls, and the drift calls use the same
-kind of directory. Plugins from the user configuration still load; the
-run data records them, so a change in the environment stays visible.
+kind of directory.
+The user configuration stays out of every call as well. Each tool
+invocation builds one hermetic config directory, points the CLI at
+that directory through `CLAUDE_CONFIG_DIR`, and passes a whitelisted
+environment (`HOME`, `PATH`, `TERM`, `USER`, plus the config
+variable) instead of the inherited one. Thus zero user plugins load,
+and the runner asserts that every call reports exactly the declared
+plugins: the harness plugin where the call passes `--plugin-dir`,
+and none otherwise. A leak fails the call without a retry. The
+credential has two routes: when `CLAUDE_CODE_OAUTH_TOKEN` is set
+(see `claude setup-token`), the token passes through and nothing is
+written; else an existing `~/.claude/.credentials.json` is copied
+into the hermetic directory with mode 600 and removed with it. The
+credential never lands in the run data. Without a credential, the
+tool warns and proceeds, and the first live call fails with zero
+tokens spent. The provenance records the config mode, the manifest
+hash of the declared config inputs, the resolved absolute path of
+the `claude` binary, and the names of the passed variables. The
+config mode marks a comparability era: a run from before the
+hermetic directory saw the user plugins, so old runs and new runs
+warn in a comparison.
 The generation calls run several at a time (8 by default), and
 `--parallel` sets the count (1 runs one call at a time). The calls do
 not interact, so the concurrency changes no condition of a run. The
@@ -311,8 +330,11 @@ the largest possible slope, so the verdict needs enough complete
 sessions to be sensitive. The scoring is offline, so a rescore of an
 old run uses the derived threshold as well. `--generate` runs the
 missing sessions; an interrupted run restarts an incomplete session
-from turn 1. Session persistence stays on for these calls, so session
-files remain under `~/.claude` after a run. Without `--generate` the
+from turn 1. Session persistence stays on for these calls, because a
+resumable session must persist. The session files land in the
+hermetic config directory of the invocation and vanish with it; the
+resume chain works because the directory lives for the whole
+invocation. Without `--generate` the
 tool rescores the stored session data offline. Exit codes: 0 when
 every session is complete, every verdict is flat, and no warnings
 exist, 1 when a session failed or a verdict is "growing" or warnings
@@ -331,10 +353,13 @@ wins against the unstyled competitor. The unstyled anchor gets no
 section of its own, because its strength is 1.0 by construction. The comparison is offline and makes no
 judge calls. The runs must share their conditions: the tool checks
 the prompt-set hash, the style and rule hashes, the writer model,
-the Claude CLI version, the workdir mode, the judge parameters,
+the Claude CLI version, the workdir mode, the config mode and its
+manifest hash, the judge parameters,
 and the resolved judge models, and a mismatch
 becomes a warning, because the reader must see how far apart the
-conditions are. A missing artifact drops the axes of that artifact
+conditions are. The binary path stays out of the check, because an
+absolute path is machine-local; the CLI version is the
+cross-machine invariant. A missing artifact drops the axes of that artifact
 for that run, and n states the run count per axis. Exit codes: 0
 when no warnings exist, 1 when warnings exist, 2 when the
 comparison cannot run.
@@ -461,7 +486,7 @@ pair runner picks the suffix on a same-day repeat:
 
 ```
 runs/<YYYY-MM-DD>/
-  provenance.json   # prompt-set hash, conditions, style hashes, linter toolchain
+  provenance.json   # prompt-set hash, conditions (workdir and config modes), style hashes, linter toolchain
   answers.jsonl     # one line per answer; style null marks the unstyled answer
   report.md         # completeness, volume, call timing, environment, warnings
   fidelity.jsonl    # one line per (answer, rule set), with the pass or fail mark

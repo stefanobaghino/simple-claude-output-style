@@ -5,8 +5,9 @@ first turn starts a fresh session, and every later turn resumes from
 the session id that the previous turn reported, because a resumed
 call can report a fresh id. The calls keep the isolation flags of the
 pair runner, except --no-session-persistence, because a resumable
-session must persist. Thus session files stay under ~/.claude after a
-run. The code never deletes that user state.
+session must persist. The session files land in the hermetic config
+directory of the invocation and vanish with it. The chain works
+because the directory lives for the whole invocation.
 """
 
 from __future__ import annotations
@@ -21,7 +22,9 @@ from runner.generate import (
     ISOLATION_FLAGS,
     GenerationError,
     Runner,
+    assert_declared_plugins,
     parse_events,
+    plugin_name,
     style_reference,
     subprocess_runner,
 )
@@ -76,14 +79,16 @@ def generate_turn(
     workdir: Path,
     resume_id: str | None,
     run: Runner = subprocess_runner,
+    env: dict[str, str] | None = None,
 ) -> SessionTurn:
     """Generate one turn and check that the intended style was active."""
     argv = build_session_argv(prompt, model, style, plugin_dir, resume_id)
     start = time.monotonic()
-    stdout = run(argv, workdir)
+    stdout = run(argv, workdir, env)
     wall_ms = round((time.monotonic() - start) * 1000)
     init, result = parse_events(stdout)
 
+    assert_declared_plugins(init, (plugin_name(plugin_dir),), f"turn after {resume_id or 'start'}")
     expected_style = style_reference(plugin_dir, style)
     active_style = init.get("output_style")
     if active_style != expected_style:
@@ -149,6 +154,7 @@ def run_session(
     workdir: Path,
     run: Runner,
     record: Record,
+    env: dict[str, str] | None = None,
 ) -> None:
     """Run one scripted session and record every turn.
 
@@ -158,6 +164,8 @@ def run_session(
     """
     resume_id: str | None = None
     for turn_number, prompt in enumerate(script, start=1):
-        turn = generate_turn(prompt["text"], model, style, plugin_dir, workdir, resume_id, run=run)
+        turn = generate_turn(
+            prompt["text"], model, style, plugin_dir, workdir, resume_id, run=run, env=env
+        )
         record(turn_number, prompt, turn)
         resume_id = turn.session_id

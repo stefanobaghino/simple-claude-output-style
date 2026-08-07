@@ -24,7 +24,7 @@ from functools import partial
 from pathlib import Path
 
 from runner.generate import ISOLATION_FLAGS, Runner, subprocess_runner
-from runner.provenance import claude_version
+from runner.hermetic import CONFIG_MODE, manifest_sha256
 from value.judges import JudgeSession, RowSink, TaskPool
 
 DESIGN = "clarity-v1"
@@ -63,11 +63,13 @@ def contest_key(prompt_id: str, first_sha256: str, second_sha256: str) -> str:
     return f"clarity:{prompt_id}:{first_sha256}:{second_sha256}"
 
 
-def build_meta(*, model: str, answers_sha256: str) -> dict:
+def build_meta(*, model: str, answers_sha256: str, cli_version: str | None = None) -> dict:
     return {
         "type": "meta",
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "claude_version": claude_version(),
+        "claude_version": cli_version,
+        "config": CONFIG_MODE,
+        "config_manifest_sha256": manifest_sha256(),
         "model": model,
         "design": DESIGN,
         "orders": ORDERS,
@@ -124,6 +126,7 @@ def run_judges(
     sink: RowSink,
     workdir: Path,
     run: Runner = subprocess_runner,
+    env: dict[str, str] | None = None,
     parallel: int = 1,
 ) -> list[str]:
     """Run both orders of every contest and return the warnings.
@@ -133,7 +136,7 @@ def run_judges(
     in place; every new row also goes to the sink. Every order is
     its own task, so the orders run several at a time.
     """
-    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
+    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run, env=env)
     pool = TaskPool(parallel)
     for contest in contests:
         if contest["identical"]:

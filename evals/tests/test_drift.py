@@ -19,7 +19,7 @@ from drift import (
 )
 from linter import Linter, load_rules
 from runner.cli import load_prompts
-from runner.generate import GenerationError
+from runner.generate import GenerationError, PluginLeakError
 
 HERE = Path(__file__).parent
 PROMPTS = HERE.parent / "prompts" / "prompts.yaml"
@@ -40,6 +40,7 @@ def stream_output(
     session_id="sid-1",
     init_session_id=None,
     is_error=False,
+    plugins=("test-plugin",),
 ):
     init = {
         "type": "system",
@@ -47,7 +48,7 @@ def stream_output(
         "output_style": output_style,
         "model": "claude-sonnet-5",
         "claude_code_version": "2.1.220",
-        "plugins": [{"name": "test-plugin"}],
+        "plugins": [{"name": name} for name in plugins],
     }
     if init_session_id is not None:
         init["session_id"] = init_session_id
@@ -87,7 +88,7 @@ class FakeSessionRunner:
         self.count = 0
         self.turn = 0
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         self.calls.append(argv)
         self.count += 1
         self.turn = 1 if "--resume" not in argv else self.turn + 1
@@ -152,7 +153,7 @@ def test_build_session_argv_resumed_turn(tmp_path):
 def test_generate_turn_captures_session_id(tmp_path):
     plugin = make_plugin(tmp_path / "plugin")
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return stream_output(answer="the answer", session_id="sid-9")
 
     turn = generate_turn("prompt", "sonnet", "alpha", plugin, tmp_path, None, run=run)
@@ -166,7 +167,7 @@ def test_generate_turn_captures_session_id(tmp_path):
 def test_generate_turn_rejects_missing_session_id(tmp_path):
     plugin = make_plugin(tmp_path / "plugin")
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return stream_output(session_id=None)
 
     with pytest.raises(GenerationError, match="session id"):
@@ -176,11 +177,21 @@ def test_generate_turn_rejects_missing_session_id(tmp_path):
 def test_generate_turn_verifies_style_each_turn(tmp_path):
     plugin = make_plugin(tmp_path / "plugin")
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return stream_output(output_style="default")
 
     with pytest.raises(GenerationError, match="output style"):
         generate_turn("prompt", "sonnet", "alpha", plugin, tmp_path, "sid-1", run=run)
+
+
+def test_turn_rejects_an_undeclared_plugin(tmp_path):
+    plugin = make_plugin(tmp_path / "plugin")
+
+    def run(argv, cwd, env=None):
+        return stream_output(plugins=("test-plugin", "user-plugin"))
+
+    with pytest.raises(PluginLeakError, match="user-plugin"):
+        generate_turn("prompt", "sonnet", "alpha", plugin, tmp_path, None, run=run)
 
 
 def test_run_session_chains_forked_session_ids(tmp_path):
@@ -218,7 +229,7 @@ def project(tmp_path, monkeypatch):
     rules.mkdir()
     (rules / "alpha.rules.yaml").write_text("style: alpha\ncontractions:\n  banned: true\n")
     make_plugin(tmp_path / "plugin")
-    monkeypatch.setattr(cli, "claude_version", lambda: "0.0.0 (test)")
+    monkeypatch.setattr(cli, "claude_version", lambda *args: "0.0.0 (test)")
     return tmp_path
 
 

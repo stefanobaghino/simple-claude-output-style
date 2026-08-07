@@ -87,13 +87,13 @@ class WorkerLease:
     def wrap(self, run: Runner) -> Runner:
         """Return a runner whose every call holds one gate permit."""
 
-        def gated(argv: list[str], cwd) -> str:
+        def gated(argv: list[str], cwd, env=None) -> str:
             self._gate.acquire(self._priority)
             with self._lock:
                 self.live += 1
                 self.peak = max(self.peak, self.live)
             try:
-                return run(argv, cwd)
+                return run(argv, cwd, env)
             finally:
                 with self._lock:
                     self.live -= 1

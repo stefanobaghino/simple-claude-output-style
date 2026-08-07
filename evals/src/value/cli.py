@@ -16,8 +16,9 @@ from pathlib import Path
 
 from gate.cli import load_answers
 from loss.judges import FACT_MINE
-from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
-from runner.provenance import sha256_of
+from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.hermetic import hermetic_call
+from runner.provenance import claude_version, sha256_of
 from runner.screening import screening_section
 from runner.spend import spend_summary
 from runner.timing import timing_summary
@@ -164,78 +165,78 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
             facts_by_pair, fact_warnings = shared_facts(pairs, index, loss_rows)
             warnings += fact_warnings
 
-    meta = build_meta(
-        reader_model=args.model_reader,
-        grader_model=args.model_grader,
-        questions_n=args.questions,
-        paraphrases_k=args.paraphrases,
-        replicates=args.replicates,
-        language=args.language,
-        answers_sha256=answers_sha256,
-    )
-    meta_upgraded = False
-    if meta_stored is not None:
-        stored_design = meta_stored.get("comprehension_design")
-        if stored_design not in COMPREHENSION_DESIGNS:
-            raise _fail(
-                f"value-raw.jsonl holds the comprehension design {stored_design!r}, "
-                "which this tool does not know; use a newer tool or remove the file"
-            )
-        if stored_design != COMPREHENSION_DESIGN:
-            match_keys = TRANSITION_MATCH_KEYS
-        else:
-            match_keys = (*META_MATCH_KEYS, "replicates")
-        mismatched = [key for key in match_keys if meta_stored.get(key) != meta[key]]
-        if mismatched:
-            raise _fail(
-                f"value-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
-                "remove the file to judge again from scratch"
-            )
-        if stored_design != COMPREHENSION_DESIGN:
-            meta = {
-                **meta_stored,
-                "comprehension_design": COMPREHENSION_DESIGN,
-                "questions": meta["questions"],
-                "replicates": meta["replicates"],
-            }
-            meta_upgraded = True
-        else:
-            meta = meta_stored
-
     raw_path = run_dir / "value-raw.jsonl"
-    with (
-        raw_path.open("a", encoding="utf-8") as raw_file,
-        isolated_workdir("judge-value") as workdir,
-    ):
-        if meta_stored is None or meta_upgraded:
-            raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
-            raw_file.flush()
+    with hermetic_call("judge-value") as hermetic:
+        meta = build_meta(
+            reader_model=args.model_reader,
+            grader_model=args.model_grader,
+            questions_n=args.questions,
+            paraphrases_k=args.paraphrases,
+            replicates=args.replicates,
+            language=args.language,
+            answers_sha256=answers_sha256,
+            cli_version=claude_version(hermetic.binary, hermetic.env),
+        )
+        meta_upgraded = False
+        if meta_stored is not None:
+            stored_design = meta_stored.get("comprehension_design")
+            if stored_design not in COMPREHENSION_DESIGNS:
+                raise _fail(
+                    f"value-raw.jsonl holds the comprehension design {stored_design!r}, "
+                    "which this tool does not know; use a newer tool or remove the file"
+                )
+            if stored_design != COMPREHENSION_DESIGN:
+                match_keys = TRANSITION_MATCH_KEYS
+            else:
+                match_keys = (*META_MATCH_KEYS, "replicates")
+            mismatched = [key for key in match_keys if meta_stored.get(key) != meta[key]]
+            if mismatched:
+                raise _fail(
+                    f"value-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
+                    "remove the file to judge again from scratch"
+                )
+            if stored_design != COMPREHENSION_DESIGN:
+                meta = {
+                    **meta_stored,
+                    "comprehension_design": COMPREHENSION_DESIGN,
+                    "questions": meta["questions"],
+                    "replicates": meta["replicates"],
+                }
+                meta_upgraded = True
+            else:
+                meta = meta_stored
 
-        def sink(row: dict) -> None:
-            raw_file.write(json.dumps(row, ensure_ascii=False) + "\n")
-            raw_file.flush()
+        with raw_path.open("a", encoding="utf-8") as raw_file:
+            if meta_stored is None or meta_upgraded:
+                raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
+                raw_file.flush()
 
-        try:
-            warnings += run_judges(
-                texts=_texts(pairs, index),
-                pairs=pairs,
-                answers=index,
-                facts_by_pair=facts_by_pair,
-                checks=checks,
-                reader_model=meta["models"]["reader"],
-                grader_model=meta["models"]["grader"],
-                questions_n=meta["questions"],
-                paraphrases_k=meta["paraphrases"],
-                replicates=meta["replicates"],
-                language=meta["language"],
-                rows=rows,
-                sink=sink,
-                workdir=workdir,
-                run=run,
-                parallel=args.parallel,
-            )
-        except GenerationError as error:
-            raise _fail(f"a judge call failed: {error}") from error
+            def sink(row: dict) -> None:
+                raw_file.write(json.dumps(row, ensure_ascii=False) + "\n")
+                raw_file.flush()
+
+            try:
+                warnings += run_judges(
+                    texts=_texts(pairs, index),
+                    pairs=pairs,
+                    answers=index,
+                    facts_by_pair=facts_by_pair,
+                    checks=checks,
+                    reader_model=meta["models"]["reader"],
+                    grader_model=meta["models"]["grader"],
+                    questions_n=meta["questions"],
+                    paraphrases_k=meta["paraphrases"],
+                    replicates=meta["replicates"],
+                    language=meta["language"],
+                    rows=rows,
+                    sink=sink,
+                    workdir=hermetic.workdir,
+                    run=run,
+                    env=hermetic.env,
+                    parallel=args.parallel,
+                )
+            except GenerationError as error:
+                raise _fail(f"a judge call failed: {error}") from error
     return meta, warnings
 
 

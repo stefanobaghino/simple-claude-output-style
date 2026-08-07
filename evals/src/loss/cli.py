@@ -14,8 +14,9 @@ import sys
 from pathlib import Path
 
 from gate.cli import load_answers, run_provenance
-from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
-from runner.provenance import sha256_of
+from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.hermetic import hermetic_call
+from runner.provenance import claude_version, sha256_of
 from runner.screening import screening_section
 from runner.spend import spend_summary
 from runner.timing import timing_summary
@@ -57,52 +58,57 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
     """Run the live judge calls. Returns the meta row and the warnings."""
     warnings = _check_writer_constraint(run_dir, args.model)
 
-    meta = build_meta(model=args.model, answers_sha256=sha256_of(run_dir / "answers.jsonl"))
-    meta_upgraded = False
-    if meta_stored is not None:
-        mismatched = [key for key in META_MATCH_KEYS if meta_stored.get(key) != meta[key]]
-        mismatched += [
-            key for key in META_UPGRADE_KEYS if key in meta_stored and meta_stored[key] != meta[key]
-        ]
-        if mismatched:
-            raise _fail(
-                f"loss-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
-                "remove the file to judge again from scratch"
-            )
-        absent = [key for key in META_UPGRADE_KEYS if key not in meta_stored]
-        if absent:
-            meta = {**meta_stored, **{key: meta[key] for key in absent}}
-            meta_upgraded = True
-        else:
-            meta = meta_stored
-
     raw_path = run_dir / "loss-raw.jsonl"
-    with (
-        raw_path.open("a", encoding="utf-8") as raw_file,
-        isolated_workdir("judge-loss") as workdir,
-    ):
-        if meta_stored is None or meta_upgraded:
-            raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
-            raw_file.flush()
+    with hermetic_call("judge-loss") as hermetic:
+        meta = build_meta(
+            model=args.model,
+            answers_sha256=sha256_of(run_dir / "answers.jsonl"),
+            cli_version=claude_version(hermetic.binary, hermetic.env),
+        )
+        meta_upgraded = False
+        if meta_stored is not None:
+            mismatched = [key for key in META_MATCH_KEYS if meta_stored.get(key) != meta[key]]
+            mismatched += [
+                key
+                for key in META_UPGRADE_KEYS
+                if key in meta_stored and meta_stored[key] != meta[key]
+            ]
+            if mismatched:
+                raise _fail(
+                    f"loss-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
+                    "remove the file to judge again from scratch"
+                )
+            absent = [key for key in META_UPGRADE_KEYS if key not in meta_stored]
+            if absent:
+                meta = {**meta_stored, **{key: meta[key] for key in absent}}
+                meta_upgraded = True
+            else:
+                meta = meta_stored
 
-        def sink(row: dict) -> None:
-            raw_file.write(json.dumps(row, ensure_ascii=False) + "\n")
-            raw_file.flush()
+        with raw_path.open("a", encoding="utf-8") as raw_file:
+            if meta_stored is None or meta_upgraded:
+                raw_file.write(json.dumps(meta, ensure_ascii=False) + "\n")
+                raw_file.flush()
 
-        try:
-            warnings += run_judges(
-                pairs=pairs,
-                answers=index,
-                checks=args.check_list,
-                model=meta["model"],
-                rows=rows,
-                sink=sink,
-                workdir=workdir,
-                run=run,
-                parallel=args.parallel,
-            )
-        except GenerationError as error:
-            raise _fail(f"a judge call failed: {error}") from error
+            def sink(row: dict) -> None:
+                raw_file.write(json.dumps(row, ensure_ascii=False) + "\n")
+                raw_file.flush()
+
+            try:
+                warnings += run_judges(
+                    pairs=pairs,
+                    answers=index,
+                    checks=args.check_list,
+                    model=meta["model"],
+                    rows=rows,
+                    sink=sink,
+                    workdir=hermetic.workdir,
+                    run=run,
+                    env=hermetic.env,
+                    parallel=args.parallel,
+                )
+            except GenerationError as error:
+                raise _fail(f"a judge call failed: {error}") from error
     return meta, warnings
 
 

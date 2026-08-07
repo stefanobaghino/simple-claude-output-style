@@ -16,7 +16,8 @@ from pathlib import Path
 
 from linter import Linter, load_rules
 from runner.cli import discover_styles, load_prompts
-from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
+from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.hermetic import hermetic_call
 from runner.provenance import build_provenance, claude_version, linter_toolchain, sha256_of
 from runner.spend import spend_summary
 
@@ -54,7 +55,7 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
     failures: list[str] = []
     with (
         sessions_path.open("a", encoding="utf-8") as sessions_file,
-        isolated_workdir("drift") as workdir,
+        hermetic_call("drift") as hermetic,
     ):
         for style in styles:
             for repeat in range(1, args.repeats + 1):
@@ -63,7 +64,8 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
                     print(f"skipping {style} session {repeat}: complete", file=sys.stderr)
                     continue
                 # An incomplete session restarts from turn 1 with a fresh
-                # session id: nothing depends on state under ~/.claude.
+                # session id: nothing depends on stored session state
+                # across invocations.
                 script = session_script(prompts, args.turns, repeat, args.repeats)
                 print(
                     f"{style} session {repeat}/{args.repeats}: {args.turns} turn(s)",
@@ -93,17 +95,31 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
                     print(f"  [{turn_number}/{args.turns}] {prompt['id']}", file=sys.stderr)
 
                 try:
-                    run_session(script, args.model, style, plugin_dir, workdir, run, record)
+                    run_session(
+                        script,
+                        args.model,
+                        style,
+                        plugin_dir,
+                        hermetic.workdir,
+                        run,
+                        record,
+                        env=hermetic.env,
+                    )
                 except GenerationError as error:
                     failures.append(f"{style}: session {repeat} failed: {error}")
                     print(f"  failed: {error}", file=sys.stderr)
+        # The version call needs the live hermetic directory, so it
+        # runs before the context closes.
+        cli_version = claude_version(hermetic.binary, hermetic.env)
 
     provenance = build_provenance(
         model=args.model,
         prompts_path=prompts_path,
         styles=styles,
         plugin_dir=plugin_dir,
-        cli_version=claude_version(),
+        cli_version=cli_version,
+        claude_binary=hermetic.binary,
+        config_manifest_sha256=hermetic.manifest_sha256,
     )
     provenance["conditions"]["flags"] = list(SESSION_FLAGS)
     provenance["conditions"]["settings"] = {

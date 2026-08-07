@@ -114,6 +114,13 @@ def _hedging_section(stats: dict) -> list[str]:
         for prompt_id, entry in stats["pairs"].items()
     ]
     lines.append("")
+    totals = stats["totals"]
+    lines.append(
+        f"Claims: {totals['claims']} over {len(stats['pairs'])} judged pairs: "
+        f"{totals['hedged']} hedged, {totals['certain']} certain, "
+        f"{totals['absent']} absent."
+    )
+    lines.append("")
     lines += _median_line(stats, "survival")
     lines += _lost_lines(stats, "lost", "Claims that became certain:", "No claim became certain.")
     return lines

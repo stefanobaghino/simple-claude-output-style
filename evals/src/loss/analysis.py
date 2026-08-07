@@ -177,6 +177,11 @@ def score_checks(
                     if entry["additions"] is not None
                 ]
                 stats["additions_median"] = _median(additions)
+            if check == "hedging":
+                stats["totals"] = {
+                    key: sum(entry[key] for entry in pair_scores.values())
+                    for key in ("claims", "hedged", "certain", "absent")
+                }
             stats["pairs"] = pair_scores
             per_style[style] = stats
         checks_out[check] = {"judged": True, "per_style": per_style}

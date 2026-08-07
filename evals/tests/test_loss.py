@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from loss import cli, parse_string_list, parse_verdicts, score_checks
+from loss import cli, parse_string_list, parse_verdicts, report, score_checks
 from loss.judges import JUDGE_PROMPTS_SHA256, run_judges
 from runner.provenance import sha256_of
 
@@ -258,6 +258,7 @@ def test_hedging_scoring_counts_the_three_verdicts():
         "lost": ["c1"],
     }
     assert stats["median"] == 0.5
+    assert stats["totals"] == {"claims": 3, "hedged": 1, "certain": 1, "absent": 1}
 
 
 def test_an_empty_claim_list_leaves_the_pair_without_a_score():
@@ -273,7 +274,31 @@ def test_an_empty_claim_list_leaves_the_pair_without_a_score():
         "lost": [],
     }
     assert stats["median"] is None
+    assert stats["totals"] == {"claims": 0, "hedged": 0, "certain": 0, "absent": 0}
     assert not any("hedging" in w for w in result.warnings)
+
+
+def test_hedging_totals_count_the_unscored_pairs():
+    answers = {
+        ("p-01", "alpha"): {"text": "styled one", "sha256": "S1"},
+        ("p-01", None): {"text": "unstyled one", "sha256": "U1"},
+        ("p-02", "alpha"): {"text": "styled two", "sha256": "S2"},
+        ("p-02", None): {"text": "unstyled two", "sha256": "U2"},
+    }
+    rows = {
+        "hedging:claims:U1": loss_row("hedging", '["c1", "c2"]'),
+        "hedging:check:S1": loss_row("hedging", '["hedged", "certain"]'),
+        "hedging:claims:U2": loss_row("hedging", '["c3"]'),
+        "hedging:check:S2": loss_row("hedging", '["absent"]'),
+    }
+    result = score_checks(pairs={"alpha": ["p-01", "p-02"]}, answers=answers, rows=rows)
+    stats = result.checks["hedging"]["per_style"]["alpha"]
+    assert stats["totals"] == {"claims": 3, "hedged": 1, "certain": 1, "absent": 1}
+    assert stats["median"] == 0.5
+    assert stats["pairs"]["p-02"]["survival"] is None
+    lines = "\n".join(report._hedging_section(stats))
+    assert "Claims: 3 over 2 judged pairs: 1 hedged, 1 certain, 1 absent." in lines
+    assert "Median survival: 0.5 over 1 scored pairs." in lines
 
 
 def test_missing_check_marks_leave_the_pair_unscored():
@@ -361,6 +386,7 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     }
     hedging = summary["checks"]["hedging"]["per_style"]["alpha"]
     assert hedging["median"] == 0.5
+    assert hedging["totals"] == {"claims": 2, "hedged": 1, "certain": 1, "absent": 0}
     assert hedging["pairs"]["explanation-01"]["lost"] == ["the animal may swim"]
     assert summary["warnings"] == []
     raw_rows = [
@@ -382,6 +408,7 @@ def test_cli_judge_writes_the_artifacts(project, capsys):
     assert "Added facts (styled only):" in report
     assert "- explanation-01: the animal jumps" in report
     assert "| explanation-01 | 2 | 1 | 1 | 0 | 0.5 |" in report
+    assert "Claims: 2 over 1 judged pairs: 1 hedged, 1 certain, 0 absent." in report
     assert "Median survival: 0.5 over 1 scored pairs." in report
     assert "- explanation-01: the animal may swim" in report
     out = capsys.readouterr().out

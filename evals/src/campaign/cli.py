@@ -123,7 +123,14 @@ def build_stages(
         return gate_cli.main(argv)
 
     def cost_action(index: int, run: Runner, workers: int) -> int:
-        argv = [str(chosen[index]), "--probe", "--plugin-dir", args.plugin_dir]
+        argv = [
+            str(chosen[index]),
+            "--probe",
+            "--plugin-dir",
+            args.plugin_dir,
+            "--repeats",
+            str(args.probe_repeats),
+        ]
         return cost_cli.main(argv, run=run)
 
     def loss_action(index: int, run: Runner, workers: int) -> int:
@@ -280,6 +287,12 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     parser.add_argument(
         "--budget", type=int, default=32, help="total live workers across the stages"
     )
+    parser.add_argument(
+        "--probe-repeats",
+        type=int,
+        default=3,
+        help="probe calls per arm in the cost stage (forwarded to style-cost --repeats)",
+    )
     parser.add_argument("--model", default="sonnet", help="writer model for all answers")
     parser.add_argument("--prompts", default="prompts/prompts.yaml", help="the prompt set")
     parser.add_argument("--rules-dir", default="rules", help="directory with the rule files")
@@ -294,6 +307,8 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     args = parser.parse_args(argv)
     if args.budget < 1:
         raise _fail(f"--budget must be 1 or more, not {args.budget}")
+    if args.probe_repeats < 1:
+        raise _fail(f"--probe-repeats must be 1 or more, not {args.probe_repeats}")
     if args.screening and args.runs not in (None, 1):
         raise _fail(f"--screening implies --runs 1, not {args.runs}")
     if args.runs is None:

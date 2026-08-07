@@ -94,7 +94,7 @@ uv run style-cost runs/<date> [--probe] [--repeats N]
 uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-rank runs/<date> [--judge] [--parallel N]
-uv run style-campaign [--runs N] [--budget W] [--screening]
+uv run style-campaign [--runs N] [--budget W] [--probe-repeats N] [--screening]
 uv run style-drift [--generate] [--out runs/<date>-drift]
 uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
@@ -377,7 +377,9 @@ A campaign is several runs under identical conditions, produced for
 the cross-run comparison. The campaign driver produces one with one
 command: `style-campaign` runs N full runs (3 by default), and
 `--budget` sets the total worker count across every stage (32 by
-default). One worker gate meters every CLI call of the campaign:
+default). The cost stage probes with 3 repeats, and
+`--probe-repeats` forwards a different count to `style-cost`. One
+worker gate meters every CLI call of the campaign:
 a call takes a permit before its subprocess starts and returns the
 permit when the subprocess ends. Thus the live call total never
 rises above the budget, and a stage that runs alone can use the

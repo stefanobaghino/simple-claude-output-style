@@ -335,6 +335,33 @@ def test_campaign_rejects_a_budget_below_one(project):
         run_campaign(project, CampaignRunner(), "--budget", "0")
 
 
+def test_campaign_forwards_the_probe_repeats(project):
+    runner = CampaignRunner()
+    args = ("--runs", "1", "--budget", "8", "--probe-repeats", "2")
+    assert run_campaign(project, runner, *args) == 0
+    (run_dir,) = run_dirs(project, 1)
+    probe = json.loads((run_dir / "cost-probe.json").read_text())
+    assert probe["repeats"] == 2
+    assert len(runner.spans("probe", None)) == 4  # 2 repeats x 2 arms
+
+
+def test_campaign_probes_with_three_repeats_without_the_flag(project):
+    runner = CampaignRunner()
+    assert run_campaign(project, runner, "--runs", "1", "--budget", "8") == 0
+    (run_dir,) = run_dirs(project, 1)
+    probe = json.loads((run_dir / "cost-probe.json").read_text())
+    assert probe["repeats"] == 3
+    assert len(runner.spans("probe", None)) == 6  # 3 repeats x 2 arms
+
+
+def test_campaign_rejects_probe_repeats_below_one(project):
+    runner = CampaignRunner()
+    with pytest.raises(SystemExit) as error:
+        run_campaign(project, runner, "--probe-repeats", "0")
+    assert error.value.code == 2
+    assert runner.events == []
+
+
 def test_campaign_screening_produces_one_reduced_run(project):
     runner = CampaignRunner()
     assert run_campaign(project, runner, "--screening", "--budget", "8") == 0

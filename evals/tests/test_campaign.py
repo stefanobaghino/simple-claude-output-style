@@ -79,7 +79,7 @@ class CampaignRunner:
         self.live = 0
         self.peak = 0
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         prompt = argv[argv.index("-p") + 1]
         with self.lock:
             self.live += 1
@@ -117,8 +117,9 @@ class CampaignRunner:
         animal = (
             "The slow green turtle crawls" if style == "default" else "The quick brown fox jumps"
         )
+        plugins = ("test-plugin",) if "--plugin-dir" in argv else ()
         return run_index, stream_output(
-            output_style=style or "default", answer=f"{animal}. Run {run_index}."
+            output_style=style or "default", answer=f"{animal}. Run {run_index}.", plugins=plugins
         )
 
     def spans(self, tag, run_index):
@@ -144,7 +145,7 @@ def project(tmp_path, monkeypatch):
     (rules / "alpha.rules.yaml").write_text("style: alpha\n")
     (rules / "gate.yaml").write_text(yaml.safe_dump({"thresholds": {"alpha": {"max_rate": 100}}}))
     make_plugin(tmp_path / "plugin")
-    monkeypatch.setattr(runner_cli, "claude_version", lambda: "0.0.0 (test)")
+    monkeypatch.setattr(runner_cli, "claude_version", lambda *args: "0.0.0 (test)")
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -422,7 +423,7 @@ def test_gate_lets_a_lone_lease_use_the_whole_budget():
     lease = gate.lease("judge", priority=2)
     barrier = threading.Barrier(4, timeout=10)
 
-    def call(argv, cwd):
+    def call(argv, cwd, env=None):
         barrier.wait()
         return "ok"
 
@@ -441,12 +442,12 @@ def test_gate_prefers_the_lower_priority_number():
     release = threading.Event()
     done = []
 
-    def holder(argv, cwd):
+    def holder(argv, cwd, env=None):
         release.wait(timeout=10)
         return "ok"
 
     def call(name):
-        def run(argv, cwd):
+        def run(argv, cwd, env=None):
             done.append(name)
             return "ok"
 
@@ -469,12 +470,12 @@ def test_gate_keeps_arrival_order_at_equal_priority():
     release = threading.Event()
     done = []
 
-    def holder(argv, cwd):
+    def holder(argv, cwd, env=None):
         release.wait(timeout=10)
         return "ok"
 
     def call(name):
-        def run(argv, cwd):
+        def run(argv, cwd, env=None):
             done.append(name)
             return "ok"
 
@@ -492,11 +493,24 @@ def test_gate_keeps_arrival_order_at_equal_priority():
     assert done == ["first", "second"]
 
 
+def test_gate_forwards_the_environment():
+    gate = WorkerGate(1)
+    seen = []
+
+    def run(argv, cwd, env=None):
+        seen.append(env)
+        return "ok"
+
+    gated = gate.lease("judge", 1).wrap(run)
+    assert gated([], None, {"PATH": "/bin"}) == "ok"
+    assert seen == [{"PATH": "/bin"}]
+
+
 def test_gate_returns_the_permit_on_an_error():
     gate = WorkerGate(2)
     lease = gate.lease("judge", 1)
 
-    def bad(argv, cwd):
+    def bad(argv, cwd, env=None):
         raise GenerationError("injected failure")
 
     with pytest.raises(GenerationError):

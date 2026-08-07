@@ -30,6 +30,8 @@ def write_run(
     style_sha: str = "s" * 8,
     claude_version: str = "2.0.0 (Claude Code)",
     workdir: str | None = "temp",
+    config: str | None = "hermetic",
+    manifest_sha: str | None = "m" * 8,
     screening: dict | None = None,
     skip: tuple[str, ...] = (),
 ) -> Path:
@@ -38,6 +40,10 @@ def write_run(
     conditions = {"model_requested": "sonnet", "claude_version": claude_version}
     if workdir is not None:
         conditions["workdir"] = workdir
+    if config is not None:
+        conditions["config"] = config
+    if manifest_sha is not None:
+        conditions["config_manifest_sha256"] = manifest_sha
     files = {
         "provenance": {
             "prompt_set": {"path": "prompts/prompts.yaml", "sha256": "p" * 8},
@@ -333,6 +339,29 @@ def test_a_run_without_a_workdir_mode_warns(tmp_path):
     assert code == 1
     assert summary["warnings"] == [
         "condition mismatch on workdir: run-a null, run-b temp",
+    ]
+
+
+def test_a_run_without_a_config_mode_warns(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a", config=None, manifest_sha=None)
+    write_run(runs, "run-b")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        "condition mismatch on config: run-a null, run-b hermetic",
+        f"condition mismatch on config manifest hash: run-a null, run-b {'m' * 8}",
+    ]
+
+
+def test_a_manifest_hash_mismatch_warns(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a", manifest_sha="a" * 8)
+    write_run(runs, "run-b", manifest_sha="b" * 8)
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        f"condition mismatch on config manifest hash: run-a {'a' * 8}, run-b {'b' * 8}",
     ]
 
 

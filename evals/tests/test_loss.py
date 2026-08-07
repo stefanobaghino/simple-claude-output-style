@@ -67,7 +67,7 @@ class FakeLossRunner:
         # the calls list and the counters of the reply methods.
         self.lock = threading.Lock()
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         with self.lock:
             self.calls.append(argv)
             prompt = argv[argv.index("-p") + 1]
@@ -507,7 +507,7 @@ def test_cli_judge_works_in_a_workdir_outside_the_run(project):
     seen = []
 
     class WorkdirProbe(FakeLossRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             seen.append((Path(cwd), Path(cwd).is_dir()))
             return super().__call__(argv, cwd)
 

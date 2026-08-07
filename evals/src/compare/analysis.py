@@ -61,6 +61,13 @@ def _condition_entries(run: dict) -> dict[str, object]:
     # entry is None there, and an old-versus-new comparison warns:
     # the workdir mode marks a comparability era.
     entries["workdir"] = conditions.get("workdir")
+    # The config mode and the manifest hash mark the hermetic-config
+    # era in the same way. The claude_binary path stays out on
+    # purpose: an absolute path is machine-local and would warn on
+    # every cross-machine comparison; the claude version above is the
+    # cross-machine invariant.
+    entries["config"] = conditions.get("config")
+    entries["config manifest hash"] = conditions.get("config_manifest_sha256")
     entries["linter toolchain"] = provenance.get("linter_toolchain")
     # A full run and an old run both read None here, so the entry
     # stays silent for them. The CLI already rejects a mix of

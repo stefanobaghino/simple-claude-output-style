@@ -75,7 +75,7 @@ class FakeRankRunner:
         # the calls list.
         self.lock = threading.Lock()
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         with self.lock:
             self.calls.append(argv)
             prompt = argv[argv.index("-p") + 1]
@@ -94,7 +94,7 @@ class SplitRunner:
         self.calls = []
         self.lock = threading.Lock()
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         with self.lock:
             self.calls.append(argv)
         return stream("1")
@@ -569,7 +569,7 @@ def test_cli_judge_works_in_a_workdir_outside_the_run(project):
     seen = []
 
     class WorkdirProbe(FakeRankRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             seen.append((Path(cwd), Path(cwd).is_dir()))
             return super().__call__(argv, cwd)
 
@@ -598,7 +598,7 @@ def test_cli_judge_model_must_differ_from_the_writer(project):
 
 def test_cli_a_pin_mismatch_exits_2_without_a_retry(project):
     class WrongModel(FakeRankRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             with self.lock:
                 self.calls.append(argv)
                 prompt = argv[argv.index("-p") + 1]

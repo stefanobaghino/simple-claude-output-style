@@ -41,12 +41,13 @@ def sha(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def stream(result_text, output_style="default", model="claude-haiku-4-5-20251001"):
+def stream(result_text, output_style="default", model="claude-haiku-4-5-20251001", plugins=()):
     init = {
         "type": "system",
         "subtype": "init",
         "output_style": output_style,
         "model": model,
+        "plugins": [{"name": name} for name in plugins],
     }
     result = {
         "type": "result",
@@ -79,7 +80,7 @@ class FakeJudgeRunner:
         # the calls list and the counters of the reply methods.
         self.lock = threading.Lock()
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         with self.lock:
             self.calls.append(argv)
             prompt = argv[argv.index("-p") + 1]
@@ -599,7 +600,7 @@ def test_an_unjudged_check_warns():
 def test_structured_calls_retry_once(tmp_path):
     outputs = iter(["garbage", "[true, false]"])
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return stream(next(outputs), model="claude-opus-5")
 
     session = JudgeSession(rows={}, sink=lambda row: None, workdir=tmp_path, run=run)
@@ -620,7 +621,7 @@ def test_structured_calls_retry_once(tmp_path):
 def test_a_call_retries_a_transient_failure_once(tmp_path):
     attempts = []
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         attempts.append(argv)
         if len(attempts) == 1:
             raise GenerationError("claude exited with code 1: transient")
@@ -650,7 +651,7 @@ def test_a_call_retries_a_transient_failure_once(tmp_path):
 def test_a_second_call_failure_propagates(tmp_path):
     attempts = []
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         attempts.append(argv)
         raise GenerationError("claude exited with code 1: persistent")
 
@@ -672,7 +673,7 @@ def test_a_second_call_failure_propagates(tmp_path):
 def test_a_pin_mismatch_raises_without_a_retry(tmp_path):
     attempts = []
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         attempts.append(argv)
         return stream("[true]", model="claude-opus-4-1")
 
@@ -692,7 +693,7 @@ def test_a_pin_mismatch_raises_without_a_retry(tmp_path):
 
 
 def test_an_exact_id_passes_and_an_unpinned_alias_fails(tmp_path):
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         model = argv[argv.index("--model") + 1]
         resolved = "claude-sonnet-5" if model == "sonnet" else model
         return stream("[true]", model=resolved)
@@ -847,7 +848,7 @@ def test_the_comprehension_grain_is_smaller_than_a_pair(tmp_path):
     # of the second pair must land before the grade call of the first
     # pair. The old per-pair task ran all thirteen calls of a pair
     # before the next pair started.
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         prompt = argv[2]
         model = RESOLVED[argv[argv.index("--model") + 1]]
         if prompt.startswith("You write a quiz"):
@@ -1130,7 +1131,7 @@ def test_cli_judge_works_in_a_workdir_outside_the_run(project):
     seen = []
 
     class WorkdirProbe(FakeJudgeRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             seen.append((Path(cwd), Path(cwd).is_dir()))
             return super().__call__(argv, cwd)
 
@@ -1326,9 +1327,24 @@ def test_cli_judge_model_must_differ_from_the_writer(project):
     assert error.value.code == 2
 
 
+def test_judge_call_with_a_plugin_fails_without_retry(project):
+    class LeakedPlugin(FakeJudgeRunner):
+        def __call__(self, argv, cwd, env=None):
+            with self.lock:
+                self.calls.append(argv)
+                prompt = argv[argv.index("-p") + 1]
+                return stream(self.reply(prompt), plugins=("user-plugin",))
+
+    runner = LeakedPlugin()
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge", "--parallel", "1", run=runner)
+    assert error.value.code == 2
+    assert len(runner.calls) == 1
+
+
 def test_cli_a_pin_mismatch_exits_2_without_a_retry(project):
     class WrongModel(FakeJudgeRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             with self.lock:
                 self.calls.append(argv)
                 prompt = argv[argv.index("-p") + 1]

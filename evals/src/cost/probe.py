@@ -23,11 +23,14 @@ from runner.generate import (
     ISOLATION_FLAGS,
     GenerationError,
     Runner,
+    assert_declared_plugins,
     parse_events,
+    plugin_name,
     style_reference,
     subprocess_runner,
 )
-from runner.provenance import claude_version, sha256_of
+from runner.hermetic import CONFIG_MODE, manifest_sha256
+from runner.provenance import sha256_of
 
 PROBE_PROMPT = "Reply with the word OK."
 
@@ -48,13 +51,6 @@ PROBE_NOTE = (
     "unstyled arm of the runner. Thus the difference between a styled "
     "arm and the unstyled arm isolates the style block."
 )
-
-
-def _plugin_name(plugin_dir: Path) -> str:
-    manifest = json.loads(
-        (plugin_dir / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
-    )
-    return manifest["name"]
 
 
 def probe_argv(prompt: str, model: str, style: str | None, plugin_dir: Path) -> list[str]:
@@ -78,12 +74,15 @@ def _run_arm(
     plugin_dir: Path,
     workdir: Path,
     run: Runner,
+    env: dict[str, str] | None,
 ) -> dict:
     start = time.monotonic()
-    stdout = run(probe_argv(PROBE_PROMPT, model, style, plugin_dir), workdir)
+    stdout = run(probe_argv(PROBE_PROMPT, model, style, plugin_dir), workdir, env)
     wall_ms = round((time.monotonic() - start) * 1000)
     init, result = parse_events(stdout)
 
+    # Every probe arm loads the plugin, so every arm declares it.
+    assert_declared_plugins(init, (plugin_name(plugin_dir),), name)
     expected = style_reference(plugin_dir, style) if style is not None else "default"
     active = init.get("output_style")
     if active != expected:
@@ -171,12 +170,14 @@ def probe_overhead(
     workdir: Path,
     run: Runner = subprocess_runner,
     repeats: int = 3,
+    env: dict[str, str] | None = None,
+    cli_version: str | None = None,
 ) -> dict:
     """Run the probe and return the content of cost-probe.json."""
     sequence: list[tuple[str, str | None]] = [("unstyled", None)]
     sequence += [(style, style) for style in styles]
     arms = [
-        _run_arm(name, style, repeat, model, plugin_dir, workdir, run)
+        _run_arm(name, style, repeat, model, plugin_dir, workdir, run, env)
         for repeat in range(repeats)
         for name, style in sequence
     ]
@@ -193,12 +194,14 @@ def probe_overhead(
     style_files = {style: plugin_dir / "output-styles" / f"{style}.md" for style in sorted(styles)}
     return {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "claude_version": claude_version(),
+        "claude_version": cli_version,
         "model_requested": model,
         "probe_prompt": PROBE_PROMPT,
         "flags": list(ISOLATION_FLAGS),
+        "config": CONFIG_MODE,
+        "config_manifest_sha256": manifest_sha256(),
         "note": PROBE_NOTE,
-        "plugin": {"dir": str(plugin_dir), "name": _plugin_name(plugin_dir)},
+        "plugin": {"dir": str(plugin_dir), "name": plugin_name(plugin_dir)},
         "styles": {
             style: {"file": str(path), "sha256": sha256_of(path)}
             for style, path in style_files.items()

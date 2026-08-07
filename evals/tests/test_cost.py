@@ -9,7 +9,7 @@ import pytest
 from cost import analyze_ratios, cli, probe_argv, probe_overhead
 from cost.analysis import distribution
 from cost.report import SHORTNESS_WARNING
-from runner import GenerationError
+from runner import GenerationError, PluginLeakError
 from runner.provenance import sha256_of
 
 
@@ -121,12 +121,13 @@ def style_of(argv):
     return settings.get("outputStyle")
 
 
-def probe_stream(output_style, usage):
+def probe_stream(output_style, usage, plugins=("test-plugin",)):
     init = {
         "type": "system",
         "subtype": "init",
         "output_style": output_style,
         "model": "claude-sonnet-5",
+        "plugins": [{"name": name} for name in plugins],
     }
     result = {"type": "result", "is_error": False, "result": "OK", "usage": usage}
     return "\n".join(json.dumps(event) for event in (init, result))
@@ -163,7 +164,7 @@ class FakeProbeRunner:
         self.styled_calls = 0
         self.calls = []
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         self.calls.append(argv)
         style = style_of(argv)
         if style == "default":
@@ -176,6 +177,19 @@ class FakeProbeRunner:
             index = min(self.styled_calls - 1, len(self.styled_usages) - 1)
             return probe_stream(style, self.styled_usages[index])
         return probe_stream(style, self.styled_usage)
+
+
+def test_probe_rejects_an_undeclared_plugin(tmp_path):
+    plugin = make_plugin(tmp_path / "plugin")
+
+    def run(argv, cwd, env=None):
+        usage = UNSTYLED_USAGE if style_of(argv) == "default" else STYLED_USAGE
+        return probe_stream(style_of(argv), usage, plugins=("test-plugin", "user-plugin"))
+
+    with pytest.raises(PluginLeakError, match="user-plugin"):
+        probe_overhead(
+            styles=["alpha"], model="sonnet", plugin_dir=plugin, workdir=tmp_path, run=run
+        )
 
 
 def test_probe_argv_loads_the_plugin_on_both_arms(tmp_path):
@@ -244,7 +258,7 @@ def test_probe_repeats_give_the_overhead_a_spread(tmp_path):
 def test_probe_rejects_a_wrong_active_style(tmp_path):
     plugin = make_plugin(tmp_path / "plugin")
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return probe_stream("default", UNSTYLED_USAGE)  # the style never activates
 
     with pytest.raises(GenerationError, match="output style"):
@@ -256,7 +270,7 @@ def test_probe_rejects_a_wrong_active_style(tmp_path):
 def test_probe_rejects_absent_usage_fields(tmp_path):
     plugin = make_plugin(tmp_path / "plugin")
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return probe_stream(style_of(argv), {"output_tokens": 1})
 
     with pytest.raises(GenerationError, match="usage carries no"):
@@ -275,7 +289,7 @@ def test_probe_rejects_a_zero_reading(tmp_path):
     }
     first = iter([zero])
 
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         default = UNSTYLED_USAGE if style_of(argv) == "default" else STYLED_USAGE
         return probe_stream(style_of(argv), next(first, default))
 
@@ -465,7 +479,7 @@ def test_cli_cannot_report_without_answers(tmp_path):
 
 
 def test_cli_fails_when_the_probe_fails(project):
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return probe_stream("default", {"output_tokens": 1})  # no input-token fields
 
     with pytest.raises(SystemExit) as error:

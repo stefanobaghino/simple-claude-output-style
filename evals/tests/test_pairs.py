@@ -13,7 +13,15 @@ from string import ascii_lowercase
 import pytest
 import yaml
 
-from runner import GenerationError, build_argv, cli, generate, style_reference
+from runner import (
+    GenerationError,
+    PluginLeakError,
+    build_argv,
+    cli,
+    generate,
+    manifest_sha256,
+    style_reference,
+)
 from runner.provenance import build_provenance
 from runner.report import build_report
 from runner.screening import screening_provenance, screening_section, select_screening_prompts
@@ -24,14 +32,14 @@ PROMPTS = HERE.parent / "prompts" / "prompts.yaml"
 TASK_TYPES = {"explanation", "code-review", "summarization", "debugging"}
 
 
-def stream_output(output_style="default", answer="ok", is_error=False):
+def stream_output(output_style="default", answer="ok", is_error=False, plugins=()):
     init = {
         "type": "system",
         "subtype": "init",
         "output_style": output_style,
         "model": "claude-sonnet-5",
         "claude_code_version": "2.1.220",
-        "plugins": [{"name": "simple-output-styles"}],
+        "plugins": [{"name": name} for name in plugins],
         "tools": [],
         "mcp_servers": [],
     }
@@ -62,10 +70,13 @@ class FakeRunner:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, argv, cwd):
+    def __call__(self, argv, cwd, env=None):
         self.calls.append(argv)
         style = style_of(argv)
-        return stream_output(output_style=style or "default", answer=f"answer under {style}")
+        plugins = ("test-plugin",) if "--plugin-dir" in argv else ()
+        return stream_output(
+            output_style=style or "default", answer=f"answer under {style}", plugins=plugins
+        )
 
 
 def test_prompt_set_is_complete():
@@ -120,8 +131,12 @@ def test_build_argv_unstyled_forces_the_default_style():
 def test_generate_parses_the_stream(tmp_path):
     plugin = make_plugin(tmp_path / "plugin", styles=("plain-language",))
 
-    def run(argv, cwd):
-        return stream_output(output_style="test-plugin:plain-language", answer="the answer")
+    def run(argv, cwd, env=None):
+        return stream_output(
+            output_style="test-plugin:plain-language",
+            answer="the answer",
+            plugins=("test-plugin",),
+        )
 
     result = generate("prompt", "sonnet", "plain-language", plugin, tmp_path, run=run)
     assert result.answer == "the answer"
@@ -131,25 +146,46 @@ def test_generate_parses_the_stream(tmp_path):
     assert result.input_tokens == 3
     assert result.cache_creation_input_tokens == 2
     assert result.cache_read_input_tokens == 1
-    assert result.plugins == ("simple-output-styles",)
+    assert result.plugins == ("test-plugin",)
     assert isinstance(result.wall_ms, int)
 
 
 def test_generate_rejects_a_wrong_active_style(tmp_path):
     plugin = make_plugin(tmp_path / "plugin", styles=("plain-language",))
 
-    def run(argv, cwd):
-        return stream_output(output_style="default")
+    def run(argv, cwd, env=None):
+        return stream_output(output_style="default", plugins=("test-plugin",))
 
     with pytest.raises(GenerationError, match="output style"):
         generate("prompt", "sonnet", "plain-language", plugin, tmp_path, run=run)
 
 
 def test_generate_rejects_an_error_result(tmp_path):
-    def run(argv, cwd):
+    def run(argv, cwd, env=None):
         return stream_output(answer="Not logged in", is_error=True)
 
     with pytest.raises(GenerationError, match="error"):
+        generate("prompt", "sonnet", None, None, tmp_path, run=run)
+
+
+def test_generate_rejects_an_undeclared_plugin(tmp_path):
+    plugin = make_plugin(tmp_path / "plugin", styles=("plain-language",))
+
+    def run(argv, cwd, env=None):
+        return stream_output(
+            output_style="test-plugin:plain-language",
+            plugins=("test-plugin", "user-plugin"),
+        )
+
+    with pytest.raises(PluginLeakError, match="user-plugin"):
+        generate("prompt", "sonnet", "plain-language", plugin, tmp_path, run=run)
+
+
+def test_generate_unstyled_rejects_any_plugin(tmp_path):
+    def run(argv, cwd, env=None):
+        return stream_output(plugins=("user-plugin",))
+
+    with pytest.raises(PluginLeakError, match="user-plugin"):
         generate("prompt", "sonnet", None, None, tmp_path, run=run)
 
 
@@ -159,7 +195,7 @@ def make_pairs_project(tmp_path, monkeypatch, prompts):
     rules.mkdir()
     (rules / "alpha.rules.yaml").write_text("style: alpha\n")
     make_plugin(tmp_path / "plugin")
-    monkeypatch.setattr(cli, "claude_version", lambda: "0.0.0 (test)")
+    monkeypatch.setattr(cli, "claude_version", lambda *args: "0.0.0 (test)")
     return tmp_path
 
 
@@ -279,9 +315,9 @@ def test_cli_runs_the_calls_in_parallel(project):
     barrier = threading.Barrier(4, timeout=10)
 
     class BlockingRunner(FakeRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             barrier.wait()
-            return super().__call__(argv, cwd)
+            return super().__call__(argv, cwd, env)
 
     runner = BlockingRunner()
     assert run_cli(project, runner) == 0
@@ -293,12 +329,12 @@ def test_cli_with_parallel_one_runs_serially(project):
     lock = threading.Lock()
 
     class CountingRunner(FakeRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             with lock:
                 live["now"] += 1
                 live["peak"] = max(live["peak"], live["now"])
             try:
-                return super().__call__(argv, cwd)
+                return super().__call__(argv, cwd, env)
             finally:
                 with lock:
                     live["now"] -= 1
@@ -318,9 +354,9 @@ def test_cli_calls_run_in_a_workdir_outside_the_project(project):
     seen = []
 
     class WorkdirProbe(FakeRunner):
-        def __call__(self, argv, cwd):
+        def __call__(self, argv, cwd, env=None):
             seen.append((Path(cwd), Path(cwd).is_dir()))
-            return super().__call__(argv, cwd)
+            return super().__call__(argv, cwd, env)
 
     assert run_cli(project, WorkdirProbe()) == 0
     assert seen
@@ -383,9 +419,10 @@ def test_pick_default_out_refuses_when_every_suffix_is_complete(tmp_path):
 
 
 def test_cli_reports_a_failed_call_and_keeps_going(project):
-    def failing_runner(argv, cwd):
+    def failing_runner(argv, cwd, env=None):
         if style_of(argv) == "alpha":
-            return stream_output(output_style="default")  # style did not activate
+            # The style did not activate.
+            return stream_output(output_style="default", plugins=("test-plugin",))
         return stream_output()
 
     assert run_cli(project, failing_runner) == 1
@@ -506,3 +543,16 @@ def test_provenance_holds_the_linter_toolchain(project):
     assert provenance["conditions"]["model_requested"] == "sonnet"
     assert provenance["conditions"]["workdir"] == "temp"
     assert "--disallowedTools" in provenance["conditions"]["flags"]
+
+
+def test_provenance_holds_the_config_fields(project):
+    runner = FakeRunner()
+    assert run_cli(project, runner) == 0
+    provenance = json.loads((project / "run" / "provenance.json").read_text())
+    conditions = provenance["conditions"]
+    assert conditions["config"] == "hermetic"
+    assert conditions["config_manifest_sha256"] == manifest_sha256()
+    assert "claude_binary" in conditions
+    assert "CLAUDE_CONFIG_DIR" in conditions["env_passed"]
+    # The names of the variables land here, never the values.
+    assert all(isinstance(name, str) and "/" not in name for name in conditions["env_passed"])

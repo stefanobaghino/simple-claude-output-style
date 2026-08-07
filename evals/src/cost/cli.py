@@ -13,7 +13,9 @@ import sys
 from pathlib import Path
 
 from gate.cli import load_answers
-from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
+from runner.generate import GenerationError, Runner, subprocess_runner
+from runner.hermetic import hermetic_call
+from runner.provenance import claude_version
 from runner.screening import screening_section
 from runner.spend import spend_summary
 
@@ -36,14 +38,16 @@ def _provenance(run_dir: Path) -> dict | None:
 
 def _run_probe(styles: list[str], model: str, plugin_dir: Path, run: Runner, repeats: int) -> dict:
     try:
-        with isolated_workdir("probe") as workdir:
+        with hermetic_call("probe") as hermetic:
             return probe_overhead(
                 styles=styles,
                 model=model,
                 plugin_dir=plugin_dir,
-                workdir=workdir,
+                workdir=hermetic.workdir,
                 run=run,
                 repeats=repeats,
+                env=hermetic.env,
+                cli_version=claude_version(hermetic.binary, hermetic.env),
             )
     except GenerationError as error:
         raise _fail(f"the probe failed: {error}") from error

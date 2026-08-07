@@ -15,7 +15,8 @@ import yaml
 
 from value.judges import TaskPool
 
-from .generate import GenerationError, Runner, generate, isolated_workdir, subprocess_runner
+from .generate import GenerationError, Runner, generate, subprocess_runner
+from .hermetic import hermetic_call
 from .provenance import build_provenance, claude_version
 from .report import arm_name, build_report
 from .screening import screening_provenance, select_screening_prompts
@@ -183,7 +184,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     lock = threading.Lock()
     with (
         answers_path.open("a", encoding="utf-8") as answers_file,
-        isolated_workdir("pairs") as workdir,
+        hermetic_call("pairs") as hermetic,
     ):
         # The calls do not interact: each call is an isolated
         # subprocess, and the workdir stays read-only for the CLI. The
@@ -195,7 +196,15 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             nonlocal done
             name = arm_name(style)
             try:
-                result = generate(prompt["text"], args.model, style, plugin_dir, workdir, run=run)
+                result = generate(
+                    prompt["text"],
+                    args.model,
+                    style,
+                    plugin_dir,
+                    hermetic.workdir,
+                    run=run,
+                    env=hermetic.env,
+                )
             except GenerationError as error:
                 with lock:
                     done += 1
@@ -230,13 +239,18 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         for style, prompt in todo:
             pool.submit(partial(generate_one, style, prompt))
         pool.drain()
+        # The version call needs the live hermetic directory, so it
+        # runs before the context closes.
+        cli_version = claude_version(hermetic.binary, hermetic.env)
 
     provenance = build_provenance(
         model=args.model,
         prompts_path=prompts_path,
         styles=styles,
         plugin_dir=plugin_dir,
-        cli_version=claude_version(),
+        cli_version=cli_version,
+        claude_binary=hermetic.binary,
+        config_manifest_sha256=hermetic.manifest_sha256,
     )
     if args.screening:
         provenance["screening"] = screening_provenance(prompts, full_count)

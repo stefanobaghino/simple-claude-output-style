@@ -5,9 +5,10 @@ no MCP servers, no hooks, a single turn, no dynamic system-prompt
 sections, and no session persistence. The call runs in an empty temp
 directory outside the repository, because the CLI loads instruction
 files, the memory index, and the git state from the ancestor
-directories of its cwd. Plugins from the user configuration still
-load; the caller records them in the provenance, so a change in the
-environment stays visible across runs.
+directories of its cwd. The user configuration stays out as well:
+the call runs under a hermetic config directory and a whitelisted
+environment (see the hermetic module), and the caller asserts that
+exactly the declared plugins loaded.
 """
 
 from __future__ import annotations
@@ -21,8 +22,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-Runner = Callable[[list[str], Path], str]
-"""Runs a command in a working directory and returns its stdout."""
+Runner = Callable[[list[str], Path, dict[str, str] | None], str]
+"""Runs a command in a working directory with an environment and returns its stdout."""
 
 # The frozen flag set. The stream-json format carries the init event,
 # which names the active output style, the resolved model, and the
@@ -59,6 +60,29 @@ class GenerationError(RuntimeError):
     """A single answer generation failed."""
 
 
+class PluginLeakError(GenerationError):
+    """An undeclared plugin entered a call.
+
+    The leak is deterministic within an invocation, so a retry burns
+    a call without a chance of success. The callers never retry this
+    error.
+    """
+
+
+def assert_declared_plugins(init: dict, declared: tuple[str, ...], context: str) -> None:
+    """Make sure that a call loaded exactly the declared plugins.
+
+    The check is exact equality, not subset: a missing declared
+    plugin breaks a measurement as surely as a stray user plugin.
+    """
+    loaded = tuple(sorted(p["name"] for p in init.get("plugins", [])))
+    if loaded != tuple(sorted(declared)):
+        raise PluginLeakError(
+            f"{context}: the call loaded plugins {list(loaded)}, "
+            f"but the declared set is {sorted(declared)}"
+        )
+
+
 @dataclass(frozen=True)
 class Generation:
     """One generated answer plus the environment that produced it."""
@@ -77,6 +101,14 @@ class Generation:
     wall_ms: int
 
 
+def plugin_name(plugin_dir: Path) -> str:
+    """The declared name of the plugin, from its manifest."""
+    manifest = json.loads(
+        (plugin_dir / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )
+    return manifest["name"]
+
+
 def style_reference(plugin_dir: Path, style: str) -> str:
     """The plugin-qualified name that activates a plugin output style.
 
@@ -84,10 +116,7 @@ def style_reference(plugin_dir: Path, style: str) -> str:
     event without injecting the style, and the answer comes out
     unstyled. Only the "<plugin>:<style>" form injects the style.
     """
-    manifest = json.loads(
-        (plugin_dir / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
-    )
-    return f"{manifest['name']}:{style}"
+    return f"{plugin_name(plugin_dir)}:{style}"
 
 
 def build_argv(prompt: str, model: str, style: str | None, plugin_dir: Path | None) -> list[str]:
@@ -110,9 +139,19 @@ def build_argv(prompt: str, model: str, style: str | None, plugin_dir: Path | No
     return argv
 
 
-def subprocess_runner(argv: list[str], cwd: Path) -> str:
+def subprocess_runner(argv: list[str], cwd: Path, env: dict[str, str] | None) -> str:
+    # The guard makes the inherited environment unreachable: a live
+    # call without the hermetic environment is a bug, not a mode.
+    if env is None:
+        raise GenerationError("a live call needs the hermetic environment")
     completed = subprocess.run(
-        argv, cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT_SECONDS, check=False
+        argv,
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=TIMEOUT_SECONDS,
+        check=False,
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
@@ -127,14 +166,17 @@ def generate(
     plugin_dir: Path | None,
     workdir: Path,
     run: Runner = subprocess_runner,
+    env: dict[str, str] | None = None,
 ) -> Generation:
     """Generate one answer and check that the intended style was active."""
     argv = build_argv(prompt, model, style, plugin_dir)
     start = time.monotonic()
-    stdout = run(argv, workdir)
+    stdout = run(argv, workdir, env)
     wall_ms = round((time.monotonic() - start) * 1000)
     init, result = parse_events(stdout)
 
+    declared = (plugin_name(plugin_dir),) if style is not None and plugin_dir else ()
+    assert_declared_plugins(init, declared, f"the {style or 'unstyled'} answer")
     expected_style = style_reference(plugin_dir, style) if style is not None else "default"
     active_style = init.get("output_style")
     if active_style != expected_style:

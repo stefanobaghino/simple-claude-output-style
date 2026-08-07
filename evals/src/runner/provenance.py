@@ -14,6 +14,7 @@ from importlib import metadata
 from pathlib import Path
 
 from .generate import ISOLATION_FLAGS, WORKDIR_MODE
+from .hermetic import CONFIG_DIR_VAR, CONFIG_MODE, ENV_WHITELIST, TOKEN_VAR
 
 LINTER_PACKAGES = ("spacy", "en-core-web-sm")
 
@@ -53,10 +54,17 @@ def linter_toolchain() -> dict[str, str | None]:
     return versions
 
 
-def claude_version() -> str | None:
+def claude_version(binary: str | None = "claude", env: dict[str, str] | None = None) -> str | None:
+    """The version of the CLI, under the environment of the run.
+
+    The callers pass the resolved binary and the hermetic environment,
+    so this call sees the same CLI as the measured calls.
+    """
+    if binary is None:
+        return None
     try:
         completed = subprocess.run(
-            ["claude", "--version"], capture_output=True, text=True, check=True
+            [binary, "--version"], env=env, capture_output=True, text=True, check=True
         )
     except (OSError, subprocess.CalledProcessError):
         return None
@@ -70,6 +78,8 @@ def build_provenance(
     styles: list[str],
     plugin_dir: Path,
     cli_version: str | None,
+    claude_binary: str | None = None,
+    config_manifest_sha256: str | None = None,
 ) -> dict:
     style_files = {style: plugin_dir / "output-styles" / f"{style}.md" for style in sorted(styles)}
     return {
@@ -79,6 +89,12 @@ def build_provenance(
             "model_requested": model,
             "claude_version": cli_version,
             "workdir": WORKDIR_MODE,
+            "config": CONFIG_MODE,
+            "config_manifest_sha256": config_manifest_sha256,
+            "claude_binary": claude_binary,
+            # The variable names of the whitelisted environment. The
+            # values never land here.
+            "env_passed": [*ENV_WHITELIST, CONFIG_DIR_VAR, TOKEN_VAR],
             "flags": list(ISOLATION_FLAGS),
             "settings": {
                 "base": {"disableAllHooks": True},

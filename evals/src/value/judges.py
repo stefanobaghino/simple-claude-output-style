@@ -39,11 +39,13 @@ from pathlib import Path
 from runner.generate import (
     ISOLATION_FLAGS,
     GenerationError,
+    PluginLeakError,
     Runner,
+    assert_declared_plugins,
     parse_events,
     subprocess_runner,
 )
-from runner.provenance import claude_version
+from runner.hermetic import CONFIG_MODE, manifest_sha256
 
 CHECKS = ("comprehension", "paraphrase", "roundtrip")
 
@@ -231,11 +233,14 @@ def build_meta(
     replicates: int,
     language: str,
     answers_sha256: str,
+    cli_version: str | None = None,
 ) -> dict:
     return {
         "type": "meta",
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "claude_version": claude_version(),
+        "claude_version": cli_version,
+        "config": CONFIG_MODE,
+        "config_manifest_sha256": manifest_sha256(),
         "models": {"reader": reader_model, "grader": grader_model},
         "questions": questions_n,
         "paraphrases": paraphrases_k,
@@ -356,6 +361,7 @@ class JudgeSession:
     sink: RowSink
     workdir: Path
     run: Runner
+    env: dict[str, str] | None = None
     warnings: list[str] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -379,7 +385,7 @@ class JudgeSession:
                     return self.rows[key]
         try:
             init, result, wall_ms = self._attempt(key, model, prompt)
-        except JudgePinError:
+        except (JudgePinError, PluginLeakError):
             raise
         except GenerationError as error:
             init, result, wall_ms = self._attempt(key, model, prompt)
@@ -414,9 +420,11 @@ class JudgeSession:
     def _attempt(self, key: str, model: str, prompt: str) -> tuple[dict, dict, int]:
         """One live judge call: the subprocess, then the sanity checks."""
         start = time.monotonic()
-        stdout = self.run(judge_argv(prompt, model), self.workdir)
+        stdout = self.run(judge_argv(prompt, model), self.workdir, self.env)
         wall_ms = round((time.monotonic() - start) * 1000)
         init, result = parse_events(stdout)
+        # A judge call declares no plugin at all.
+        assert_declared_plugins(init, (), key)
         active = init.get("output_style")
         if active != "default":
             raise GenerationError(
@@ -683,6 +691,7 @@ def run_judges(
     sink: RowSink,
     workdir: Path,
     run: Runner = subprocess_runner,
+    env: dict[str, str] | None = None,
     parallel: int = 1,
 ) -> list[str]:
     """Run the judge calls for every pair and return the warnings.
@@ -695,7 +704,7 @@ def run_judges(
     spans the checks, the parallel count sets how many tasks run at
     a time, and a call runs as soon as its inputs exist.
     """
-    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run)
+    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run, env=env)
     pool = TaskPool(parallel)
 
     if "comprehension" in checks:

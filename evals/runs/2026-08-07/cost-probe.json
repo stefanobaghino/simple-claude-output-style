@@ -1,0 +1,427 @@
+{
+  "date": "2026-08-07T09:00:46+00:00",
+  "claude_version": "2.1.224 (Claude Code)",
+  "model_requested": "sonnet",
+  "probe_prompt": "Reply with the word OK.",
+  "flags": [
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--no-session-persistence",
+    "--max-turns",
+    "1",
+    "--disallowedTools",
+    "*",
+    "--exclude-dynamic-system-prompt-sections",
+    "--strict-mcp-config"
+  ],
+  "config": "hermetic",
+  "config_manifest_sha256": "e3ef87bafe5a44a4929464925e932ad3a0ede1accc791d84f511e706c8d9abab",
+  "note": "Both probe arms load the plugin through --plugin-dir, unlike the unstyled arm of the runner. Thus the difference between a styled arm and the unstyled arm isolates the style block.",
+  "plugin": {
+    "dir": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin",
+    "name": "simple-output-styles"
+  },
+  "styles": {
+    "clarity-flow": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/clarity-flow.md",
+      "sha256": "b96eb83b01ad11b18ec5cf46dbb7203aad77de54ebafff10a6476b84cac19a06"
+    },
+    "classic-concise": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/classic-concise.md",
+      "sha256": "6adc8c4fb691900266f0cbceb873767423d623824387d8f14ef85d552ef06d44"
+    },
+    "developer-docs": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/developer-docs.md",
+      "sha256": "c62b6bf0a91ce36fe15d5318816eca56d318f5aa8e54fc5f9520e82bf46b9efc"
+    },
+    "plain-language": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/plain-language.md",
+      "sha256": "d9acbffcfb85937603524c3defc7491f91e86f24fcc679ec1247313b80bcbc04"
+    },
+    "technical-simplified": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/technical-simplified.md",
+      "sha256": "69bf572f15b1b570bd8ace5e93960150ec5f0096f0b71b9f42f8833ccaa4f089"
+    }
+  },
+  "repeats": 3,
+  "price_weights": {
+    "input_tokens": 1.0,
+    "cache_creation_input_tokens": 1.25,
+    "cache_read_input_tokens": 0.1
+  },
+  "arms": [
+    {
+      "arm": "unstyled",
+      "repeat": 0,
+      "output_style_active": "default",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 371,
+      "cache_read_input_tokens": 8081,
+      "total_input_tokens": 8454,
+      "output_tokens": 4,
+      "duration_ms": 3724,
+      "wall_ms": 12224
+    },
+    {
+      "arm": "clarity-flow",
+      "repeat": 0,
+      "output_style_active": "simple-output-styles:clarity-flow",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 371,
+      "cache_read_input_tokens": 9319,
+      "total_input_tokens": 9692,
+      "output_tokens": 4,
+      "duration_ms": 2913,
+      "wall_ms": 585839
+    },
+    {
+      "arm": "classic-concise",
+      "repeat": 0,
+      "output_style_active": "simple-output-styles:classic-concise",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 371,
+      "cache_read_input_tokens": 9383,
+      "total_input_tokens": 9756,
+      "output_tokens": 4,
+      "duration_ms": 3386,
+      "wall_ms": 11888
+    },
+    {
+      "arm": "developer-docs",
+      "repeat": 0,
+      "output_style_active": "simple-output-styles:developer-docs",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 371,
+      "cache_read_input_tokens": 9322,
+      "total_input_tokens": 9695,
+      "output_tokens": 4,
+      "duration_ms": 3109,
+      "wall_ms": 613331
+    },
+    {
+      "arm": "plain-language",
+      "repeat": 0,
+      "output_style_active": "simple-output-styles:plain-language",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 371,
+      "cache_read_input_tokens": 9541,
+      "total_input_tokens": 9914,
+      "output_tokens": 4,
+      "duration_ms": 9792,
+      "wall_ms": 17942
+    },
+    {
+      "arm": "technical-simplified",
+      "repeat": 0,
+      "output_style_active": "simple-output-styles:technical-simplified",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 371,
+      "cache_read_input_tokens": 10069,
+      "total_input_tokens": 10442,
+      "output_tokens": 4,
+      "duration_ms": 2508,
+      "wall_ms": 9726
+    },
+    {
+      "arm": "unstyled",
+      "repeat": 1,
+      "output_style_active": "default",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 8452,
+      "total_input_tokens": 8454,
+      "output_tokens": 4,
+      "duration_ms": 2665,
+      "wall_ms": 4139
+    },
+    {
+      "arm": "clarity-flow",
+      "repeat": 1,
+      "output_style_active": "simple-output-styles:clarity-flow",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9690,
+      "total_input_tokens": 9692,
+      "output_tokens": 4,
+      "duration_ms": 2111,
+      "wall_ms": 3028
+    },
+    {
+      "arm": "classic-concise",
+      "repeat": 1,
+      "output_style_active": "simple-output-styles:classic-concise",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9754,
+      "total_input_tokens": 9756,
+      "output_tokens": 4,
+      "duration_ms": 2142,
+      "wall_ms": 3080
+    },
+    {
+      "arm": "developer-docs",
+      "repeat": 1,
+      "output_style_active": "simple-output-styles:developer-docs",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9693,
+      "total_input_tokens": 9695,
+      "output_tokens": 4,
+      "duration_ms": 2073,
+      "wall_ms": 2970
+    },
+    {
+      "arm": "plain-language",
+      "repeat": 1,
+      "output_style_active": "simple-output-styles:plain-language",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9912,
+      "total_input_tokens": 9914,
+      "output_tokens": 4,
+      "duration_ms": 2796,
+      "wall_ms": 3724
+    },
+    {
+      "arm": "technical-simplified",
+      "repeat": 1,
+      "output_style_active": "simple-output-styles:technical-simplified",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 10440,
+      "total_input_tokens": 10442,
+      "output_tokens": 4,
+      "duration_ms": 3140,
+      "wall_ms": 3972
+    },
+    {
+      "arm": "unstyled",
+      "repeat": 2,
+      "output_style_active": "default",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 8452,
+      "total_input_tokens": 8454,
+      "output_tokens": 4,
+      "duration_ms": 3614,
+      "wall_ms": 4603
+    },
+    {
+      "arm": "clarity-flow",
+      "repeat": 2,
+      "output_style_active": "simple-output-styles:clarity-flow",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9690,
+      "total_input_tokens": 9692,
+      "output_tokens": 4,
+      "duration_ms": 3474,
+      "wall_ms": 4278
+    },
+    {
+      "arm": "classic-concise",
+      "repeat": 2,
+      "output_style_active": "simple-output-styles:classic-concise",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9754,
+      "total_input_tokens": 9756,
+      "output_tokens": 4,
+      "duration_ms": 2556,
+      "wall_ms": 3359
+    },
+    {
+      "arm": "developer-docs",
+      "repeat": 2,
+      "output_style_active": "simple-output-styles:developer-docs",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9693,
+      "total_input_tokens": 9695,
+      "output_tokens": 4,
+      "duration_ms": 3184,
+      "wall_ms": 3944
+    },
+    {
+      "arm": "plain-language",
+      "repeat": 2,
+      "output_style_active": "simple-output-styles:plain-language",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9912,
+      "total_input_tokens": 9914,
+      "output_tokens": 4,
+      "duration_ms": 2081,
+      "wall_ms": 2948
+    },
+    {
+      "arm": "technical-simplified",
+      "repeat": 2,
+      "output_style_active": "simple-output-styles:technical-simplified",
+      "model": "claude-sonnet-5",
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 10440,
+      "total_input_tokens": 10442,
+      "output_tokens": 4,
+      "duration_ms": 2781,
+      "wall_ms": 3592
+    }
+  ],
+  "unstyled_totals": [
+    8454,
+    8454,
+    8454
+  ],
+  "overhead": {
+    "clarity-flow": {
+      "tokens": {
+        "n": 3,
+        "per_repeat": [
+          1238,
+          1238,
+          1238
+        ],
+        "min": 1238,
+        "mean": 1238.0,
+        "max": 1238,
+        "stdev": 0.0
+      },
+      "weighted": {
+        "n": 3,
+        "per_repeat": [
+          123.8,
+          123.8,
+          123.8
+        ],
+        "min": 123.8,
+        "mean": 123.8,
+        "max": 123.8,
+        "stdev": 0.0
+      }
+    },
+    "classic-concise": {
+      "tokens": {
+        "n": 3,
+        "per_repeat": [
+          1302,
+          1302,
+          1302
+        ],
+        "min": 1302,
+        "mean": 1302.0,
+        "max": 1302,
+        "stdev": 0.0
+      },
+      "weighted": {
+        "n": 3,
+        "per_repeat": [
+          130.2,
+          130.2,
+          130.2
+        ],
+        "min": 130.2,
+        "mean": 130.2,
+        "max": 130.2,
+        "stdev": 0.0
+      }
+    },
+    "developer-docs": {
+      "tokens": {
+        "n": 3,
+        "per_repeat": [
+          1241,
+          1241,
+          1241
+        ],
+        "min": 1241,
+        "mean": 1241.0,
+        "max": 1241,
+        "stdev": 0.0
+      },
+      "weighted": {
+        "n": 3,
+        "per_repeat": [
+          124.1,
+          124.1,
+          124.1
+        ],
+        "min": 124.1,
+        "mean": 124.1,
+        "max": 124.1,
+        "stdev": 0.0
+      }
+    },
+    "plain-language": {
+      "tokens": {
+        "n": 3,
+        "per_repeat": [
+          1460,
+          1460,
+          1460
+        ],
+        "min": 1460,
+        "mean": 1460.0,
+        "max": 1460,
+        "stdev": 0.0
+      },
+      "weighted": {
+        "n": 3,
+        "per_repeat": [
+          146.0,
+          146.0,
+          146.0
+        ],
+        "min": 146.0,
+        "mean": 146.0,
+        "max": 146.0,
+        "stdev": 0.0
+      }
+    },
+    "technical-simplified": {
+      "tokens": {
+        "n": 3,
+        "per_repeat": [
+          1988,
+          1988,
+          1988
+        ],
+        "min": 1988,
+        "mean": 1988.0,
+        "max": 1988,
+        "stdev": 0.0
+      },
+      "weighted": {
+        "n": 3,
+        "per_repeat": [
+          198.8,
+          198.8,
+          198.8
+        ],
+        "min": 198.8,
+        "mean": 198.8,
+        "max": 198.8,
+        "stdev": 0.0
+      }
+    }
+  },
+  "warnings": []
+}

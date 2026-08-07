@@ -108,6 +108,28 @@ style adds the samples `tests/samples/<style>/{clean,dirty,traps}.md`,
 its expected violations in `tests/test_lint.py`, and one designed
 conflict pair in the conflict map of that file.
 
+## How to add a prompt
+
+The prompt set in `prompts/prompts.yaml` is shared: every axis reads
+the same prompts, so a new prompt grows the sample of every check.
+Add a prompt with these steps:
+
+1. Append the entry at the tail of its type block, with the next
+   `<type>-NN` id. Keep the counts uniform across the 4 types, and
+   keep the prompt self-contained, as the file header describes. The
+   tail position keeps the turn order of the drift sessions stable.
+2. Update the prompt counts in `tests/test_pairs.py`
+   (`test_prompt_set_is_complete`).
+3. Update the count sentences in this document: the drift sentence
+   ("15 of the N pair prompts") and the screening sentence ("8 of
+   the N prompts", with its design fractions).
+
+A prompt edit opens a comparability era: the provenance records the
+sha256 of `prompts.yaml`, so new full runs warn against old runs in
+a comparison. The screening subset also redraws, because the seed-0
+sample runs over a longer sorted id list. Old runs stay comparable
+among themselves.
+
 ## How to run
 
 The harness uses [uv](https://docs.astral.sh/uv/). From this directory:
@@ -355,7 +377,7 @@ codes equal the exit codes of `style-value`.
 The drift report owns its own run directory, because it measures
 sessions, not pairs. A session is 15 scripted turns in one Claude Code
 session, with the style active: each turn resumes the session of the
-previous turn, so the context grows. The turns reuse 15 of the 20 pair
+previous turn, so the context grows. The turns reuse 15 of the 32 pair
 prompts, and each repeat rotates the order, so a hard prompt does not
 always sit at the same turn position. The linter checks every turn
 with the rule set of the style. The rate of a turn position pools
@@ -516,10 +538,13 @@ resumes, so a stop loses no data.
 instead of three, over a fixed prompt subset, with every stage of a
 full run. The subset draws 2 prompts per task type from the full
 prompt file, sorted and with seed 0, so every screening run uses
-the same 8 of the 20 prompts. By design, the generation calls are
-about 13% of a full campaign, and the judge calls are about 40% of
+the same 8 of the 32 prompts. By design, the generation calls are
+about 8% of a full campaign, and the judge calls are about 25% of
 one full run. These fractions are design numbers until a
-measurement against the baseline campaign replaces them. The run
+measurement against the baseline campaign replaces them. A grown
+prompt set redraws the subset, so screening runs across a
+prompt-set change warn on the screening block of the provenance as
+well as on the prompt-set hash. The run
 lands under its own `-screening` directory family, the provenance
 carries a screening block, and every report of the run starts with
 a screening note, because the error bars of a screening run are

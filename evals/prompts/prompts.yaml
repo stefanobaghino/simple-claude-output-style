@@ -7,6 +7,9 @@
 # - Each prompt is self-contained. The code to review, the text to
 #   summarize, and the error output to debug are inline. An answer
 #   needs no tools and no repository.
+# - Each type holds the same number of prompts. A new prompt continues
+#   the <type>-NN numbering and appends at the tail of its type block,
+#   so the turn order of the drift sessions stays stable.
 #
 # Changes to this file change the measurement. The provenance of each
 # run records the sha256 of this file.
@@ -45,6 +48,30 @@ prompts:
       Explain what a memory leak is in a garbage-collected language,
       and how a leak can still happen even though a garbage collector
       runs. Give two common causes.
+
+  - id: explanation-06
+    type: explanation
+    text: |
+      Our API feels slow, and the team wants to add a cache in front of
+      the database. Explain whether a cache will help us. We have not
+      profiled the service, and we do not know the read-to-write mix.
+      The reader is a junior developer.
+
+  - id: explanation-07
+    type: explanation
+    text: |
+      Our single PostgreSQL instance holds about 200 GB, and the
+      product team expects growth but cannot say how much. Explain
+      whether we should start sharding now. State what the decision
+      depends on and what can go wrong on each path.
+
+  - id: explanation-08
+    type: explanation
+    text: |
+      Our service exchanges JSON with its clients, and a colleague
+      proposes a switch to a binary format for speed. Explain how much
+      improvement we can expect. We have no measurements of the payload
+      sizes or of the serialization share of the request time.
 
   - id: code-review-01
     type: code-review
@@ -128,6 +155,81 @@ prompts:
         gzip $f
       done
       echo Cleaned $BACKUP_DIR
+      ```
+
+  - id: code-review-06
+    type: code-review
+    text: |
+      Review this Python function. We inherited it without tests or
+      documentation, and the original author has left, so we do not
+      know which behaviors are intentional. Point out every problem
+      you find, and say which ones might be deliberate:
+
+      ```python
+      def merge_settings(base, override):
+          merged = dict(base)
+          for key, value in override.items():
+              if value is None:
+                  merged.pop(key, None)
+              elif key in merged and isinstance(merged[key], dict):
+                  merged[key] = merge_settings(merged[key], value)
+              else:
+                  merged[key] = value
+          return merged
+      ```
+
+  - id: code-review-07
+    type: code-review
+    text: |
+      Review this JavaScript helper. It comes from an old internal
+      library, nobody on the team knows its history, and callers exist
+      that we cannot see. Point out every problem you find, and say
+      which ones might be deliberate:
+
+      ```javascript
+      function withRetry(fn, attempts = 3) {
+        return async (...args) => {
+          for (let i = 0; i < attempts; i++) {
+            try {
+              return await fn(...args);
+            } catch (err) {
+              if (err.status === 429) {
+                await new Promise((r) => setTimeout(r, 1000 * i));
+                continue;
+              }
+              if (err.status >= 500) continue;
+              return null;
+            }
+          }
+        };
+      }
+      ```
+
+  - id: code-review-08
+    type: code-review
+    text: |
+      Review this Python cleanup script. It runs in production on a
+      schedule we did not set up, and the constants have no recorded
+      rationale. Point out every problem you find, and say which ones
+      might be deliberate:
+
+      ```python
+      import os, time
+
+      ROOT = "/var/data/exports"
+      CUTOFF = time.time() - 86400 * 45
+
+      def clean():
+          removed = 0
+          for name in os.listdir(ROOT):
+              path = os.path.join(ROOT, name)
+              if name.startswith("tmp-") or name.endswith(".part"):
+                  os.remove(path)
+                  removed += 1
+              elif os.path.getmtime(path) < CUTOFF and removed < 500:
+                  os.remove(path)
+                  removed += 1
+          return removed
       ```
 
   - id: summarization-01
@@ -214,6 +316,59 @@ prompts:
       would check with their lead. Ben will also prepare the runbook
       for the migration night. Chen continues with the search indexing
       work and expects a demo by Friday.
+
+  - id: summarization-06
+    type: summarization
+    text: |
+      Summarize this incident review for the engineering newsletter,
+      in at most five sentences. Preserve what is known and what is
+      still uncertain:
+
+      On March 3rd the checkout service returned errors for roughly
+      40 minutes. The on-call engineer suspects connection-pool
+      exhaustion in the payments client, but the pool metrics were
+      not retained, so this is unconfirmed. A deploy 20 minutes
+      before the incident may have contributed: the diff touched
+      retry settings, though rollback alone did not restore service.
+      Error rates recovered after a restart, which is consistent
+      with several possible causes. The team believes, but cannot
+      yet show, that a retry storm amplified the outage.
+
+  - id: summarization-07
+    type: summarization
+    text: |
+      Summarize this experiment write-up in one paragraph for the
+      team lead. Keep the distinction between what the data shows
+      and what is still a guess:
+
+      We compared the new request batcher against the current one on
+      the staging cluster for six hours. Median latency dropped 18%,
+      which looks solid. Tail latency may also have improved, but
+      staging traffic is smoother than production traffic, so the
+      p99 numbers are probably optimistic. Memory use per worker
+      grew by about 60 MB; we suspect the larger buffer pool, though
+      we have not profiled it. One worker crashed once during the
+      run. The crash might be unrelated, because staging runs a
+      newer kernel, but we cannot rule out a batcher bug yet.
+
+  - id: summarization-08
+    type: summarization
+    text: |
+      Summarize these user-research notes into the three main
+      findings for the product team. Mark clearly which findings are
+      firm and which are tentative:
+
+      We interviewed eight customers about the new import flow. All
+      eight found the field-mapping step, and six completed it
+      without help, so the redesign of that step seems to work.
+      Three mentioned that the progress bar appears stuck on large
+      files; this may be a perception issue, because the uploads did
+      finish, but two of the three abandoned the import anyway. A
+      few remarks hint that admins and regular users want different
+      defaults, though with eight participants we cannot say how
+      common that split is. Nobody used the new template gallery,
+      which could mean it is hard to find, or just that these
+      customers had existing templates.
 
   - id: debugging-01
     type: debugging
@@ -313,3 +468,62 @@ prompts:
           post = make_post("hello")
           assert post["tags"] == ["draft", "post"]
       ```
+
+  - id: debugging-06
+    type: debugging
+    text: |
+      Our nightly export job fails about once a week with the error
+      below. We cannot reproduce it on demand, and we only have this
+      log fragment, because the surrounding lines were rotated away.
+      What are the most plausible causes, and how would you narrow
+      them down?
+
+      ```
+      2026-07-29T02:14:07Z worker-3 ERROR TimeoutError: pool
+      exhausted, request waited 30.0s
+      2026-07-29T02:14:08Z worker-3 WARN retrying batch 1148
+      (attempt 2)
+      2026-07-29T02:14:41Z worker-3 ERROR TimeoutError: pool
+      exhausted, request waited 30.0s
+      2026-07-29T02:14:41Z scheduler ERROR job nightly-export failed
+      ```
+
+      The job shares its database with an analytics service, and the
+      failures do not always happen at the same batch number.
+
+  - id: debugging-07
+    type: debugging
+    text: |
+      One test in our suite fails on roughly one CI run in ten, and
+      it never fails on a developer machine. The CI log shows only
+      the assertion below, and the runner does not keep artifacts.
+      What are the most plausible causes, and how would you narrow
+      them down?
+
+      ```
+      FAILED tests/test_notifications.py::test_digest_contains_all_events
+      AssertionError: assert 2 == 3
+        digest contained 2 events, expected 3
+      ```
+
+      The test seeds three events through the API and then requests
+      the digest. CI runs the suite with four parallel workers; a
+      developer machine runs it serially. We do not know whether the
+      parallelism matters.
+
+  - id: debugging-08
+    type: debugging
+    text: |
+      The memory of our order service grows slowly until the weekly
+      restart, and the growth rate differs between weeks. We have no
+      heap profile, only these observations. What are the most
+      plausible causes, and how would you check each one?
+
+      - Memory grows roughly 2% per day, faster in weeks with
+        marketing campaigns.
+      - The growth survives quiet nights: usage never returns to the
+        morning baseline.
+      - A canary instance that receives no webhook traffic grows
+        more slowly, but still grows.
+      - The service caches product data with a size-bounded cache,
+        and the bound has not changed in a year.

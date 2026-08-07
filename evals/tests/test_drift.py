@@ -126,8 +126,9 @@ def test_session_script_interleaves_task_types():
 
 def test_session_script_rejects_too_few_prompts():
     prompts = load_prompts(PROMPTS)
-    with pytest.raises(ValueError, match="21 prompts"):
-        session_script(prompts, 21, 1, 3)
+    turns = len(prompts) + 1
+    with pytest.raises(ValueError, match=f"{turns} prompts"):
+        session_script(prompts, turns, 1, 3)
 
 
 def test_build_session_argv_first_turn(tmp_path):

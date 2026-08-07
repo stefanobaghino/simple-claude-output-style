@@ -81,13 +81,13 @@ class FakeRunner:
 
 def test_prompt_set_is_complete():
     prompts = yaml.safe_load(PROMPTS.read_text())["prompts"]
-    assert len(prompts) == 20
+    assert len(prompts) == 32
     ids = [p["id"] for p in prompts]
-    assert len(set(ids)) == 20
+    assert len(set(ids)) == 32
     types = {p["type"] for p in prompts}
     assert types == TASK_TYPES
     for task_type in TASK_TYPES:
-        assert sum(1 for p in prompts if p["type"] == task_type) == 5
+        assert sum(1 for p in prompts if p["type"] == task_type) == 8
     assert all(p["text"].strip() for p in prompts)
 
 

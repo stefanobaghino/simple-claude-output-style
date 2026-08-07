@@ -12,7 +12,9 @@ from drift import (
     SESSION_FLAGS,
     build_session_argv,
     cli,
+    deep_script,
     generate_turn,
+    load_session_script,
     run_session,
     score_sessions,
     session_script,
@@ -233,7 +235,7 @@ def project(tmp_path, monkeypatch):
     return tmp_path
 
 
-def run_cli(project, runner, *extra, generate=True):
+def run_cli(project, runner, *extra, generate=True, turns="3"):
     argv = [
         "--prompts",
         str(project / "prompts.yaml"),
@@ -243,12 +245,12 @@ def run_cli(project, runner, *extra, generate=True):
         str(project / "plugin"),
         "--out",
         str(project / "run"),
-        "--turns",
-        "3",
         "--repeats",
         "2",
         *extra,
     ]
+    if turns is not None:
+        argv += ["--turns", turns]
     if generate:
         argv.append("--generate")
     return cli.main(argv, run=runner)
@@ -453,3 +455,250 @@ def test_threshold_flag_overrides_the_derived_threshold(project, capsys):
     assert stats["verdict"] == "flat"
     report = (project / "run" / "drift.md").read_text()
     assert "- Slope threshold: 30.0 (override; the null quantile is 18.75)" in report
+
+
+SESSIONS_DIR = HERE.parent / "prompts" / "sessions"
+
+
+def make_script(path, script_id, turns=3):
+    data = {
+        "session": {
+            "id": script_id,
+            "description": "A test script.",
+            "turns": [
+                {"id": f"turn-{n:02d}", "text": f"The turn asks question {n}."}
+                for n in range(1, turns + 1)
+            ],
+        }
+    }
+    path.write_text(yaml.safe_dump(data))
+    return path
+
+
+def test_load_session_script_loads_a_valid_file(tmp_path):
+    path = make_script(tmp_path / "incident.yaml", "incident")
+    script = load_session_script(path)
+    assert script["id"] == "incident"
+    assert script["path"] == str(path)
+    assert [turn["id"] for turn in script["turns"]] == ["turn-01", "turn-02", "turn-03"]
+    assert all(turn["text"] for turn in script["turns"])
+
+
+@pytest.mark.parametrize(
+    ("data", "match"),
+    [
+        ({"turns": []}, "session mapping"),
+        ({"session": {"id": "", "turns": [{"id": "a", "text": "t"}] * 2}}, "non-empty id"),
+        ({"session": {"id": "x", "turns": [{"id": "a", "text": "t"}]}}, "at least 2 turns"),
+        (
+            {"session": {"id": "x", "turns": [{"id": "a", "text": "t"}, {"id": "b"}]}},
+            "turn 2 needs",
+        ),
+        (
+            {
+                "session": {
+                    "id": "x",
+                    "turns": [{"id": "a", "text": "t"}, {"id": "a", "text": "u"}],
+                }
+            },
+            "duplicate turn id",
+        ),
+    ],
+)
+def test_load_session_script_rejects_a_contract_breach(tmp_path, data, match):
+    path = tmp_path / "bad.yaml"
+    path.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValueError, match=match):
+        load_session_script(path)
+
+
+def test_deep_script_cycles_over_the_scripts_and_composes_ids(tmp_path):
+    scripts = [
+        load_session_script(make_script(tmp_path / "one.yaml", "one")),
+        load_session_script(make_script(tmp_path / "two.yaml", "two")),
+    ]
+    first = deep_script(scripts, 1)
+    assert [turn["id"] for turn in first] == ["one/turn-01", "one/turn-02", "one/turn-03"]
+    assert deep_script(scripts, 2)[0]["id"] == "two/turn-01"
+    assert deep_script(scripts, 3)[0]["id"] == "one/turn-01"
+    assert first[0]["text"] == "The turn asks question 1."
+
+
+def deep_args(project):
+    one = make_script(project / "one.yaml", "one")
+    two = make_script(project / "two.yaml", "two")
+    return ("--scripts", str(one), str(two))
+
+
+def test_cli_deep_generates_sessions_with_composed_ids(project):
+    runner = FakeSessionRunner()
+    assert run_cli(project, runner, *deep_args(project), turns=None) == 0
+    assert len(runner.calls) == 6  # 1 style x 2 repeats x 3 turns
+
+    rows = load_rows(project)
+    assert {r["prompt_id"] for r in rows if r["repeat"] == 1} == {
+        "one/turn-01",
+        "one/turn-02",
+        "one/turn-03",
+    }
+    assert {r["prompt_id"] for r in rows if r["repeat"] == 2} == {
+        "two/turn-01",
+        "two/turn-02",
+        "two/turn-03",
+    }
+    # The row schema equals the shallow schema.
+    assert set(rows[0]) == {
+        "style",
+        "repeat",
+        "turn",
+        "prompt_id",
+        "session_id",
+        "resume_from",
+        "answer",
+        "model",
+        "claude_code_version",
+        "output_tokens",
+        "input_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+        "duration_ms",
+        "wall_ms",
+    }
+
+
+def test_deep_provenance_holds_the_scripts_and_the_mapping(project):
+    run_cli(project, FakeSessionRunner(), *deep_args(project), turns=None)
+    provenance = json.loads((project / "run" / "provenance.json").read_text())
+    drift = provenance["drift"]
+    assert drift["mode"] == "deep"
+    assert drift["turns"] == 3
+    assert set(drift["scripts"]) == {"one", "two"}
+    for entry in drift["scripts"].values():
+        assert entry["path"] and len(entry["sha256"]) == 64
+    assert drift["repeat_scripts"] == {"1": "one", "2": "two"}
+    assert drift["script"]["1"] == ["one/turn-01", "one/turn-02", "one/turn-03"]
+    assert drift["script"]["2"] == ["two/turn-01", "two/turn-02", "two/turn-03"]
+    assert provenance["prompt_set"] == {"path": None, "sha256": None}
+
+
+def test_shallow_output_holds_no_deep_keys(project):
+    run_cli(project, FakeSessionRunner())
+    provenance = json.loads((project / "run" / "provenance.json").read_text())
+    assert "mode" not in provenance["drift"]
+    assert "scripts" not in provenance["drift"]
+    assert "repeat_scripts" not in provenance["drift"]
+    assert provenance["prompt_set"]["sha256"]
+    summary = json.loads((project / "run" / "drift.json").read_text())
+    assert "mode" not in summary
+    assert "scripts" not in summary
+
+
+def test_cli_rejects_turns_with_scripts(project, capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        run_cli(project, FakeSessionRunner(), *deep_args(project))
+    assert excinfo.value.code == 2
+    assert "the scripts fix the turn count" in capsys.readouterr().err
+
+
+def test_cli_rejects_scripts_of_unequal_length(project):
+    one = make_script(project / "one.yaml", "one", turns=3)
+    two = make_script(project / "two.yaml", "two", turns=4)
+    with pytest.raises(SystemExit) as excinfo:
+        run_cli(project, FakeSessionRunner(), "--scripts", str(one), str(two), turns=None)
+    assert excinfo.value.code == 2
+
+
+def test_cli_rejects_duplicate_script_ids(project):
+    one = make_script(project / "one.yaml", "same")
+    two = make_script(project / "two.yaml", "same")
+    with pytest.raises(SystemExit) as excinfo:
+        run_cli(project, FakeSessionRunner(), "--scripts", str(one), str(two), turns=None)
+    assert excinfo.value.code == 2
+
+
+def test_cli_rejects_repeats_that_do_not_spread_over_the_scripts(project):
+    scripts = [str(make_script(project / f"s{n}.yaml", f"s{n}")) for n in (1, 2, 3)]
+    with pytest.raises(SystemExit) as excinfo:
+        run_cli(project, FakeSessionRunner(), "--scripts", *scripts, turns=None)
+    assert excinfo.value.code == 2
+
+
+def test_cli_shallow_default_is_15_turns(project, capsys):
+    # The project set holds 4 prompts, so the default of 15 turns
+    # fails with a message that names the default.
+    with pytest.raises(SystemExit) as excinfo:
+        run_cli(project, FakeSessionRunner(), turns=None)
+    assert excinfo.value.code == 2
+    assert "15 turns need 15 prompts" in capsys.readouterr().err
+
+
+def test_cli_rejects_a_mode_mismatch_on_the_run_directory(project, capsys):
+    run_cli(project, FakeSessionRunner())
+    with pytest.raises(SystemExit) as excinfo:
+        run_cli(project, FakeSessionRunner(), *deep_args(project), turns=None)
+    assert excinfo.value.code == 2
+    assert "shallow run" in capsys.readouterr().err
+
+
+def test_cli_rejects_a_shallow_invocation_on_a_deep_run(project, capsys):
+    run_cli(project, FakeSessionRunner(), *deep_args(project), turns=None)
+    with pytest.raises(SystemExit) as excinfo:
+        run_cli(project, FakeSessionRunner())
+    assert excinfo.value.code == 2
+    assert "deep run" in capsys.readouterr().err
+
+
+def test_cli_deep_skips_complete_and_restarts_incomplete_sessions(project):
+    run_cli(project, FakeSessionRunner(), *deep_args(project), turns=None)
+    sessions_path = project / "run" / "sessions.jsonl"
+    kept = [
+        line
+        for line in sessions_path.read_text().splitlines()
+        if not (json.loads(line)["repeat"] == 2 and json.loads(line)["turn"] == 3)
+    ]
+    sessions_path.write_text("\n".join(kept) + "\n")
+
+    second = FakeSessionRunner()
+    assert run_cli(project, second, *deep_args(project), turns=None) == 0
+    assert len(second.calls) == 3
+    assert resume_of(second.calls[0]) is None
+
+
+def test_cli_deep_rescores_offline_and_is_deterministic(project):
+    run_cli(project, FakeSessionRunner(), *deep_args(project), turns=None)
+
+    idle = FakeSessionRunner()
+    assert run_cli(project, idle, *deep_args(project), turns=None, generate=False) == 0
+    assert idle.calls == []
+
+    first = json.loads((project / "run" / "drift.json").read_text())
+    assert run_cli(project, idle, *deep_args(project), turns=None, generate=False) == 0
+    second = json.loads((project / "run" / "drift.json").read_text())
+    del first["date"], second["date"]
+    assert first == second
+
+
+def test_deep_report_states_the_script_design(project):
+    run_cli(project, FakeSessionRunner(), *deep_args(project), turns=None)
+    summary = json.loads((project / "run" / "drift.json").read_text())
+    assert summary["mode"] == "deep"
+    assert summary["scripts"] == {"1": "one", "2": "two"}
+    report = (project / "run" / "drift.md").read_text()
+    assert "coherent script" in report
+    assert "The shallow rotated run is the control." in report
+    assert "- Repeat 1: script `one`" in report
+    assert "- Repeat 2: script `two`" in report
+    assert "rotates the prompt order" not in report
+
+
+def test_the_authored_scripts_obey_the_contract():
+    paths = sorted(SESSIONS_DIR.glob("*.yaml"))
+    scripts = [load_session_script(path) for path in paths]
+    assert len(scripts) == 3
+    assert {len(script["turns"]) for script in scripts} == {15}
+    assert len({script["id"] for script in scripts}) == 3
+    for path, script in zip(paths, scripts, strict=True):
+        assert path.stem == script["id"]
+        for turn in script["turns"]:
+            size = len(turn["text"].encode("utf-8"))
+            assert size >= 20_000, f"{script['id']}/{turn['id']}: {size} bytes is too short"

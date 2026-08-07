@@ -18,6 +18,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 from runner.generate import (
     ISOLATION_FLAGS,
     GenerationError,
@@ -144,6 +146,53 @@ def session_script(prompts: list[dict], turns: int, repeat: int, repeats: int) -
     order = base[:turns]
     offset = ((repeat - 1) * turns) // repeats % turns
     return order[offset:] + order[:offset]
+
+
+def load_session_script(path: Path) -> dict:
+    """Load one coherent session script.
+
+    Returns {"id", "path", "turns"}, where turns is the ordered list
+    of {"id", "text"} dicts. Raises ValueError on a contract breach.
+    """
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("session"), dict):
+        # The breach is in the file's shape, not in a Python type.
+        raise ValueError(  # noqa: TRY004 -- the file shape is a contract, not a type
+            f"{path}: the script needs a top-level session mapping"
+        )
+    session = data["session"]
+    script_id = session.get("id")
+    if not script_id or not isinstance(script_id, str):
+        raise ValueError(f"{path}: the session needs a non-empty id")
+    turns = session.get("turns")
+    if not isinstance(turns, list) or len(turns) < 2:
+        raise ValueError(f"{path}: the session needs at least 2 turns")
+    seen: set[str] = set()
+    for index, turn in enumerate(turns, start=1):
+        if not isinstance(turn, dict) or not turn.get("id") or not turn.get("text"):
+            raise ValueError(f"{path}: turn {index} needs an id and a text")
+        if turn["id"] in seen:
+            raise ValueError(f"{path}: duplicate turn id {turn['id']}")
+        seen.add(turn["id"])
+    return {
+        "id": script_id,
+        "path": str(path),
+        "turns": [{"id": turn["id"], "text": turn["text"]} for turn in turns],
+    }
+
+
+def deep_script(scripts: list[dict], repeat: int) -> list[dict]:
+    """The turn list of one repeat in deep mode.
+
+    Repeat r runs script (r - 1) mod len(scripts), so the repeats
+    spread over the scripts and the coupling of turn position to
+    content averages over scripts. The prompt id composes the script
+    id and the turn id, so a row names its script.
+    """
+    script = scripts[(repeat - 1) % len(scripts)]
+    return [
+        {"id": f"{script['id']}/{turn['id']}", "text": turn["text"]} for turn in script["turns"]
+    ]
 
 
 def run_session(

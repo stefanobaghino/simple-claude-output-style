@@ -74,7 +74,7 @@ def claude_version(binary: str | None = "claude", env: dict[str, str] | None = N
 def build_provenance(
     *,
     model: str,
-    prompts_path: Path,
+    prompts_path: Path | None,
     styles: list[str],
     plugin_dir: Path,
     cli_version: str | None,
@@ -82,9 +82,16 @@ def build_provenance(
     config_manifest_sha256: str | None = None,
 ) -> dict:
     style_files = {style: plugin_dir / "output-styles" / f"{style}.md" for style in sorted(styles)}
+    # A deep drift run reads no prompt file: its inputs are the session
+    # scripts, hashed in the drift block of the provenance.
+    prompt_set = (
+        {"path": None, "sha256": None}
+        if prompts_path is None
+        else {"path": str(prompts_path), "sha256": sha256_of(prompts_path)}
+    )
     return {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "prompt_set": {"path": str(prompts_path), "sha256": sha256_of(prompts_path)},
+        "prompt_set": prompt_set,
         "conditions": {
             "model_requested": model,
             "claude_version": cli_version,

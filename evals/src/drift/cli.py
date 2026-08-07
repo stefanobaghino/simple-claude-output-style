@@ -23,7 +23,7 @@ from runner.spend import spend_summary
 
 from .analysis import load_sessions, score_sessions
 from .report import build_drift_report, build_drift_summary
-from .session import SESSION_FLAGS, run_session, session_script
+from .session import SESSION_FLAGS, deep_script, load_session_script, run_session, session_script
 
 
 def _fail(message: str) -> SystemExit:
@@ -31,17 +31,27 @@ def _fail(message: str) -> SystemExit:
     return SystemExit(2)
 
 
-def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runner) -> list[str]:
+def _generate(
+    args,
+    out: Path,
+    sessions_path: Path,
+    styles: list[str],
+    run: Runner,
+    scripts: list[dict] | None,
+) -> list[str]:
     """Run the missing sessions and write the provenance. Returns the failures."""
-    prompts_path = Path(args.prompts)
-    if not prompts_path.exists():
-        raise _fail(f"{prompts_path}: no prompt file")
-    prompts = load_prompts(prompts_path)
-    if args.turns > len(prompts):
-        raise _fail(
-            f"{prompts_path}: {args.turns} turns need {args.turns} prompts, "
-            f"but the set holds {len(prompts)}"
-        )
+    prompts_path: Path | None = None
+    prompts: list[dict] = []
+    if scripts is None:
+        prompts_path = Path(args.prompts)
+        if not prompts_path.exists():
+            raise _fail(f"{prompts_path}: no prompt file")
+        prompts = load_prompts(prompts_path)
+        if args.turns > len(prompts):
+            raise _fail(
+                f"{prompts_path}: {args.turns} turns need {args.turns} prompts, "
+                f"but the set holds {len(prompts)}"
+            )
     plugin_dir = Path(args.plugin_dir).resolve()
     for style in styles:
         style_file = plugin_dir / "output-styles" / f"{style}.md"
@@ -66,7 +76,10 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
                 # An incomplete session restarts from turn 1 with a fresh
                 # session id: nothing depends on stored session state
                 # across invocations.
-                script = session_script(prompts, args.turns, repeat, args.repeats)
+                if scripts is None:
+                    script = session_script(prompts, args.turns, repeat, args.repeats)
+                else:
+                    script = deep_script(scripts, repeat)
                 print(
                     f"{style} session {repeat}/{args.repeats}: {args.turns} turn(s)",
                     file=sys.stderr,
@@ -126,17 +139,38 @@ def _generate(args, out: Path, sessions_path: Path, styles: list[str], run: Runn
         "base": {"disableAllHooks": True},
         "styled_arm": {"outputStyle": "<style>", "extra_flag": "--plugin-dir"},
     }
-    provenance["drift"] = {
-        "turns": args.turns,
-        "repeats": args.repeats,
-        "resume": True,
-        "script": {
-            str(repeat): [
-                p["id"] for p in session_script(prompts, args.turns, repeat, args.repeats)
-            ]
-            for repeat in range(1, args.repeats + 1)
-        },
-    }
+    repeat_range = range(1, args.repeats + 1)
+    if scripts is None:
+        # The shallow block stays byte-identical to the pre-script era:
+        # the absence of a mode key marks a shallow (or old) run.
+        provenance["drift"] = {
+            "turns": args.turns,
+            "repeats": args.repeats,
+            "resume": True,
+            "script": {
+                str(repeat): [
+                    p["id"] for p in session_script(prompts, args.turns, repeat, args.repeats)
+                ]
+                for repeat in repeat_range
+            },
+        }
+    else:
+        provenance["drift"] = {
+            "turns": args.turns,
+            "repeats": args.repeats,
+            "resume": True,
+            "mode": "deep",
+            "scripts": {
+                s["id"]: {"path": s["path"], "sha256": sha256_of(Path(s["path"]))} for s in scripts
+            },
+            "repeat_scripts": {
+                str(repeat): scripts[(repeat - 1) % len(scripts)]["id"] for repeat in repeat_range
+            },
+            "script": {
+                str(repeat): [p["id"] for p in deep_script(scripts, repeat)]
+                for repeat in repeat_range
+            },
+        }
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     return failures
 
@@ -147,6 +181,19 @@ def run_toolchain_of(run_dir: Path) -> dict | None:
         return None
     provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
     return provenance.get("linter_toolchain")
+
+
+def run_mode_of(run_dir: Path) -> str | None:
+    """The drift mode of a stored run, or None without a provenance.
+
+    A run from before the deep scripts has no mode key and reads as
+    shallow.
+    """
+    provenance_path = run_dir / "provenance.json"
+    if not provenance_path.exists():
+        return None
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    return provenance.get("drift", {}).get("mode", "shallow")
 
 
 def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
@@ -161,12 +208,22 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     )
     parser.add_argument("--generate", action="store_true", help="run the missing sessions first")
     parser.add_argument("--prompts", default="prompts/prompts.yaml", help="the prompt set")
+    parser.add_argument(
+        "--scripts",
+        nargs="+",
+        help="coherent session scripts for a deep run (default: the shallow rotated prompt set)",
+    )
     parser.add_argument("--rules-dir", default="rules", help="directory with the rule files")
     parser.add_argument("--plugin-dir", default="../plugin", help="the plugin directory")
     parser.add_argument("--model", default="sonnet", help="model for all answers")
     parser.add_argument("--styles", nargs="*", help="styles to run (default: all rule files)")
     parser.add_argument("--repeats", type=int, default=3, help="sessions per style")
-    parser.add_argument("--turns", type=int, default=15, help="turns per session")
+    parser.add_argument(
+        "--turns",
+        type=int,
+        default=None,
+        help="turns per session (default: 15; a deep run takes the script length)",
+    )
     parser.add_argument(
         "--slope-threshold",
         type=float,
@@ -177,6 +234,37 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     )
     parser.add_argument("--out", help="run directory (default: runs/<date>-drift)")
     args = parser.parse_args(argv)
+
+    scripts: list[dict] | None = None
+    if args.scripts:
+        if args.turns is not None:
+            raise _fail("--turns does not combine with --scripts: the scripts fix the turn count")
+        scripts = []
+        for raw in args.scripts:
+            path = Path(raw)
+            if not path.exists():
+                raise _fail(f"{path}: no script file")
+            try:
+                scripts.append(load_session_script(path))
+            except ValueError as error:
+                raise _fail(str(error)) from error
+        lengths = {script["id"]: len(script["turns"]) for script in scripts}
+        if len(set(lengths)) < len(scripts):
+            raise _fail("duplicate script ids: every script needs its own id")
+        if len(set(lengths.values())) > 1:
+            raise _fail(
+                "the scripts must share one turn count, because the analysis pools "
+                f"by turn position; got {lengths}"
+            )
+        if args.repeats % len(scripts) != 0:
+            raise _fail(
+                f"{args.repeats} repeat(s) do not spread evenly over "
+                f"{len(scripts)} script(s), so the position-content coupling "
+                "would not average cleanly"
+            )
+        args.turns = len(scripts[0]["turns"])
+    elif args.turns is None:
+        args.turns = 15
 
     if args.turns < 2:
         raise _fail("the series needs at least 2 turns")
@@ -189,16 +277,22 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         if not rule_file.exists():
             raise _fail(f"{style}: no rule file at {rule_file}")
 
+    suffix = "-drift-deep" if scripts is not None else "-drift"
     out = (
         Path(args.out)
         if args.out
-        else Path("runs") / f"{datetime.now(UTC).strftime('%Y-%m-%d')}-drift"
+        else Path("runs") / f"{datetime.now(UTC).strftime('%Y-%m-%d')}{suffix}"
     )
     sessions_path = out / "sessions.jsonl"
 
+    run_mode = run_mode_of(out)
+    mode = "deep" if scripts is not None else "shallow"
+    if run_mode is not None and run_mode != mode:
+        raise _fail(f"{out}: the run directory holds a {run_mode} run, but this is a {mode} run")
+
     failures: list[str] = []
     if args.generate:
-        failures = _generate(args, out, sessions_path, styles, run)
+        failures = _generate(args, out, sessions_path, styles, run, scripts)
 
     rows = load_sessions(sessions_path)
     if not rows:
@@ -228,6 +322,13 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         turns=args.turns,
         repeats=args.repeats,
         slope_threshold=args.slope_threshold,
+        mode="deep" if scripts is not None else None,
+        scripts={
+            str(repeat): scripts[(repeat - 1) % len(scripts)]["id"]
+            for repeat in range(1, args.repeats + 1)
+        }
+        if scripts is not None
+        else None,
         styles=result.styles,
         rules={
             style: {"file": str(path), "sha256": sha256_of(path)}

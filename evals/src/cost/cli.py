@@ -14,6 +14,7 @@ from pathlib import Path
 
 from gate.cli import load_answers
 from runner.generate import GenerationError, Runner, isolated_workdir, subprocess_runner
+from runner.screening import screening_section
 from runner.spend import spend_summary
 
 from .analysis import analyze_ratios
@@ -123,7 +124,8 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     )
     (run_dir / "cost.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     spend = spend_summary(probe["arms"]) if probe is not None else None
-    (run_dir / "cost.md").write_text(build_cost_report(summary, spend), encoding="utf-8")
+    report = build_cost_report(summary, spend, screening=screening_section(provenance))
+    (run_dir / "cost.md").write_text(report, encoding="utf-8")
 
     overhead = summary["input_overhead"]
     for style in styles:

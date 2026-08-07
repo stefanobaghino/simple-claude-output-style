@@ -18,6 +18,7 @@ from value.judges import TaskPool
 from .generate import GenerationError, Runner, generate, isolated_workdir, subprocess_runner
 from .provenance import build_provenance, claude_version
 from .report import arm_name, build_report
+from .screening import screening_provenance, select_screening_prompts
 
 
 def load_prompts(path: Path) -> list[dict]:
@@ -58,7 +59,7 @@ def _is_complete(answers_path: Path, arms: list[str | None], prompts: list[dict]
 
 
 def pick_default_out(
-    runs_dir: Path, date: str, arms: list[str | None], prompts: list[dict]
+    runs_dir: Path, date: str, arms: list[str | None], prompts: list[dict], suffix: str = ""
 ) -> Path:
     """The first date-named directory that is not a complete run.
 
@@ -66,13 +67,17 @@ def pick_default_out(
     b through z. A missing directory and an incomplete run both stop
     the search, so an interrupted run still resumes. Only a complete
     run pushes the runner to the next slot, because a silent reuse of
-    a complete run produces no new sample.
+    a complete run produces no new sample. The suffix names a
+    directory family of its own, after the letter: a screening run
+    lives under runs/<date>-screening, so the screening picker and
+    the full-run picker never meet.
     """
-    for suffix in ("", *ascii_lowercase[1:]):
-        candidate = runs_dir / f"{date}{suffix}"
+    for letter in ("", *ascii_lowercase[1:]):
+        candidate = runs_dir / f"{date}{letter}{suffix}"
         if not _is_complete(candidate / "answers.jsonl", arms, prompts):
             return candidate
-    raise SystemExit(f"{runs_dir / date}: every letter suffix holds a complete run; pass --out")
+    message = f"{runs_dir / (date + suffix)}: every letter suffix holds a complete run; pass --out"
+    raise SystemExit(message)
 
 
 def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
@@ -90,6 +95,15 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     parser.add_argument("--model", default="sonnet", help="model for all answers")
     parser.add_argument("--styles", nargs="*", help="styles to run (default: all rule files)")
     parser.add_argument(
+        "--screening",
+        action="store_true",
+        help=(
+            "one reduced run over the fixed prompt subset (2 per type, "
+            "seed 0); the run carries a screening mark and never "
+            "compares with a full run"
+        ),
+    )
+    parser.add_argument(
         "--out",
         help="run directory (default: runs/<date>, next letter suffix on a same-day repeat)",
     )
@@ -106,6 +120,9 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     prompts_path = Path(args.prompts)
     plugin_dir = Path(args.plugin_dir).resolve()
     prompts = load_prompts(prompts_path)
+    full_count = len(prompts)
+    if args.screening:
+        prompts = select_screening_prompts(prompts)
     styles = args.styles or discover_styles(Path(args.rules_dir))
     if not styles:
         raise SystemExit(f"{args.rules_dir}: no rule files found")
@@ -115,16 +132,41 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             raise SystemExit(f"{style_file}: the style file does not exist")
 
     arms: list[str | None] = [None, *styles]
+    suffix = "-screening" if args.screening else ""
     if args.out:
         out = Path(args.out)
     else:
         date = datetime.now(UTC).strftime("%Y-%m-%d")
-        out = pick_default_out(Path("runs"), date, arms, prompts)
-        if out.name != date:
-            print(f"runs/{date} is complete; starting {out}", file=sys.stderr)
+        out = pick_default_out(Path("runs"), date, arms, prompts, suffix=suffix)
+        if out.name != f"{date}{suffix}":
+            print(f"runs/{date}{suffix} is complete; starting {out}", file=sys.stderr)
+
+    # The guard classifies a resumed directory by its provenance. A
+    # run interrupted before the provenance write has no mark yet;
+    # the -screening name family confines that gap to an explicit
+    # --out that points a full run at a screening directory, or the
+    # reverse. The subset check below closes most of that gap.
+    provenance_path = out / "provenance.json"
+    if provenance_path.exists():
+        stored = json.loads(provenance_path.read_text(encoding="utf-8"))
+        if ("screening" in stored) != args.screening:
+            mode = "a screening run" if "screening" in stored else "a full run"
+            flag = "with" if "screening" in stored else "without"
+            raise SystemExit(
+                f"{out}: the directory holds {mode}; "
+                f"run again {flag} --screening, or pass another --out"
+            )
+
     out.mkdir(parents=True, exist_ok=True)
     answers_path = out / "answers.jsonl"
     existing = load_existing(answers_path)
+    if args.screening:
+        subset_ids = {prompt["id"] for prompt in prompts}
+        stray = sorted({pid for pid, _ in existing if pid not in subset_ids})
+        if stray:
+            raise SystemExit(
+                f"{out}: the answers hold prompts outside the screening subset: {', '.join(stray)}"
+            )
 
     todo = [
         (style, prompt)
@@ -196,6 +238,8 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         plugin_dir=plugin_dir,
         cli_version=claude_version(),
     )
+    if args.screening:
+        provenance["screening"] = screening_provenance(prompts, full_count)
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     answers = list(load_existing(answers_path).values())
     report = build_report(prompts, styles, answers, provenance, failures)

@@ -4,6 +4,7 @@ stream-json output."""
 
 import json
 import threading
+from collections import Counter
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
@@ -15,6 +16,7 @@ import yaml
 from runner import GenerationError, build_argv, cli, generate, style_reference
 from runner.provenance import build_provenance
 from runner.report import build_report
+from runner.screening import screening_provenance, screening_section, select_screening_prompts
 
 HERE = Path(__file__).parent
 PROMPTS = HERE.parent / "prompts" / "prompts.yaml"
@@ -151,22 +153,35 @@ def test_generate_rejects_an_error_result(tmp_path):
         generate("prompt", "sonnet", None, None, tmp_path, run=run)
 
 
-@pytest.fixture
-def project(tmp_path, monkeypatch):
-    """A minimal project: 2 prompts, 1 style, a plugin directory."""
-    prompts = {
-        "prompts": [
-            {"id": "explanation-01", "type": "explanation", "text": "Explain A."},
-            {"id": "debugging-01", "type": "debugging", "text": "Debug B."},
-        ]
-    }
-    (tmp_path / "prompts.yaml").write_text(yaml.safe_dump(prompts))
+def make_pairs_project(tmp_path, monkeypatch, prompts):
+    (tmp_path / "prompts.yaml").write_text(yaml.safe_dump({"prompts": prompts}))
     rules = tmp_path / "rules"
     rules.mkdir()
     (rules / "alpha.rules.yaml").write_text("style: alpha\n")
     make_plugin(tmp_path / "plugin")
     monkeypatch.setattr(cli, "claude_version", lambda: "0.0.0 (test)")
     return tmp_path
+
+
+@pytest.fixture
+def project(tmp_path, monkeypatch):
+    """A minimal project: 2 prompts, 1 style, a plugin directory."""
+    prompts = [
+        {"id": "explanation-01", "type": "explanation", "text": "Explain A."},
+        {"id": "debugging-01", "type": "debugging", "text": "Debug B."},
+    ]
+    return make_pairs_project(tmp_path, monkeypatch, prompts)
+
+
+@pytest.fixture
+def screening_project(tmp_path, monkeypatch):
+    """Like project, but with 3 prompts per type, so the subset reduces."""
+    prompts = [
+        {"id": f"{task_type}-{n:02d}", "type": task_type, "text": f"{task_type} {n}."}
+        for task_type in ("explanation", "debugging")
+        for n in (1, 2, 3)
+    ]
+    return make_pairs_project(tmp_path, monkeypatch, prompts)
 
 
 def run_cli(project, runner, out="run", *extra):
@@ -186,7 +201,7 @@ def run_cli(project, runner, out="run", *extra):
     )
 
 
-def run_cli_default_out(project, runner):
+def run_cli_default_out(project, runner, *extra):
     """Invoke the CLI without --out; the caller must chdir into the project."""
     return cli.main(
         [
@@ -196,6 +211,7 @@ def run_cli_default_out(project, runner):
             str(project / "rules"),
             "--plugin-dir",
             str(project / "plugin"),
+            *extra,
         ],
         run=runner,
     )
@@ -377,6 +393,102 @@ def test_cli_reports_a_failed_call_and_keeps_going(project):
     assert "Failed call: alpha/" in report
     assert "| unstyled | 2/2 | none |" in report
     assert "| alpha | 0/2 |" in report
+
+
+def test_screening_subset_is_deterministic_and_balanced():
+    prompts = yaml.safe_load(PROMPTS.read_text())["prompts"]
+    first = select_screening_prompts(prompts)
+    second = select_screening_prompts(prompts)
+    assert first == second
+    assert len(first) == 8
+    counts = Counter(prompt["type"] for prompt in first)
+    assert counts == {task_type: 2 for task_type in TASK_TYPES}
+    ids = [prompt["id"] for prompt in prompts]
+    positions = [ids.index(prompt["id"]) for prompt in first]
+    assert positions == sorted(positions)
+
+
+def test_screening_keeps_a_small_type_whole():
+    prompts = [
+        {"id": "explanation-01", "type": "explanation", "text": "Explain A."},
+        {"id": "debugging-01", "type": "debugging", "text": "Debug B."},
+    ]
+    assert select_screening_prompts(prompts) == prompts
+
+
+def test_screening_section_is_empty_without_the_block():
+    assert screening_section(None) == []
+    assert screening_section({"date": "2026-08-06"}) == []
+
+
+def test_screening_section_states_the_design_fractions():
+    subset = [{"id": f"p{index}"} for index in range(8)]
+    provenance = {"screening": screening_provenance(subset, 20)}
+    text = "\n".join(screening_section(provenance))
+    assert "8 of 20 prompts" in text
+    assert "13% of a full campaign" in text
+    assert "40%" in text
+    assert "design numbers" in text
+
+
+def test_cli_screening_run_marks_the_provenance(screening_project):
+    runner = FakeRunner()
+    assert run_cli(screening_project, runner, "run", "--screening") == 0
+    prompts = yaml.safe_load((screening_project / "prompts.yaml").read_text())["prompts"]
+    subset = select_screening_prompts(prompts)
+    assert len(subset) == 4
+    assert len(runner.calls) == 8  # 4 prompts x (unstyled + alpha)
+
+    out = screening_project / "run"
+    answers = [json.loads(line) for line in (out / "answers.jsonl").read_text().splitlines()]
+    assert {a["prompt_id"] for a in answers} == {prompt["id"] for prompt in subset}
+    provenance = json.loads((out / "provenance.json").read_text())
+    assert provenance["screening"] == {
+        "prompts_per_type": 2,
+        "seed": 0,
+        "prompt_ids": sorted(prompt["id"] for prompt in subset),
+        "full_prompt_count": 6,
+    }
+    report = (out / "report.md").read_text()
+    assert "**Screening run.** This run covers 4 of 6 prompts" in report
+
+
+def test_cli_full_run_carries_no_screening_mark(project):
+    assert run_cli(project, FakeRunner()) == 0
+    provenance = json.loads((project / "run" / "provenance.json").read_text())
+    assert "screening" not in provenance
+    assert "**Screening run.**" not in (project / "run" / "report.md").read_text()
+
+
+def test_cli_a_screening_run_uses_its_own_directory_family(project, monkeypatch):
+    monkeypatch.chdir(project)
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    assert run_cli_default_out(project, FakeRunner(), "--screening") == 0
+    assert (project / "runs" / f"{date}-screening" / "answers.jsonl").exists()
+
+    assert run_cli_default_out(project, FakeRunner()) == 0
+    assert (project / "runs" / date / "answers.jsonl").exists()
+
+    assert run_cli_default_out(project, FakeRunner(), "--screening") == 0
+    assert (project / "runs" / f"{date}b-screening" / "answers.jsonl").exists()
+
+
+def test_cli_rejects_a_mode_mismatch_on_resume(project):
+    assert run_cli(project, FakeRunner()) == 0
+    with pytest.raises(SystemExit, match="full run"):
+        run_cli(project, FakeRunner(), "run", "--screening")
+
+    assert run_cli(project, FakeRunner(), "screening-run", "--screening") == 0
+    with pytest.raises(SystemExit, match="screening run"):
+        run_cli(project, FakeRunner(), "screening-run")
+
+
+def test_cli_rejects_screening_answers_outside_the_subset(screening_project):
+    assert run_cli(screening_project, FakeRunner()) == 0
+    (screening_project / "run" / "provenance.json").unlink()
+    with pytest.raises(SystemExit, match="outside the screening subset"):
+        run_cli(screening_project, FakeRunner(), "run", "--screening")
 
 
 def test_provenance_holds_the_linter_toolchain(project):

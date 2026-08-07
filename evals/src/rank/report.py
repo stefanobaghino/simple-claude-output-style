@@ -154,11 +154,17 @@ def _length_section(confound: dict) -> list[str]:
     ]
 
 
-def build_rank_report(summary: dict, timing: dict | None = None, spend: dict | None = None) -> str:
+def build_rank_report(
+    summary: dict,
+    timing: dict | None = None,
+    spend: dict | None = None,
+    screening: list[str] | None = None,
+) -> str:
     judge = summary["judge"]
     lines = [
         "# Clarity-ranking report",
         "",
+        *(screening or []),
         "Every contest shows a blind judge the two answers of one prompt,",
         "in both orders, and the judge picks the clearer text. This tool",
         "relaxes one harness invariant on purpose: a clarity contest is a",

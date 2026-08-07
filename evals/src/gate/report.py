@@ -64,10 +64,12 @@ def build_fidelity_report(
     styles: list[str],
     summary: dict,
     failing: dict[tuple[str, str], list],
+    screening: list[str] | None = None,
 ) -> str:
     lines = [
         "# Fidelity report",
         "",
+        *(screening or []),
         "A pair passes the gate when its styled answer has at least one",
         "sentence and a violation rate at or below the threshold of its",
         "style. The baseline columns check the unstyled answers with the",

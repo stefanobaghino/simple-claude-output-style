@@ -7,6 +7,7 @@ directly; the report is for a human who opens the run directory.
 
 from __future__ import annotations
 
+from .screening import screening_section
 from .spend import spend_section, spend_summary
 from .timing import timing_section, timing_summary
 
@@ -31,6 +32,7 @@ def build_report(
         by_arm.setdefault(arm_name(answer.get("style")), []).append(answer)
 
     lines = ["# Run report", ""]
+    lines += screening_section(provenance)
     lines += [
         f"- Date: {provenance['date']}",
         f"- Model requested: {provenance['conditions']['model_requested']}",

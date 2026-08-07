@@ -62,6 +62,11 @@ def _condition_entries(run: dict) -> dict[str, object]:
     # the workdir mode marks a comparability era.
     entries["workdir"] = conditions.get("workdir")
     entries["linter toolchain"] = provenance.get("linter_toolchain")
+    # A full run and an old run both read None here, so the entry
+    # stays silent for them. The CLI already rejects a mix of
+    # screening and full runs; this entry makes two screening runs
+    # with different subsets warn.
+    entries["screening"] = provenance.get("screening")
     fidelity = run["fidelity"]
     if fidelity is not None:
         for style, info in (fidelity.get("rules") or {}).items():

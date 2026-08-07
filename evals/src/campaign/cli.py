@@ -39,6 +39,7 @@ from loss import cli as loss_cli
 from rank import cli as rank_cli
 from runner import cli as runner_cli
 from runner.generate import Runner, subprocess_runner
+from runner.screening import select_screening_prompts
 from value import cli as value_cli
 
 from .budget import WorkerGate, WorkerLease
@@ -79,15 +80,20 @@ def build_stages(
     judge stages of the earlier runs.
     """
     prompts = runner_cli.load_prompts(Path(args.prompts))
+    if args.screening:
+        prompts = select_screening_prompts(prompts)
     styles = runner_cli.discover_styles(Path(args.rules_dir))
     if not styles:
         raise _fail(f"{args.rules_dir}: no rule files found")
     arms: list[str | None] = [None, *styles]
+    suffix = "-screening" if args.screening else ""
 
     def pairs_action(index: int, run: Runner, workers: int) -> int:
         if chosen[index] is None:
             date = datetime.now(UTC).strftime("%Y-%m-%d")
-            chosen[index] = runner_cli.pick_default_out(Path("runs"), date, arms, prompts)
+            chosen[index] = runner_cli.pick_default_out(
+                Path("runs"), date, arms, prompts, suffix=suffix
+            )
         argv = [
             "--prompts",
             args.prompts,
@@ -102,6 +108,8 @@ def build_stages(
             "--parallel",
             str(workers),
         ]
+        if args.screening:
+            argv.append("--screening")
         return runner_cli.main(argv, run=run)
 
     def gate_action(index: int, _run: Runner, workers: int) -> int:
@@ -250,9 +258,24 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         ),
     )
     count_group = parser.add_mutually_exclusive_group()
-    count_group.add_argument("--runs", type=int, default=3, help="number of full runs")
     count_group.add_argument(
-        "--dirs", nargs="+", help="explicit run directories (resumes an interrupted campaign)"
+        "--runs", type=int, help="number of runs (default 3, or 1 with --screening)"
+    )
+    count_group.add_argument(
+        "--dirs",
+        nargs="+",
+        help=(
+            "explicit run directories (resumes an interrupted campaign; "
+            "resume a screening campaign with --screening as well)"
+        ),
+    )
+    parser.add_argument(
+        "--screening",
+        action="store_true",
+        help=(
+            "screen a candidate style: one reduced run over the fixed "
+            "prompt subset (implies --runs 1)"
+        ),
     )
     parser.add_argument(
         "--budget", type=int, default=32, help="total live workers across the stages"
@@ -271,6 +294,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     args = parser.parse_args(argv)
     if args.budget < 1:
         raise _fail(f"--budget must be 1 or more, not {args.budget}")
+    if args.screening and args.runs not in (None, 1):
+        raise _fail(f"--screening implies --runs 1, not {args.runs}")
+    if args.runs is None:
+        args.runs = 1 if args.screening else 3
     if not args.dirs and args.runs < 1:
         raise _fail(f"--runs must be 1 or more, not {args.runs}")
 

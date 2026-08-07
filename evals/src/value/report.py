@@ -246,11 +246,17 @@ def _comprehension_header(judges: dict) -> str:
     return f"Comprehension uses {judges['questions']} questions per prompt, "
 
 
-def build_value_report(summary: dict, timing: dict | None = None, spend: dict | None = None) -> str:
+def build_value_report(
+    summary: dict,
+    timing: dict | None = None,
+    spend: dict | None = None,
+    screening: list[str] | None = None,
+) -> str:
     judges = summary["judges"]
     lines = [
         "# Reader-value report",
         "",
+        *(screening or []),
         "The checks compare the styled answer with the unstyled answer of",
         "the same prompt, pair by pair, as win, loss, or tie. Only pairs",
         "whose styled answer passes the fidelity gate enter the checks.",

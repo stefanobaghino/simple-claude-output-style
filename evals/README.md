@@ -36,7 +36,9 @@ strength per competitor. The tenth is a campaign driver. It runs
 several full runs under one schedule: the pair stages run one at a
 time, the judge stages overlap, the value pass splits around the
 loss pass, and one worker gate meters every CLI call against one
-worker budget. See the tracking issue in this repository for
+worker budget. The campaign driver also has a screening mode: one
+reduced run over a fixed prompt subset, for a cheap first verdict
+on a candidate style. See the tracking issue in this repository for
 the other planned components.
 
 ## Rule files
@@ -92,7 +94,7 @@ uv run style-cost runs/<date> [--probe] [--repeats N]
 uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-rank runs/<date> [--judge] [--parallel N]
-uv run style-campaign [--runs N] [--budget W]
+uv run style-campaign [--runs N] [--budget W] [--screening]
 uv run style-drift [--generate] [--out runs/<date>-drift]
 uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
@@ -357,6 +359,18 @@ When the agreement rate is below 0.7, do not accept the style, and
 open an issue that lists the disagreements. The protocol is manual:
 no tool draws the sample or computes the rate.
 
+### Screening threshold
+
+A screening run gives a cheap first verdict on a candidate style,
+and this threshold states which verdict earns a full campaign. Read
+the Bradley-Terry strengths in the `rank.md` of the screening run.
+The candidate earns a full confirmation campaign when the candidate
+ranks first among the styled competitors, or when its bootstrap
+interval overlaps the interval of the first-ranked styled
+competitor. Any other outcome rejects the candidate, without a full
+campaign. A screening run accepts no style: acceptance needs the
+full campaign, the cross-run comparison, and the human spot check.
+
 ### Campaign overlap
 
 A campaign is several runs under identical conditions, produced for
@@ -421,6 +435,22 @@ When the account limit rejects calls, a judge call that fails twice
 stops its pass, so lower the worker count. An interrupted pass
 resumes, so a stop loses no data.
 
+`style-campaign --screening` screens one candidate style: one run
+instead of three, over a fixed prompt subset, with every stage of a
+full run. The subset draws 2 prompts per task type from the full
+prompt file, sorted and with seed 0, so every screening run uses
+the same 8 of the 20 prompts. By design, the generation calls are
+about 13% of a full campaign, and the judge calls are about 40% of
+one full run. These fractions are design numbers until a
+measurement against the baseline campaign replaces them. The run
+lands under its own `-screening` directory family, the provenance
+carries a screening block, and every report of the run starts with
+a screening note, because the error bars of a screening run are
+wider than the error bars of a full run. `style-compare` rejects a
+comparison that mixes a screening run with a full run. A resume
+through `--dirs` needs `--screening` again, and the pair runner
+rejects a directory whose mode differs from the flag.
+
 ## Run data
 
 Stored runs live under `runs/`, one directory per run, named `<date>`,
@@ -448,6 +478,11 @@ runs/<YYYY-MM-DD>/
   rank.json         # matchups, win matrix, and strengths, machine-readable
   rank.md           # the clarity-ranking report for a human
   spot-check.md     # the human spot-check record and the agreement rate (manual)
+
+runs/<YYYY-MM-DD>-screening/
+  # the same files as a pair run, over the fixed prompt subset; the
+  # provenance carries the screening block, and every report starts
+  # with the screening note
 
 runs/<YYYY-MM-DD>-drift/
   provenance.json   # like the pair runs, plus the session script per repeat

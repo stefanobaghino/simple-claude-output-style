@@ -291,7 +291,9 @@ gate, and the report states the asymmetry. A Bradley-Terry fit
 turns the contests into one strength per competitor, anchored on
 the unstyled answer at 1.0, with a bootstrap interval per
 strength. The fit stays dormant below 3 competitors, and a
-competitor with zero wins or zero losses has no finite strength. The report also
+competitor with zero wins or zero losses has no finite strength.
+The report lists the strengths from the highest to the lowest, so
+the order per style is explicit. The report also
 states the position bias of the judge, the matchups per task type,
 and the length confound: the correlation between the length ratio
 of a contest and the points of the longer text. The judge model

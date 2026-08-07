@@ -186,7 +186,9 @@ def fit_bradley_terry(
     outcomes: each resample refits, and the interval takes the
     nearest-rank 2.5 and 97.5 percentiles of the finite anchored
     refits. The anchor holds the scale at 1.0, so its interval is
-    None by construction.
+    None by construction. The strengths block lists the competitors
+    from the highest strength to the lowest, ties in name order, and
+    a competitor without a finite strength comes last.
     """
     warnings: list[str] = []
     competitors = sorted({name for a, b, _ in outcomes for name in (a, b)})
@@ -222,6 +224,10 @@ def fit_bradley_terry(
             f"the anchor {anchor!r} has no finite strength, so the strengths are "
             "scaled by their geometric mean and the bootstrap is skipped"
         )
+    ordered = sorted(
+        competitors,
+        key=lambda name: (strengths[name] is None, -(strengths[name] or 0.0), name),
+    )
     return {
         "fitted": True,
         "anchored_on": anchor if anchored else None,
@@ -231,7 +237,7 @@ def fit_bradley_terry(
                 "ci_low": _round3(intervals[name][0]),
                 "ci_high": _round3(intervals[name][1]),
             }
-            for name in competitors
+            for name in ordered
         },
         "bootstrap": {"resamples": resamples, "seed": seed},
     }, warnings

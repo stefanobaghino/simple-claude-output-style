@@ -387,6 +387,21 @@ def test_campaign_screening_rejects_an_explicit_runs_count(project):
     assert error.value.code == 2
 
 
+def test_campaign_rejects_screening_with_holdout(project):
+    with pytest.raises(SystemExit) as error:
+        run_campaign(project, CampaignRunner(), "--screening", "--holdout")
+    assert error.value.code == 2
+
+
+def test_campaign_holdout_uses_its_own_directory_family(project):
+    runner = CampaignRunner()
+    assert run_campaign(project, runner, "--holdout", "--runs", "1", "--budget", "8") == 0
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    run_dir = project / "runs" / f"{date}-holdout"
+    assert (run_dir / "answers.jsonl").exists()
+    assert not (project / "runs" / date).exists()
+
+
 def test_campaign_dirs_flag_resumes_a_screening_run(project):
     first = CampaignRunner()
     assert run_campaign(project, first, "--screening", "--budget", "8") == 0

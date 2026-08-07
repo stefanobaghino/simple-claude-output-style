@@ -86,7 +86,7 @@ def build_stages(
     if not styles:
         raise _fail(f"{args.rules_dir}: no rule files found")
     arms: list[str | None] = [None, *styles]
-    suffix = "-screening" if args.screening else ""
+    suffix = "-screening" if args.screening else "-holdout" if args.holdout else ""
 
     def pairs_action(index: int, run: Runner, workers: int) -> int:
         if chosen[index] is None:
@@ -293,8 +293,22 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         default=3,
         help="probe calls per arm in the cost stage (forwarded to style-cost --repeats)",
     )
+    parser.add_argument(
+        "--holdout",
+        action="store_true",
+        help=(
+            "the final held-out check of a candidate style: every stage "
+            "over prompts/holdout.yaml, under the runs/<date>-holdout "
+            "directory family"
+        ),
+    )
     parser.add_argument("--model", default="sonnet", help="writer model for all answers")
-    parser.add_argument("--prompts", default="prompts/prompts.yaml", help="the prompt set")
+    parser.add_argument(
+        "--prompts",
+        help=(
+            "the prompt set (default: prompts/prompts.yaml, or prompts/holdout.yaml with --holdout)"
+        ),
+    )
     parser.add_argument("--rules-dir", default="rules", help="directory with the rule files")
     parser.add_argument("--plugin-dir", default="../plugin", help="the plugin directory")
     parser.add_argument("--gate-config", default="rules/gate.yaml", help="the gate policy file")
@@ -309,8 +323,16 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         raise _fail(f"--budget must be 1 or more, not {args.budget}")
     if args.probe_repeats < 1:
         raise _fail(f"--probe-repeats must be 1 or more, not {args.probe_repeats}")
+    if args.screening and args.holdout:
+        raise _fail(
+            "--screening and --holdout do not combine: a screening run never uses the held-out set"
+        )
     if args.screening and args.runs not in (None, 1):
         raise _fail(f"--screening implies --runs 1, not {args.runs}")
+    # The pairs action forwards args.prompts verbatim, so the default
+    # resolves here, before the stage table is built.
+    if args.prompts is None:
+        args.prompts = "prompts/holdout.yaml" if args.holdout else "prompts/prompts.yaml"
     if args.runs is None:
         args.runs = 1 if args.screening else 3
     if not args.dirs and args.runs < 1:

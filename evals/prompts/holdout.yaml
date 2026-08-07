@@ -1,0 +1,387 @@
+# The held-out prompt set: the final check of a candidate style.
+#
+# Contract:
+# - Same shape as prompts.yaml: each prompt has a unique id, one of
+#   the 4 task types, and a self-contained text.
+# - The ids carry the h mark: <type>-hNN. The mark keeps the two
+#   sets disjoint under any growth of the main set.
+# - Each type holds the same number of prompts: 4 confident prompts
+#   (-h01..-h04) and 2 hedge-rich prompts (-h05..-h06), the same mix
+#   as the main set. A new prompt continues the <type>-hNN numbering
+#   and appends at the tail of its type block.
+# - Isolation policy: the design loop never reads this file. No
+#   artifact of this set enters the design loop. A candidate style
+#   runs over this set once, as the final check. A screening run
+#   never uses this set.
+#
+# Changes to this file change the held-out measurement. The
+# provenance of a held-out run records the sha256 of this file.
+
+prompts:
+  - id: explanation-h01
+    type: explanation
+    text: |
+      Explain what makes an HTTP API operation idempotent and why
+      retries depend on it. Cover which standard methods are idempotent
+      by definition, and how a service makes an unsafe operation
+      retryable. The reader is a junior developer.
+
+  - id: explanation-h02
+    type: explanation
+    text: |
+      Explain how a B-tree index speeds up a database query, and why
+      the same index slows down writes. Give one example of a query
+      that the index helps and one that it does not.
+
+  - id: explanation-h03
+    type: explanation
+    text: |
+      Explain the difference between offset pagination and cursor
+      pagination for an API that lists orders. State the trade-offs
+      and when each approach fits.
+
+  - id: explanation-h04
+    type: explanation
+    text: |
+      Explain what a connection pool does and why opening a new
+      database connection per request is costly. The reader has built
+      one small web application and has never tuned a pool.
+
+  - id: explanation-h05
+    type: explanation
+    text: |
+      A colleague proposes a message queue between our order service
+      and our email service, which today talk over HTTP. Explain
+      whether the queue will make the system more reliable. We have no
+      numbers on the traffic volume or on how often the email service
+      is down.
+
+  - id: explanation-h06
+    type: explanation
+    text: |
+      Our team of six engineers debates splitting our monolith into
+      microservices. Deploys feel slow and risky, but we have not
+      measured where the time goes. Explain whether the split will
+      help us. State what the decision depends on and what can go
+      wrong on each path.
+
+  - id: code-review-h01
+    type: code-review
+    text: |
+      Review this Python function and point out every problem you find:
+
+      ```python
+      def split_bill(total, people):
+          share = round(total / people, 2)
+          amounts = [share] * people
+          if sum(amounts) != total:
+              amounts[-1] = total - share * (people - 1)
+          return amounts
+      ```
+
+  - id: code-review-h02
+    type: code-review
+    text: |
+      Review this JavaScript function and point out every problem you
+      find:
+
+      ```javascript
+      function removeExpired(items, now) {
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].expires < now) {
+            items.splice(i, 1);
+          }
+        }
+        return items;
+      }
+      ```
+
+  - id: code-review-h03
+    type: code-review
+    text: |
+      Review this Python function and point out every problem you find:
+
+      ```python
+      def stats(numbers):
+          total = sum(numbers)
+          count = len(list(numbers))
+          maximum = max(numbers)
+          return {"mean": total / count, "max": maximum}
+
+      print(stats(int(line) for line in open("data.txt")))
+      ```
+
+  - id: code-review-h04
+    type: code-review
+    text: |
+      Review this Python function and point out every problem you find:
+
+      ```python
+      import logging
+
+      def login(request, users):
+          assert "username" in request and "password" in request
+          logging.info("login attempt: %s", request)
+          user = users.get(request["username"])
+          if user and user["password"] == request["password"]:
+              return {"ok": True, "token": user["token"]}
+          return {"ok": False, "error": "bad username or password"}
+      ```
+
+  - id: code-review-h05
+    type: code-review
+    text: |
+      Review this Python rate limiter. It came with the service, it
+      has no tests, and nobody knows why the numbers were chosen.
+      Point out every problem you find, and say which ones might be
+      deliberate:
+
+      ```python
+      import time
+
+      _hits = {}
+
+      def allow(key, limit=20):
+          now = int(time.time())
+          bucket = _hits.setdefault(key, [])
+          bucket.append(now)
+          _hits[key] = [t for t in bucket if t > now - 60]
+          return len(_hits[key]) <= limit
+      ```
+
+  - id: code-review-h06
+    type: code-review
+    text: |
+      Review this Python config loader. It is inherited, callers exist
+      in several services we cannot see, and the fallback order was
+      never documented. Point out every problem you find, and say
+      which ones might be deliberate:
+
+      ```python
+      import json, os
+
+      def load_config(path="config.json"):
+          config = {"timeout": 30, "retries": 3, "debug": False}
+          try:
+              with open(path) as f:
+                  config.update(json.load(f))
+          except Exception:
+              pass
+          for key in config:
+              if key.upper() in os.environ:
+                  config[key] = os.environ[key.upper()]
+          return config
+      ```
+
+  - id: summarization-h01
+    type: summarization
+    text: |
+      Summarize this deprecation announcement as a migration checklist
+      for customers. Keep every date and every required action:
+
+      As of June 1st, version 2 of the reporting API is deprecated.
+      Version 2 endpoints keep working until November 30th, and after
+      that date they return 410 Gone. Version 3 is available today at
+      /v3/ and requires token authentication; API keys are not
+      accepted on v3. The endpoint /v2/reports/export is renamed to
+      /v3/exports, and its response format is unchanged. Between June
+      1st and November 30th, both versions run side by side, and a
+      request to v2 returns a Deprecation header with a link to the
+      migration guide. Customers on the legacy quarterly billing plan
+      must contact support before switching, because v3 usage is
+      metered differently.
+
+  - id: summarization-h02
+    type: summarization
+    text: |
+      Summarize this support-ticket thread as a handoff note for the
+      next support shift: current state, what was tried, and the next
+      step:
+
+      Customer reports that scheduled reports stopped arriving by
+      email on Monday. First reply asked for the report ids; customer
+      sent three ids on Tuesday morning. We confirmed all three
+      schedules are active and the reports generate successfully; the
+      delivery log shows the mails handed to the relay with status
+      accepted. Asked the customer to check spam and to whitelist our
+      sending domain; customer confirmed nothing in spam and that
+      their IT team applied the whitelist Wednesday. Since then one of
+      the three reports arrived, the other two did not. We requested a
+      trace from the relay provider; ticket with them is open under
+      reference RLY-4812, response promised within two business days.
+
+  - id: summarization-h03
+    type: summarization
+    text: |
+      Summarize this runbook section as a quick-reference card for the
+      on-call engineer: the checks in order, with their commands:
+
+      When the ingest queue depth alarm fires, first confirm the
+      backlog is real: run "queuectl depth ingest" and treat a value
+      above 50000 as confirmed. Next check whether the consumers are
+      alive with "svc status ingest-workers"; if fewer than 4 workers
+      are running, restart the pool with "svc restart ingest-workers"
+      and wait five minutes. If the workers are alive but the depth
+      still grows, check the downstream database latency on the
+      ingest-db dashboard; a p99 above 200ms means the database is the
+      bottleneck, and in that case do not add workers, because more
+      writers make it worse. Instead page the database on-call. Record
+      every action in the incident channel as you go.
+
+  - id: summarization-h04
+    type: summarization
+    text: |
+      Summarize this change description for the QA team: list what to
+      test, in order of risk:
+
+      This release reworks the invoice numbering. Numbers were
+      allocated at creation time; they are now allocated when the
+      invoice is finalized, so drafts no longer consume numbers.
+      Existing drafts keep their already-allocated numbers. The
+      numbering sequence is now per legal entity instead of global,
+      with a migration that backfills the entity prefix on all
+      existing invoices. The PDF template shows the new prefixed
+      number, and the search index was rebuilt to match. The public
+      API field "invoice_number" is unchanged in shape but may now be
+      null for drafts, which is a behavior change for API consumers.
+
+  - id: summarization-h05
+    type: summarization
+    text: |
+      Summarize this capacity-planning memo in one paragraph for the
+      budget owner. Keep the distinction between measured facts and
+      guesses:
+
+      Storage use grew from 40 TB to 58 TB over the last twelve
+      months, measured monthly. Growth was roughly linear except for
+      a jump in March, which we attribute to the new audio uploads,
+      though we did not break down the March data by type. If the
+      linear trend holds, we cross the 80 TB cluster limit in about
+      fourteen months. The marketing team expects a large customer
+      campaign next quarter; if it lands, growth could accelerate,
+      but past campaigns had mixed effects and we have no model for
+      this one. Compression of the archive tier might buy back around
+      8 TB, based on a sample of one bucket, which may not be
+      representative.
+
+  - id: summarization-h06
+    type: summarization
+    text: |
+      Summarize this security triage note for the weekly report, in
+      at most four sentences. Keep what is confirmed separate from
+      what is suspected:
+
+      Between Friday and Sunday we logged 214 failed logins across 31
+      accounts from a single IP range, followed by two successful
+      logins on accounts that had reused passwords from a public
+      breach list. Both accounts were locked Sunday evening and both
+      owners confirmed they did not log in. We suspect the successful
+      logins used credential stuffing, but the authentication logs do
+      not record enough detail to prove it. There is no evidence so
+      far that data left either account, though audit coverage of the
+      export endpoints is partial, so a small export could have gone
+      unnoticed. We believe the range belongs to a known botnet,
+      based on a third-party reputation feed we have not verified.
+
+  - id: debugging-h01
+    type: debugging
+    text: |
+      This Python code prints the wrong values. Explain the cause and
+      how to fix it:
+
+      ```python
+      handlers = []
+      for name in ["start", "stop", "reset"]:
+          handlers.append(lambda: print("handling " + name))
+
+      for handler in handlers:
+          handler()
+      ```
+
+      Expected one line per command, got:
+
+      ```
+      handling reset
+      handling reset
+      handling reset
+      ```
+
+  - id: debugging-h02
+    type: debugging
+    text: |
+      This Python code picks the wrong file. Explain the cause and how
+      to fix it:
+
+      ```python
+      snapshots = ["snap-9.db", "snap-10.db", "snap-11.db"]
+      latest = sorted(snapshots)[-1]
+      print("restoring", latest)
+      ```
+
+      ```
+      restoring snap-9.db
+      ```
+
+      The newest snapshot is snap-11.db.
+
+  - id: debugging-h03
+    type: debugging
+    text: |
+      This JavaScript check fails even though the cart looks correct.
+      Explain the cause and how to fix it:
+
+      ```javascript
+      const prices = [0.1, 0.2, 0.3];
+      let total = 0;
+      for (const p of prices) {
+        total += p;
+      }
+      if (total !== 0.6) {
+        throw new Error(`cart total mismatch: ${total}`);
+      }
+      ```
+
+      ```
+      Error: cart total mismatch: 0.6000000000000001
+      ```
+
+  - id: debugging-h04
+    type: debugging
+    text: |
+      This Python code raises an error. Explain the cause and how to
+      fix it:
+
+      ```python
+      from datetime import datetime, timezone
+
+      def age_seconds(created_at):
+          return (datetime.now(timezone.utc) - created_at).total_seconds()
+
+      created = datetime.fromisoformat("2026-08-01T10:00:00")
+      print(age_seconds(created))
+      ```
+
+      ```
+      TypeError: can't subtract offset-naive and offset-aware datetimes
+      ```
+
+  - id: debugging-h05
+    type: debugging
+    text: |
+      Some customers receive the same webhook twice, roughly 1
+      delivery in 200. We only have receiver-side counts from one
+      customer, and our sender logs from the affected window were not
+      retained. The sender retries on any non-2xx response with a
+      30-second timeout. What are the most plausible causes, and how
+      would you narrow them down?
+
+  - id: debugging-h06
+    type: debugging
+    text: |
+      After Tuesday's deploy, the p99 latency of our search endpoint
+      doubled, but only in one of our three regions. We rolled the
+      deploy back, the latency stayed high for another hour, and then
+      it recovered on its own. The dashboards keep only 24 hours of
+      data, so we can no longer see the incident window. What are the
+      most plausible causes, and how would you narrow them down before
+      we retry the deploy?

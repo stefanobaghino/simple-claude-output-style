@@ -17,7 +17,7 @@ from value.judges import TaskPool
 
 from .generate import GenerationError, Runner, generate, subprocess_runner
 from .hermetic import hermetic_call
-from .provenance import build_provenance, claude_version
+from .provenance import build_provenance, claude_version, sha256_of
 from .report import arm_name, build_report
 from .screening import screening_provenance, select_screening_prompts
 
@@ -90,7 +90,12 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             "when the same invocation runs again."
         ),
     )
-    parser.add_argument("--prompts", default="prompts/prompts.yaml", help="the prompt set")
+    parser.add_argument(
+        "--prompts",
+        help=(
+            "the prompt set (default: prompts/prompts.yaml, or prompts/holdout.yaml with --holdout)"
+        ),
+    )
     parser.add_argument("--rules-dir", default="rules", help="directory with the rule files")
     parser.add_argument("--plugin-dir", default="../plugin", help="the plugin directory")
     parser.add_argument("--model", default="sonnet", help="model for all answers")
@@ -102,6 +107,15 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             "one reduced run over the fixed prompt subset (2 per type, "
             "seed 0); the run carries a screening mark and never "
             "compares with a full run"
+        ),
+    )
+    parser.add_argument(
+        "--holdout",
+        action="store_true",
+        help=(
+            "run over the held-out prompt set, under the "
+            "runs/<date>-holdout directory family; the final check of "
+            "a candidate style, never part of the design loop"
         ),
     )
     parser.add_argument(
@@ -117,8 +131,13 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     args = parser.parse_args(argv)
     if args.parallel < 1:
         raise SystemExit(f"--parallel must be 1 or more, not {args.parallel}")
+    if args.screening and args.holdout:
+        raise SystemExit(
+            "--screening and --holdout do not combine: a screening run never uses the held-out set"
+        )
 
-    prompts_path = Path(args.prompts)
+    default_prompts = "prompts/holdout.yaml" if args.holdout else "prompts/prompts.yaml"
+    prompts_path = Path(args.prompts or default_prompts)
     plugin_dir = Path(args.plugin_dir).resolve()
     prompts = load_prompts(prompts_path)
     full_count = len(prompts)
@@ -133,7 +152,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             raise SystemExit(f"{style_file}: the style file does not exist")
 
     arms: list[str | None] = [None, *styles]
-    suffix = "-screening" if args.screening else ""
+    suffix = "-screening" if args.screening else "-holdout" if args.holdout else ""
     if args.out:
         out = Path(args.out)
     else:
@@ -156,6 +175,14 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             raise SystemExit(
                 f"{out}: the directory holds {mode}; "
                 f"run again {flag} --screening, or pass another --out"
+            )
+        # The same gap statement holds for the prompt-set guard: the
+        # -holdout name family confines a resume from before the
+        # provenance write.
+        stored_hash = (stored.get("prompt_set") or {}).get("sha256")
+        if stored_hash is not None and stored_hash != sha256_of(prompts_path):
+            raise SystemExit(
+                f"{out}: the directory holds a run over another prompt set; pass another --out"
             )
 
     out.mkdir(parents=True, exist_ok=True)

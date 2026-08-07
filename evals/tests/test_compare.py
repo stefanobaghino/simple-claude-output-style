@@ -32,6 +32,10 @@ def write_run(
     workdir: str | None = "temp",
     config: str | None = "hermetic",
     manifest_sha: str | None = "m" * 8,
+    value_prompts_sha: str | None = "v" * 8,
+    loss_prompts_sha: str | None = "l" * 8,
+    rank_prompts_sha: str | None = "k" * 8,
+    loss_fact_mine: str | None = "two-way",
     screening: dict | None = None,
     skip: tuple[str, ...] = (),
 ) -> Path:
@@ -114,6 +118,16 @@ def write_run(
             ],
         },
     }
+    # A None value simulates a summary from before the field: the key
+    # stays absent, like an old stored run.
+    if value_prompts_sha is not None:
+        files["value"]["judges"]["judge_prompts_sha256"] = value_prompts_sha
+    if loss_prompts_sha is not None:
+        files["loss"]["judge"]["judge_prompts_sha256"] = loss_prompts_sha
+    if loss_fact_mine is not None:
+        files["loss"]["judge"]["fact_mine"] = loss_fact_mine
+    if rank_prompts_sha is not None:
+        files["rank"]["judge"]["judge_prompts_sha256"] = rank_prompts_sha
     if screening is not None:
         files["provenance"]["screening"] = screening
     for stem, content in files.items():
@@ -362,6 +376,55 @@ def test_a_manifest_hash_mismatch_warns(tmp_path):
     assert code == 1
     assert summary["warnings"] == [
         f"condition mismatch on config manifest hash: run-a {'a' * 8}, run-b {'b' * 8}",
+    ]
+
+
+def test_a_prompt_hash_mismatch_warns(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a")
+    write_run(
+        runs,
+        "run-b",
+        value_prompts_sha="V" * 8,
+        loss_prompts_sha="L" * 8,
+        rank_prompts_sha="K" * 8,
+    )
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        f"condition mismatch on value judge prompts: run-a {'v' * 8}, run-b {'V' * 8}",
+        f"condition mismatch on loss judge prompts: run-a {'l' * 8}, run-b {'L' * 8}",
+        f"condition mismatch on rank judge prompts: run-a {'k' * 8}, run-b {'K' * 8}",
+    ]
+
+
+def test_a_run_without_a_prompt_hash_stays_silent(tmp_path):
+    # The inverse of the config-mode entry: a run from before the
+    # judge-prompt hash did not change the prompt text, so the entry
+    # stays silent instead of warning on the absence.
+    runs = tmp_path / "runs"
+    write_run(
+        runs,
+        "run-a",
+        value_prompts_sha=None,
+        loss_prompts_sha=None,
+        rank_prompts_sha=None,
+        loss_fact_mine=None,
+    )
+    write_run(runs, "run-b")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 0
+    assert summary["warnings"] == []
+
+
+def test_a_fact_mine_mismatch_warns(tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "run-a")
+    write_run(runs, "run-b", loss_fact_mine="one-way")
+    code, summary, _ = run_cli(tmp_path, "run-a", "run-b")
+    assert code == 1
+    assert summary["warnings"] == [
+        "condition mismatch on loss judge fact_mine: run-a two-way, run-b one-way",
     ]
 
 

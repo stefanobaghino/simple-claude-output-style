@@ -84,15 +84,32 @@ def _condition_entries(run: dict) -> dict[str, object]:
         judges = value.get("judges", {})
         for key in VALUE_JUDGE_KEYS:
             entries[f"value judges {key}"] = judges.get(key)
+        # The judge-prompt hash entries invert the era semantics of
+        # the config entries above: a run from before the hash stores
+        # none, and its prompt text did not differ across that
+        # boundary, so the entry appears only when the summary holds
+        # one. Old-versus-new stays silent, and two stored hashes
+        # that differ warn.
+        if judges.get("judge_prompts_sha256") is not None:
+            entries["value judge prompts"] = judges["judge_prompts_sha256"]
     loss = run["loss"]
     if loss is not None:
         entries["loss judge model"] = loss.get("judge", {}).get("model")
         entries["loss judge model_resolved"] = loss.get("judge", {}).get("model_resolved")
+        # The fact-mine tag and the prompt hash follow the inverted
+        # era semantics of the value judge prompts entry above.
+        if loss.get("judge", {}).get("fact_mine") is not None:
+            entries["loss judge fact_mine"] = loss["judge"]["fact_mine"]
+        if loss.get("judge", {}).get("judge_prompts_sha256") is not None:
+            entries["loss judge prompts"] = loss["judge"]["judge_prompts_sha256"]
     rank = run["rank"]
     if rank is not None:
         entries["rank judge model"] = rank.get("judge", {}).get("model")
         entries["rank judge model_resolved"] = rank.get("judge", {}).get("model_resolved")
         entries["rank design"] = rank.get("design")
+        # The inverted era semantics apply here as well.
+        if rank.get("judge", {}).get("judge_prompts_sha256") is not None:
+            entries["rank judge prompts"] = rank["judge"]["judge_prompts_sha256"]
     return entries
 
 

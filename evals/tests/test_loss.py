@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from loss import cli, parse_string_list, parse_verdicts, score_checks
-from loss.judges import run_judges
+from loss.judges import JUDGE_PROMPTS_SHA256, run_judges
 from runner.provenance import sha256_of
 
 STYLED_TEXT = "The quick brown fox jumps."
@@ -548,7 +548,34 @@ def test_cli_meta_upgrade_appends_a_row(project):
     assert len(metas) == 2
     assert "fact_mine" not in metas[0]
     assert metas[1]["fact_mine"] == "two-way"
+    # One appended row backfills every absent upgrade key.
+    assert metas[1]["judge_prompts_sha256"] == JUDGE_PROMPTS_SHA256
     assert metas[1]["date"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_cli_meta_holds_the_judge_prompt_hash(project):
+    assert run_cli(project, "--judge") == 0
+    meta = json.loads((project / "run" / "loss-raw.jsonl").read_text().splitlines()[0])
+    assert meta["judge_prompts_sha256"] == JUDGE_PROMPTS_SHA256
+    summary = json.loads((project / "run" / "loss.json").read_text())
+    assert summary["judge"]["judge_prompts_sha256"] == JUDGE_PROMPTS_SHA256
+    assert summary["judge"]["fact_mine"] == "two-way"
+
+
+def test_cli_a_prompt_hash_mismatch_exits_2(project):
+    run_dir = project / "run"
+    old_meta = {
+        "type": "meta",
+        "date": "2026-01-01T00:00:00+00:00",
+        "model": "opus",
+        "fact_mine": "two-way",
+        "judge_prompts_sha256": "stale",
+        "answers_sha256": sha256_of(run_dir / "answers.jsonl"),
+    }
+    write_jsonl(run_dir / "loss-raw.jsonl", [old_meta])
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge")
+    assert error.value.code == 2
 
 
 def test_cli_a_fact_mine_mismatch_exits_2(project):

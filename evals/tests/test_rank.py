@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from rank import build_schedule, cli, contest_key, fit_bradley_terry, parse_pick, score_contests
+from rank.judges import JUDGE_PROMPTS_SHA256
 
 ALPHA_TEXT = "The quick brown fox jumps."
 BETA_TEXT = "The big red bear sleeps."
@@ -676,6 +677,45 @@ def test_cli_meta_mismatch_exits_2(project):
     run_cli(project, "--judge")
     with pytest.raises(SystemExit) as error:
         run_cli(project, "--judge", "--model", "haiku")
+    assert error.value.code == 2
+
+
+def test_cli_meta_holds_the_judge_prompt_hash(project):
+    assert run_cli(project, "--judge") == 0
+    meta = json.loads((project / "run" / "rank-raw.jsonl").read_text().splitlines()[0])
+    assert meta["judge_prompts_sha256"] == JUDGE_PROMPTS_SHA256
+    summary = json.loads((project / "run" / "rank.json").read_text())
+    assert summary["judge"]["judge_prompts_sha256"] == JUDGE_PROMPTS_SHA256
+
+
+def test_cli_a_stored_file_without_the_prompt_hash_upgrades_and_resumes(project):
+    run_cli(project, "--judge")
+    raw_path = project / "run" / "rank-raw.jsonl"
+    rows = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    del rows[0]["judge_prompts_sha256"]
+    write_jsonl(raw_path, rows)
+    second_runner = FakeRankRunner()
+    assert run_cli(project, "--judge", run=second_runner) == 0
+    assert second_runner.calls == []
+    metas = [
+        row
+        for line in raw_path.read_text().splitlines()
+        if (row := json.loads(line)).get("type") == "meta"
+    ]
+    assert len(metas) == 2
+    assert "judge_prompts_sha256" not in metas[0]
+    assert metas[1]["judge_prompts_sha256"] == JUDGE_PROMPTS_SHA256
+    assert metas[1]["date"] == metas[0]["date"]
+
+
+def test_cli_a_prompt_hash_mismatch_exits_2(project):
+    run_cli(project, "--judge")
+    raw_path = project / "run" / "rank-raw.jsonl"
+    rows = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    rows[0]["judge_prompts_sha256"] = "stale"
+    write_jsonl(raw_path, rows)
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--judge")
     assert error.value.code == 2
 
 

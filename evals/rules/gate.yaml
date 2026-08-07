@@ -23,10 +23,26 @@
 #   started at 8.3. The threshold 5.0 sits below the baseline floor and
 #   grants slack for one violation in an answer of 20 or more sentences.
 #
-# classic-concise, clarity-flow, developer-docs: provisional and
-#   uncalibrated, set before any measured run so the gate stays runnable.
-#   The calibration run of #79 p2 replaces these values, and that run
-#   carries the one-time asterisk described above.
+# classic-concise, clarity-flow, developer-docs: calibrated against
+#   runs/2026-08-07, the calibration run of #79 p2. That run carries
+#   the same one-time asterisk. Unlike the first two styles, their
+#   baseline floors sit low, so a threshold under every nonzero
+#   baseline rate is not attainable; the baseline carries no mark, so
+#   the thresholds aim at the styled rates and the baseline mass.
+#
+# classic-concise: the styled rates were 30 zeros, then 2.7 and 4.2
+#   (one violation each). The baseline rates started at 2.0. The
+#   threshold 10.0 keeps the observed styled rates with headroom,
+#   passes one violation at 10 or more sentences, and fails the
+#   baseline tail from 12.9.
+# clarity-flow: the styled rates and the baseline rates were all
+#   zero: the rule set separated nothing in this run. The threshold
+#   5.0 mirrors plain-language: strict, with slack for one violation
+#   in an answer of 20 or more sentences.
+# developer-docs: the styled rates were 31 zeros and one 6.2. The
+#   baseline rates started at 2.6, with 11 of 20 nonzero rates at
+#   11.1 or above. The threshold 10.0 passes the observed styled
+#   rate with headroom and fails that upper half of the baseline.
 thresholds:
   technical-simplified:
     max_rate: 15.0
@@ -35,6 +51,6 @@ thresholds:
   classic-concise:
     max_rate: 10.0
   clarity-flow:
-    max_rate: 10.0
+    max_rate: 5.0
   developer-docs:
     max_rate: 10.0

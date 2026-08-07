@@ -77,9 +77,12 @@ the harness. The members:
 - **technical-simplified** — ASD-STE100 Issue 9: controlled technical
   language with a restricted vocabulary and grammar.
 
-The field is provisional until #79 p2 freezes it. Every member adds a
-linear cost to every campaign, so an addition needs a reason that a
-smaller field cannot serve.
+The field is frozen (#79): these five members are the competitor set
+of the baseline, and `runs/2026-08-07` is the calibration run of the
+field. A later addition goes through the process below and re-opens
+the field on purpose. Every member adds a linear cost to every
+campaign, so an addition needs a reason that a smaller field cannot
+serve.
 
 ## How to add a style
 

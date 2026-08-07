@@ -533,7 +533,7 @@ full campaign, the cross-run comparison, and the human spot check.
 A campaign is several runs under identical conditions, produced for
 the cross-run comparison. The campaign driver produces one with one
 command: `style-campaign` runs N full runs (3 by default), and
-`--budget` sets the total worker count across every stage (32 by
+`--budget` sets the total worker count across every stage (48 by
 default). The cost stage probes with 3 repeats, and
 `--probe-repeats` forwards a different count to `style-cost`. One
 worker gate meters every CLI call of the campaign:
@@ -551,6 +551,17 @@ run directories of the interrupted campaign. The first value
 invocation of a run exits 1 by design, because its comprehension
 check is not judged yet; the driver reports that exit code but does
 not count it.
+
+The default budget rests on the probe of #73, stored in
+`runs/2026-08-07`: at a sustained peak of 48 live calls, the
+per-call durations stayed at the light-load means, so 48 sits under
+the account saturation. The wall of a campaign follows from the
+call time of its era divided by the budget. The probe run made
+about 4,500 calls with about 59,500 s of subprocess time, and its
+wall was 24 minutes at 85 percent permit utilization. Thus a 3-run
+campaign of the current era expects a wall near 70 minutes at
+budget 48. A wall bar must state the budget and the era that it
+assumes.
 
 The schedule rests on four dependencies:
 

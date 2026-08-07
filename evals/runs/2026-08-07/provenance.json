@@ -1,0 +1,77 @@
+{
+  "date": "2026-08-07T08:39:00+00:00",
+  "prompt_set": {
+    "path": "prompts/prompts.yaml",
+    "sha256": "b61b430684a75f4155ce1bb796a9b264df6e85a892fc1b53df35e3d0d7385284"
+  },
+  "conditions": {
+    "model_requested": "sonnet",
+    "claude_version": "2.1.224 (Claude Code)",
+    "workdir": "temp",
+    "config": "hermetic",
+    "config_manifest_sha256": "e3ef87bafe5a44a4929464925e932ad3a0ede1accc791d84f511e706c8d9abab",
+    "claude_binary": "/Users/ste/.local/bin/claude",
+    "env_passed": [
+      "HOME",
+      "PATH",
+      "TERM",
+      "USER",
+      "CLAUDE_CONFIG_DIR",
+      "CLAUDE_CODE_OAUTH_TOKEN"
+    ],
+    "flags": [
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--no-session-persistence",
+      "--max-turns",
+      "1",
+      "--disallowedTools",
+      "*",
+      "--exclude-dynamic-system-prompt-sections",
+      "--strict-mcp-config"
+    ],
+    "settings": {
+      "base": {
+        "disableAllHooks": true
+      },
+      "unstyled_arm": {
+        "outputStyle": "default"
+      },
+      "styled_arm": {
+        "outputStyle": "<style>",
+        "extra_flag": "--plugin-dir"
+      }
+    }
+  },
+  "repo": {
+    "commit": "30913c639d1874c6379a38d55ac66b93ade71e96",
+    "dirty": false
+  },
+  "styles": {
+    "clarity-flow": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/clarity-flow.md",
+      "sha256": "b96eb83b01ad11b18ec5cf46dbb7203aad77de54ebafff10a6476b84cac19a06"
+    },
+    "classic-concise": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/classic-concise.md",
+      "sha256": "6adc8c4fb691900266f0cbceb873767423d623824387d8f14ef85d552ef06d44"
+    },
+    "developer-docs": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/developer-docs.md",
+      "sha256": "c62b6bf0a91ce36fe15d5318816eca56d318f5aa8e54fc5f9520e82bf46b9efc"
+    },
+    "plain-language": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/plain-language.md",
+      "sha256": "d9acbffcfb85937603524c3defc7491f91e86f24fcc679ec1247313b80bcbc04"
+    },
+    "technical-simplified": {
+      "file": "/Users/ste/Projects/github.com/stefanobaghino/simple-claude-output-style/plugin/output-styles/technical-simplified.md",
+      "sha256": "69bf572f15b1b570bd8ace5e93960150ec5f0096f0b71b9f42f8833ccaa4f089"
+    }
+  },
+  "linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  }
+}

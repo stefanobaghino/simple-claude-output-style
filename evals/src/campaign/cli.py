@@ -285,7 +285,7 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         ),
     )
     parser.add_argument(
-        "--budget", type=int, default=32, help="total live workers across the stages"
+        "--budget", type=int, default=48, help="total live workers across the stages"
     )
     parser.add_argument(
         "--probe-repeats",

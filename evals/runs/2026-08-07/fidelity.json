@@ -1,0 +1,85 @@
+{
+  "date": "2026-08-07T08:39:11+00:00",
+  "run": "2026-08-07",
+  "thresholds": {
+    "clarity-flow": 10.0,
+    "classic-concise": 10.0,
+    "developer-docs": 10.0,
+    "plain-language": 5.0,
+    "technical-simplified": 15.0
+  },
+  "summary": {
+    "clarity-flow": {
+      "gated": 32,
+      "passed": 32,
+      "failed": 0,
+      "styled_rate": 0.0,
+      "baseline_rate": 0.0
+    },
+    "classic-concise": {
+      "gated": 32,
+      "passed": 32,
+      "failed": 0,
+      "styled_rate": 0.47,
+      "baseline_rate": 1.96
+    },
+    "developer-docs": {
+      "gated": 32,
+      "passed": 32,
+      "failed": 0,
+      "styled_rate": 0.18,
+      "baseline_rate": 8.61
+    },
+    "plain-language": {
+      "gated": 32,
+      "passed": 32,
+      "failed": 0,
+      "styled_rate": 0.0,
+      "baseline_rate": 7.24
+    },
+    "technical-simplified": {
+      "gated": 32,
+      "passed": 26,
+      "failed": 6,
+      "styled_rate": 7.71,
+      "baseline_rate": 79.06
+    }
+  },
+  "linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  },
+  "run_linter_toolchain": {
+    "spacy": "3.8.14",
+    "en-core-web-sm": "3.8.0"
+  },
+  "rules": {
+    "clarity-flow": {
+      "file": "rules/clarity-flow.rules.yaml",
+      "sha256": "d4047e50d635f3427b5373f4bfdd85574e5f91622b0ee462edb454c69420e32a"
+    },
+    "classic-concise": {
+      "file": "rules/classic-concise.rules.yaml",
+      "sha256": "d3496c81a6c74cd388b4e3e44e405b32cc1de656ba4a35a58f3eeaf7b9bd57d9"
+    },
+    "developer-docs": {
+      "file": "rules/developer-docs.rules.yaml",
+      "sha256": "7d0f20c52814fced11943ace3dec6cce0c4f5716766562fd346a9c7891047903"
+    },
+    "plain-language": {
+      "file": "rules/plain-language.rules.yaml",
+      "sha256": "b2175b219907fcf815762e53fd9c4ac11f86901b6bce590224aeb6d5db6485a8"
+    },
+    "technical-simplified": {
+      "file": "rules/technical-simplified.rules.yaml",
+      "sha256": "f7120e410a1863e07bda72bd5b0fe07c7ca0cbad642c9a093681e86497025fdd"
+    }
+  },
+  "gate_config": {
+    "file": "rules/gate.yaml",
+    "sha256": "1a94223c86db0698a461b51bf849c56e7b4f85a3444721147b146f321ebe82d6"
+  },
+  "warnings": [
+    "technical-simplified/code-review-07: the answer has no sentences and fails the gate"
+  ]
+}

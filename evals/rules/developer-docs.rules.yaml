@@ -1,0 +1,56 @@
+# Rule data for the developer-docs output style.
+#
+# The style file lives at plugin/output-styles/developer-docs.md.
+#
+# Documented exclusions. These rules of the style need judgment, so the
+# linter does not check them, and the fidelity score does not cover them:
+# second person, present tense over future ("will" has legal uses), the
+# minimizer sense of "just" (the temporal sense is legal and the tagger
+# cannot separate the two), tone, idioms and cultural references,
+# answer-first structure, list and table choice, descriptive link text
+# beyond the "click here" pattern, accessibility, and timeless language.
+#
+# The style permits contractions (the source encourages them) and
+# semicolons, so both toggles stay off. The source states no numeric
+# sentence limit, so the sentence-length check stays off. The modal ban
+# covers "shall" and "may": the source reserves "may" for permission and
+# prescribes "might" or "can". The month "May" is safe, because the check
+# fires on the modal tag only. This rule set conflicts with the
+# technical-simplified rule set on purpose.
+#
+# Format: see rules/technical-simplified.rules.yaml.
+
+style: developer-docs
+
+modals:
+  banned: [shall, may]
+  permitted: [can, might, must]
+
+latin_abbreviations:
+  - avoid: "e.g."
+    write: "for example"
+  - avoid: "i.e."
+    write: "that is"
+  - avoid: "etc."
+    write: "and so on, or stop the list"
+  - avoid: "et al."
+    write: "and others"
+  - avoid: "cf."
+    write: "compare"
+  - avoid: "viz."
+    write: "namely"
+
+words:
+  # The interjection tag spares the verb: "the results pleased the team".
+  - { avoid: please, write: the instruction alone, pos: [INTJ] }
+
+patterns:
+  - id: minimizer
+    regex: '\b(?:simply|easily|obviously|of course)\b'
+    message: 'Do not minimize the work. Cut the word and state the step.'
+  - id: click-here
+    regex: '\bclick here\b'
+    message: 'Make the link text describe the destination. Never write "click here".'
+  - id: and-or
+    regex: '\band/or\b'
+    message: 'Do not write "and/or". Write "either X or Y, or both".'

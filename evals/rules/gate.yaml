@@ -22,8 +22,19 @@
 # plain-language: the styled rates were all zero. The baseline rates
 #   started at 8.3. The threshold 5.0 sits below the baseline floor and
 #   grants slack for one violation in an answer of 20 or more sentences.
+#
+# classic-concise, clarity-flow, developer-docs: provisional and
+#   uncalibrated, set before any measured run so the gate stays runnable.
+#   The calibration run of #79 p2 replaces these values, and that run
+#   carries the one-time asterisk described above.
 thresholds:
   technical-simplified:
     max_rate: 15.0
   plain-language:
     max_rate: 5.0
+  classic-concise:
+    max_rate: 10.0
+  clarity-flow:
+    max_rate: 10.0
+  developer-docs:
+    max_rate: 10.0

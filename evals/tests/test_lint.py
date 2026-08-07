@@ -3,7 +3,9 @@
 The ticket sets the bar per style: the check finds all violations in the
 known-dirty sample, and the check reports zero violations on the known-clean
 sample and on the traps sample. The clean sample of each style is dirty
-under the rules of the other style, because the styles conflict on purpose.
+under the rules of one designed conflict style, because clean under one
+rule set is not automatically dirty under every other; the CONFLICTS map
+names the designed pair per style.
 """
 
 from pathlib import Path
@@ -37,6 +39,41 @@ EXPECTED_DIRTY = {
         ("and-or", "and/or"),
         ("double-negative", "no fewer than"),
     ],
+    "classic-concise": [
+        ("needless-phrase", "the fact that"),
+        ("banned-word", "very"),
+        ("needless-phrase", "the question as to whether"),
+        ("banned-word", "certainly"),
+        ("needless-phrase", "there is no doubt but that"),
+        ("needless-phrase", "in a hasty manner"),
+        ("needless-phrase", "one of the most"),
+        ("banned-word", "kind of"),
+        ("banned-word", "sort of"),
+    ],
+    "clarity-flow": [
+        ("metadiscourse", "it should be noted that"),
+        ("banned-word", "made a decision"),
+        ("banned-word", "conducted an analysis"),
+        ("banned-word", "reached a conclusion"),
+        ("banned-word", "carried out an investigation"),
+        ("banned-word", "made an assumption"),
+        ("metadiscourse", "as previously mentioned"),
+        ("banned-word", "give consideration to"),
+        ("metadiscourse", "needless to say"),
+        ("banned-word", "provide an explanation"),
+        ("banned-word", "come to an agreement"),
+    ],
+    "developer-docs": [
+        ("banned-word", "please"),
+        ("minimizer", "simply"),
+        ("banned-modal", "may"),
+        ("banned-modal", "shall"),
+        ("minimizer", "obviously"),
+        ("latin-abbreviation", "e.g."),
+        ("latin-abbreviation", "etc."),
+        ("click-here", "click here"),
+        ("and-or", "and/or"),
+    ],
 }
 
 # Violations in the dirty samples beyond the pairs above: the dirty sample of
@@ -44,9 +81,23 @@ EXPECTED_DIRTY = {
 EXTRA_DIRTY = {
     "technical-simplified": 1,
     "plain-language": 0,
+    "classic-concise": 0,
+    "clarity-flow": 0,
+    "developer-docs": 0,
 }
 
 STYLES = sorted(EXPECTED_DIRTY)
+
+# The designed conflict pair per style: the clean sample of the key style is
+# dirty under the rules of the value style. Every new clean sample carries a
+# contraction (and some a semicolon), so technical-simplified rejects it.
+CONFLICTS = {
+    "classic-concise": "technical-simplified",
+    "clarity-flow": "technical-simplified",
+    "developer-docs": "technical-simplified",
+    "plain-language": "technical-simplified",
+    "technical-simplified": "plain-language",
+}
 
 
 @pytest.fixture(scope="session")
@@ -86,8 +137,8 @@ def test_dirty_sample_counts_one_long_sentence(linters):
 
 
 @pytest.mark.parametrize("style", STYLES)
-def test_clean_sample_is_dirty_for_the_other_style(linters, style):
-    other = next(s for s in STYLES if s != style)
+def test_clean_sample_is_dirty_for_the_conflict_style(linters, style):
+    other = CONFLICTS[style]
     report = linters[other].lint_file(SAMPLES / style / "clean.md")
     assert report.violations != []
 

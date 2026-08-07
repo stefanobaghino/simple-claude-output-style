@@ -1,0 +1,46 @@
+# Rule data for the classic-concise output style.
+#
+# The style file lives at plugin/output-styles/classic-concise.md.
+#
+# Documented exclusions. These rules of the style need judgment, so the
+# linter does not check them, and the fidelity score does not cover them:
+# omit needless words in general, definite and concrete language, definite
+# assertions, positive form, active voice, related words together, parallel
+# form, paragraph unity and topic sentences, the emphatic sentence end,
+# overstatement, and over-explanation.
+#
+# The style permits contractions and prescribes the semicolon for related
+# independent clauses, so both toggles stay off. The source states no
+# numeric sentence limit, so the sentence-length check stays off. This rule
+# set conflicts with the technical-simplified rule set on purpose.
+#
+# Format: see rules/technical-simplified.rules.yaml.
+
+style: classic-concise
+
+words:
+  # Intensifiers: where emphasis is needed, use a word strong in itself.
+  # The ADV tag spares "the very idea" (ADJ).
+  - { avoid: very, write: a strong word, pos: [ADV] }
+  - { avoid: certainly, write: a strong word, pos: [ADV] }
+  # Hedges: "kind of slow" tags the hedge as ADV, while "this kind of
+  # error" tags the noun, so the ADV tag separates the senses.
+  - { avoid: [kind, of], write: the exact word, pos: [ADV] }
+  - { avoid: [sort, of], write: the exact word, pos: [ADV] }
+
+patterns:
+  - id: needless-phrase
+    regex: '\bthe fact that\b'
+    message: 'Rewrite without "the fact that". Write "that" or "because".'
+  - id: needless-phrase
+    regex: '\bthe question as to whether\b'
+    message: 'Write "whether", not "the question as to whether".'
+  - id: needless-phrase
+    regex: '\bthere is no doubt but that\b'
+    message: 'Write "no doubt", not "there is no doubt but that".'
+  - id: needless-phrase
+    regex: '\bin a \w+ manner\b'
+    message: 'Write the adverb, not "in a ... manner".'
+  - id: needless-phrase
+    regex: '\bone of the most\b'
+    message: 'Avoid the feeble formula "one of the most". Make the assertion directly.'

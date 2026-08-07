@@ -1,0 +1,47 @@
+# Rule data for the clarity-flow output style.
+#
+# The style file lives at plugin/output-styles/clarity-flow.md.
+#
+# Documented exclusions. These rules of the style need judgment or work on
+# the whole document, so the linter does not check them, and the fidelity
+# score does not cover them: actors as grammatical subjects, short concrete
+# subjects, old information before new, the stress position, topic strings,
+# the issue-then-point structure, and the judgment of which hedges mark
+# real uncertainty.
+#
+# The style permits contractions, semicolons, and every modal verb, so
+# those checks stay off. The source states no numeric sentence limit, so
+# the sentence-length check stays off. The mechanical core is the
+# hidden-verb table: an action buried in an abstract noun. This rule set
+# conflicts with the technical-simplified rule set on purpose.
+#
+# Format: see rules/technical-simplified.rules.yaml.
+
+style: clarity-flow
+
+words:
+  # Hidden verbs: the action sits in an abstract noun, and the verb is a
+  # placeholder. The lemma sequences name the natural article of each
+  # noun, because "an" keeps its own lemma in the tagger.
+  - { avoid: [make, a, decision], write: decide, pos: [VERB] }
+  - { avoid: [make, an, assumption], write: assume, pos: [VERB] }
+  - { avoid: [conduct, an, analysis], write: analyze, pos: [VERB] }
+  - { avoid: [reach, a, conclusion], write: conclude, pos: [VERB] }
+  - { avoid: [give, consideration, to], write: consider, pos: [VERB] }
+  - { avoid: [carry, out, an, investigation], write: investigate, pos: [VERB] }
+  - { avoid: [provide, an, explanation], write: explain, pos: [VERB] }
+  - { avoid: [come, to, an, agreement], write: agree, pos: [VERB] }
+
+patterns:
+  - id: metadiscourse
+    regex: '\bit should be noted that\b'
+    message: 'Cut the announcement. State the point directly.'
+  - id: metadiscourse
+    regex: '\bit is important to note that\b'
+    message: 'Cut the announcement. State the point directly.'
+  - id: metadiscourse
+    regex: '\bas previously mentioned\b'
+    message: 'Cut the announcement. Repeat the point or link to it.'
+  - id: metadiscourse
+    regex: '\bneedless to say\b'
+    message: 'Cut "needless to say". If the point is needless, cut the point.'

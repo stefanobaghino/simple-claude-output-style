@@ -286,6 +286,7 @@ def test_bradley_terry_orders_a_lopsided_matrix():
     strengths = {name: entry["strength"] for name, entry in block["strengths"].items()}
     assert strengths["unstyled"] == 1.0
     assert strengths["alpha"] > strengths["unstyled"] > strengths["beta"]
+    assert list(block["strengths"]) == ["alpha", "unstyled", "beta"]
 
 
 def test_bradley_terry_a_shutout_strength_is_none():
@@ -301,6 +302,9 @@ def test_bradley_terry_a_shutout_strength_is_none():
     assert block["strengths"]["alpha"] == {"strength": None, "ci_low": None, "ci_high": None}
     assert block["strengths"]["beta"]["strength"] == 1.0
     assert block["strengths"]["unstyled"]["strength"] == 1.0
+    # A competitor without a finite strength sorts last, and the 1.0
+    # tie breaks in name order.
+    assert list(block["strengths"]) == ["beta", "unstyled", "alpha"]
     assert any(w.startswith("alpha:") for w in warnings)
 
 
@@ -468,6 +472,91 @@ def test_the_report_shows_the_screening_note_of_the_run(project):
     assert run_cli(project, "--judge") == 0
     report = (project / "run" / "rank.md").read_text()
     assert "**Screening run.**" not in report
+
+
+# Two prompts with distinct texts, so the fake judge tells the
+# contests apart. The winners give beta 3-1, unstyled 2-2, and
+# alpha 1-3: a strict fitted order that differs from name order.
+HIERARCHY_TEXTS = {
+    "explanation-01": {
+        "alpha": "The slow fox naps.",
+        "beta": "The bold bear roars.",
+        None: "The calm turtle waits.",
+    },
+    "explanation-02": {
+        "alpha": "The lone fox stares.",
+        "beta": "The tall bear stands.",
+        None: "The wet turtle swims.",
+    },
+}
+
+HIERARCHY_WINNERS = {
+    frozenset(("The slow fox naps.", "The bold bear roars.")): "The bold bear roars.",
+    frozenset(("The bold bear roars.", "The calm turtle waits.")): "The bold bear roars.",
+    frozenset(("The slow fox naps.", "The calm turtle waits.")): "The calm turtle waits.",
+    frozenset(("The lone fox stares.", "The tall bear stands.")): "The lone fox stares.",
+    frozenset(("The tall bear stands.", "The wet turtle swims.")): "The tall bear stands.",
+    frozenset(("The lone fox stares.", "The wet turtle swims.")): "The wet turtle swims.",
+}
+
+
+class HierarchyRunner:
+    """Picks the winner of HIERARCHY_WINNERS, consistent in both orders."""
+
+    def __init__(self):
+        self.calls = []
+        self.lock = threading.Lock()
+
+    def __call__(self, argv, cwd, env=None):
+        with self.lock:
+            self.calls.append(argv)
+            prompt = argv[argv.index("-p") + 1]
+            head, _, tail = prompt.partition("Text 2:")
+            texts = [text for by_style in HIERARCHY_TEXTS.values() for text in by_style.values()]
+            (first,) = [text for text in texts if text in head]
+            (second,) = [text for text in texts if text in tail]
+            winner = HIERARCHY_WINNERS[frozenset((first, second))]
+            return stream("1" if winner == first else "2")
+
+
+def make_hierarchy_project(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    answers, fidelity = [], []
+    for prompt_id, by_style in HIERARCHY_TEXTS.items():
+        for style, text in by_style.items():
+            answers.append({"prompt_id": prompt_id, "style": style, "answer": text})
+            fidelity.append(
+                {
+                    "prompt_id": prompt_id,
+                    "style": style,
+                    "pass": None if style is None else True,
+                    "answer_sha256": sha(text),
+                }
+            )
+    write_jsonl(run_dir / "answers.jsonl", answers)
+    write_jsonl(run_dir / "fidelity.jsonl", fidelity)
+    provenance = {"conditions": {"model_requested": "sonnet"}}
+    (run_dir / "provenance.json").write_text(json.dumps(provenance))
+    return tmp_path
+
+
+def test_the_artifacts_state_the_fitted_order(tmp_path, capsys):
+    project = make_hierarchy_project(tmp_path)
+    assert run_cli(project, "--judge", run=HierarchyRunner()) == 0
+    summary = json.loads((project / "run" / "rank.json").read_text())
+    assert list(summary["bradley_terry"]["strengths"]) == ["beta", "unstyled", "alpha"]
+    report = (project / "run" / "rank.md").read_text()
+    section = report[report.index("## Bradley-Terry strengths") : report.index("## Position bias")]
+    assert "The table lists the competitors from the highest strength to the" in section
+    rows = [
+        line.split("|")[1].strip()
+        for line in section.splitlines()
+        if line.startswith("| ") and not line.startswith("| Competitor")
+    ]
+    assert rows == ["beta", "unstyled", "alpha"]
+    out = capsys.readouterr().out
+    assert out.index("beta:") < out.index("unstyled:") < out.index("alpha:")
 
     provenance_path = project / "run" / "provenance.json"
     provenance = json.loads(provenance_path.read_text())

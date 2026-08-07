@@ -104,6 +104,11 @@ def _bradley_terry_section(block: dict) -> list[str]:
         ]
     else:
         lines += [f"The scale is anchored on {block['anchored_on']} at strength 1.0.", ""]
+    lines += [
+        "The table lists the competitors from the highest strength to the",
+        "lowest. A competitor without a finite strength comes last.",
+        "",
+    ]
     lines += ["| Competitor | Strength | 95% CI |", "|---|---|---|"]
     for name, entry in block["strengths"].items():
         if entry["ci_low"] is None:

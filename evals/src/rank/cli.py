@@ -173,7 +173,10 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         for side in ("a", "b"):
             totals[matchup[side]]["splits"] += matchup["splits"]
     strengths = result.bradley_terry.get("strengths", {})
-    for name in result.competitors:
+    # The lines follow the fitted order. A competitor outside the
+    # fit comes last, in name order.
+    ordered = [*strengths, *(name for name in result.competitors if name not in strengths)]
+    for name in ordered:
         tally = totals[name]
         strength = (strengths.get(name) or {}).get("strength")
         strength_part = f"strength {strength}" if strength is not None else "strength n/a"

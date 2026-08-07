@@ -8,6 +8,15 @@
   },
   "repository": "https://github.com/stefanobaghino/simple-output-styles",
   "license": "0BSD",
-  "keywords": ["output-style", "simplified-technical-english", "ste", "plain-language", "writing"],
+  "keywords": [
+    "output-style",
+    "simplified-technical-english",
+    "ste",
+    "plain-language",
+    "classic-concise",
+    "clarity-flow",
+    "developer-docs",
+    "writing"
+  ],
   "outputStyles": "./output-styles/"
 }

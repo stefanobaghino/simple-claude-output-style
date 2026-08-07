@@ -55,6 +55,30 @@ so the policy must not change the rule-file hashes in the provenance.
 The thresholds differ per style, because the rule counts differ and
 thus the rates are not comparable across styles.
 
+## The style field
+
+The measured styles form the field: the competitor set of every
+campaign, and the reference frame for a candidate style. Each member
+derives from one published writing guideline, picked for diversity of
+philosophy, because the references carry human validation from outside
+the harness. The members:
+
+- **classic-concise** — The Elements of Style (Strunk, 1918): classic
+  prescriptive concision, omit needless words.
+- **clarity-flow** — Style: Toward Clarity and Grace (Williams):
+  reader-centered clarity, actors as subjects, actions as verbs, old
+  information before new.
+- **developer-docs** — the Google developer documentation style guide:
+  the modern industry documentation voice, for a global audience.
+- **plain-language** — the Federal Plain Language Guidelines:
+  government plain language, reader first.
+- **technical-simplified** — ASD-STE100 Issue 9: controlled technical
+  language with a restricted vocabulary and grammar.
+
+The field is provisional until #79 p2 freezes it. Every member adds a
+linear cost to every campaign, so an addition needs a reason that a
+smaller field cannot serve.
+
 ## How to add a style
 
 A style has two parts: the plugin serves the style text, and the
@@ -78,8 +102,11 @@ harness measures the style. Add both parts:
    provenance of a run records the styles of the run.
 6. Run the drift sessions with `uv run style-drift --generate`.
 
-The tests need no change for a new style, because the tests use
-synthetic rules.
+The CLI tests need no change for a new style, because they use
+synthetic rules. The linter acceptance tests are per style: a new
+style adds the samples `tests/samples/<style>/{clean,dirty,traps}.md`,
+its expected violations in `tests/test_lint.py`, and one designed
+conflict pair in the conflict map of that file.
 
 ## How to run
 

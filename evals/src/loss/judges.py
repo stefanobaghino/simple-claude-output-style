@@ -25,7 +25,14 @@ from pathlib import Path
 
 from runner.generate import ISOLATION_FLAGS, Runner, subprocess_runner
 from runner.hermetic import CONFIG_MODE, manifest_sha256
-from value.judges import JudgeSession, RowSink, TaskPool, extract_json, parse_bools
+from value.judges import (
+    JudgeSession,
+    RowSink,
+    TaskPool,
+    extract_json,
+    judge_prompts_sha256,
+    parse_bools,
+)
 
 CHECKS = ("completeness", "hedging")
 VERDICTS = ("hedged", "certain", "absent")
@@ -81,6 +88,16 @@ Text:
 Claims:
 {claims}"""
 
+JUDGE_PROMPTS_SHA256 = judge_prompts_sha256(
+    {
+        "facts": FACTS_PROMPT,
+        "facts_check": FACTS_CHECK_PROMPT,
+        "claims": CLAIMS_PROMPT,
+        "claims_check": CLAIMS_CHECK_PROMPT,
+    }
+)
+"""The hash of the content-loss judge prompts, stored in the meta row."""
+
 
 def parse_string_list(output: str) -> list[str] | None:
     """A JSON array of strings, any length including zero, or None."""
@@ -109,6 +126,7 @@ def build_meta(*, model: str, answers_sha256: str, cli_version: str | None = Non
         "config_manifest_sha256": manifest_sha256(),
         "model": model,
         "fact_mine": FACT_MINE,
+        "judge_prompts_sha256": JUDGE_PROMPTS_SHA256,
         "flags": list(ISOLATION_FLAGS),
         "answers_sha256": answers_sha256,
     }

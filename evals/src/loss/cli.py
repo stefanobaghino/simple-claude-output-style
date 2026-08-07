@@ -21,7 +21,7 @@ from runner.screening import screening_section
 from runner.spend import spend_summary
 from runner.timing import timing_summary
 from value.analysis import select_pairs
-from value.cli import answer_index, load_fidelity, load_raw, resolved_models
+from value.cli import answer_index, load_fidelity, load_raw, reconcile_meta, resolved_models
 
 from .analysis import score_checks
 from .judges import CHECKS, build_meta, run_judges
@@ -29,10 +29,12 @@ from .report import build_loss_report, build_loss_summary
 
 META_MATCH_KEYS = ("model", "answers_sha256")
 
-# The key that the two-way fact mine added to the meta row. A stored
-# meta row without it gets an upgraded meta row appended; a stored
-# value that differs is a hard mismatch.
-META_UPGRADE_KEYS = ("fact_mine",)
+# The keys that entered the meta row after the first stored runs:
+# the two-way fact mine and the judge-prompt hash. A stored meta row
+# without a key gets an upgraded meta row appended; a stored value
+# that differs is a hard mismatch. The backfill stamps the current
+# value, so a prompt-edit PR must not rely on it.
+META_UPGRADE_KEYS = ("fact_mine", "judge_prompts_sha256")
 
 
 def _fail(message: str) -> SystemExit:
@@ -67,23 +69,13 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
         )
         meta_upgraded = False
         if meta_stored is not None:
-            mismatched = [key for key in META_MATCH_KEYS if meta_stored.get(key) != meta[key]]
-            mismatched += [
-                key
-                for key in META_UPGRADE_KEYS
-                if key in meta_stored and meta_stored[key] != meta[key]
-            ]
-            if mismatched:
-                raise _fail(
-                    f"loss-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
-                    "remove the file to judge again from scratch"
-                )
-            absent = [key for key in META_UPGRADE_KEYS if key not in meta_stored]
-            if absent:
-                meta = {**meta_stored, **{key: meta[key] for key in absent}}
-                meta_upgraded = True
-            else:
-                meta = meta_stored
+            meta, meta_upgraded = reconcile_meta(
+                meta,
+                meta_stored,
+                match_keys=META_MATCH_KEYS,
+                upgrade_keys=META_UPGRADE_KEYS,
+                filename="loss-raw.jsonl",
+            )
 
         with raw_path.open("a", encoding="utf-8") as raw_file:
             if meta_stored is None or meta_upgraded:

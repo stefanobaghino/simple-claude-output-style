@@ -155,6 +155,16 @@ of their own calls in a harness-spend section, with the cache-read
 share of the input. A row from before the token fields reads as
 "not measured" here as well, and this measurement also changes no
 call condition, so old runs stay comparable.
+The judge prompts stay as they are on purpose, after a measured
+audit against issue #74: every template already puts its fixed
+instructions first and the variable text last. The CLI exposes no
+cache-control surface for a `-p` call, and every fixed block sits
+far below the cacheable minimum of the judge models, so a
+manufactured cacheable preamble would cost more than it saves. A
+rubric trim would shave about 530 fixed tokens across all eleven
+templates, against prompts that are more than 90 percent variable
+text, so the saving is immaterial. The lenient JSON parser also
+stays, because one salvaged parse saves one retry call.
 An interrupted run resumes when the same invocation runs again. When
 the default directory already holds a complete run, a repeat without
 `--out` starts the next free letter suffix (`runs/<date>b`, then `c`,
@@ -233,7 +243,13 @@ one exact model ID. A live judge call that resolves to a different
 ID stops the pass, without a retry, because the mismatch is not
 transient. `--judge` runs the live calls and
 appends the raw outputs to `value-raw.jsonl`; an interrupted judge
-run resumes when the same invocation runs again. A judge call that
+run resumes when the same invocation runs again. The meta row of
+the raw file stores one sha256 over the judge prompt templates of
+the tool. A raw file from before the hash gets the hash backfilled
+on the next `--judge`, because the prompts did not change across
+that boundary. A stored hash that differs from the current
+templates stops the resume with exit code 2, because a resumed
+pass must not mix two prompt versions in one raw file. A judge call that
 fails runs once more, and the retry becomes a warning, because one
 transient failure must not abort a whole pass. A second failure
 stops the pass. The judge calls
@@ -264,7 +280,8 @@ text. The judge model must differ from the writer model of the
 run, and the judge-model pin applies here as well. `--judge` runs
 the live calls and appends the raw
 outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
-the same invocation runs again. A failed judge call retries once
+the same invocation runs again, and the prompt-hash rule applies
+here as well. A failed judge call retries once
 here as well, with the same warning. The judge calls run several at a
 time (8 by default), and `--parallel` sets the count (1 runs one
 call at a time). One pool spans the checks here as well, and a
@@ -298,7 +315,8 @@ of a contest and the points of the longer text. The judge model
 must differ from the writer model of the run, and the judge-model
 pin applies here as well. `--judge` runs the
 live calls and appends the raw outputs to `rank-raw.jsonl`; an
-interrupted judge run resumes when the same invocation runs again.
+interrupted judge run resumes when the same invocation runs again,
+and the prompt-hash rule applies here as well.
 A failed judge call retries once here as well, with the same
 warning. The judge calls run several at a time (8 by default), and
 `--parallel` sets the count (1 runs one call at a time). Without
@@ -355,11 +373,14 @@ judge calls. The runs must share their conditions: the tool checks
 the prompt-set hash, the style and rule hashes, the writer model,
 the Claude CLI version, the workdir mode, the config mode and its
 manifest hash, the judge parameters,
-and the resolved judge models, and a mismatch
+the resolved judge models, the judge-prompt hashes, and the
+fact-mine design, and a mismatch
 becomes a warning, because the reader must see how far apart the
 conditions are. The binary path stays out of the check, because an
 absolute path is machine-local; the CLI version is the
-cross-machine invariant. A missing artifact drops the axes of that artifact
+cross-machine invariant. A run from before the judge-prompt hash
+states no hash, and that entry stays silent for it, because the
+prompt text did not differ across that boundary. A missing artifact drops the axes of that artifact
 for that run, and n states the run count per axis. Exit codes: 0
 when no warnings exist, 1 when warnings exist, 2 when the
 comparison cannot run.

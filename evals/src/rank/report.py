@@ -42,6 +42,7 @@ def build_rank_summary(
         "judge": {
             "model": meta["model"],
             "model_resolved": model_resolved,
+            "judge_prompts_sha256": meta.get("judge_prompts_sha256"),
             "judged_date": meta["date"],
             "claude_version": meta.get("claude_version"),
         },

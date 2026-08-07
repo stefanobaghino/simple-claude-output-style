@@ -25,6 +25,7 @@ inputs exist.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
@@ -138,6 +139,32 @@ Text:
 {text}"""
 
 
+def judge_prompts_sha256(prompts: dict[str, str]) -> str:
+    """One hash over the judge prompt templates of a tool.
+
+    Canonical JSON over the name-to-template mapping, like
+    manifest_sha256 in runner.hermetic, so a change to any template or
+    template name changes the hash and opens a visible era. Only the
+    meta row, the resume check, and the cross-run comparison read the
+    hash; the scorer never does, so every stored run stays rescoreable.
+    """
+    payload = json.dumps(prompts, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+JUDGE_PROMPTS_SHA256 = judge_prompts_sha256(
+    {
+        "questions_from_facts": QUESTIONS_FROM_FACTS_PROMPT,
+        "reader": READER_PROMPT,
+        "grades": GRADES_PROMPT,
+        "paraphrase": PARAPHRASE_PROMPT,
+        "translate": TRANSLATE_PROMPT,
+        "back": BACK_PROMPT,
+    }
+)
+"""The hash of the reader-value judge prompts, stored in the meta row."""
+
+
 def judge_argv(prompt: str, model: str) -> list[str]:
     """The claude invocation for one judge call: no plugin, default style."""
     settings = {"disableAllHooks": True, "outputStyle": "default"}
@@ -247,6 +274,7 @@ def build_meta(
         "replicates": replicates,
         "comprehension_design": COMPREHENSION_DESIGN,
         "language": language,
+        "judge_prompts_sha256": JUDGE_PROMPTS_SHA256,
         "flags": list(ISOLATION_FLAGS),
         "answers_sha256": answers_sha256,
     }

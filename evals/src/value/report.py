@@ -108,6 +108,7 @@ def build_value_summary(
             "replicates": meta.get("replicates"),
             "comprehension_design": meta.get("comprehension_design"),
             "language": meta["language"],
+            "judge_prompts_sha256": meta.get("judge_prompts_sha256"),
             "judged_date": meta["date"],
             "claude_version": meta.get("claude_version"),
         },

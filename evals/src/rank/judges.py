@@ -25,7 +25,7 @@ from pathlib import Path
 
 from runner.generate import ISOLATION_FLAGS, Runner, subprocess_runner
 from runner.hermetic import CONFIG_MODE, manifest_sha256
-from value.judges import JudgeSession, RowSink, TaskPool
+from value.judges import JudgeSession, RowSink, TaskPool, judge_prompts_sha256
 
 DESIGN = "clarity-v1"
 """The design tag of the contest prompt, stored in the meta row."""
@@ -47,6 +47,9 @@ Text 1:
 
 Text 2:
 {second}"""
+
+JUDGE_PROMPTS_SHA256 = judge_prompts_sha256({"clarity": CLARITY_PROMPT})
+"""The hash of the clarity contest prompt, stored in the meta row."""
 
 _PICK = re.compile(r"(?:text\s*)?([12])", re.IGNORECASE)
 
@@ -74,6 +77,7 @@ def build_meta(*, model: str, answers_sha256: str, cli_version: str | None = Non
         "design": DESIGN,
         "orders": ORDERS,
         "replicates": REPLICATES,
+        "judge_prompts_sha256": JUDGE_PROMPTS_SHA256,
         "flags": list(ISOLATION_FLAGS),
         "answers_sha256": answers_sha256,
     }

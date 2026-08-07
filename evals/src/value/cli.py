@@ -35,10 +35,46 @@ META_MATCH_KEYS = ("models", "questions", "paraphrases", "language", "answers_sh
 # paraphrase and roundtrip rows depends only on these keys.
 TRANSITION_MATCH_KEYS = ("models", "paraphrases", "language", "answers_sha256")
 
+# The judge-prompt hash entered the meta row after the first stored
+# runs. A stored meta row without an upgrade key gets an upgraded
+# meta row appended; a stored value that differs is a hard mismatch.
+# The backfill stamps the current value, so a prompt-edit PR must
+# not rely on it: a pre-hash file carries rows from the old prompts.
+META_UPGRADE_KEYS = ("judge_prompts_sha256",)
+
 
 def _fail(message: str) -> SystemExit:
     print(message, file=sys.stderr)
     return SystemExit(2)
+
+
+def reconcile_meta(
+    meta: dict,
+    meta_stored: dict,
+    *,
+    match_keys: tuple[str, ...],
+    upgrade_keys: tuple[str, ...],
+    filename: str,
+) -> tuple[dict, bool]:
+    """The stored meta row, backfilled with the absent upgrade keys.
+
+    A match key or a stored upgrade key whose value differs is a hard
+    mismatch. Returns the meta row to use and whether the caller must
+    append it as an upgraded row.
+    """
+    mismatched = [key for key in match_keys if meta_stored.get(key) != meta[key]]
+    mismatched += [
+        key for key in upgrade_keys if key in meta_stored and meta_stored[key] != meta[key]
+    ]
+    if mismatched:
+        raise _fail(
+            f"{filename} does not match this invocation on {', '.join(mismatched)}; "
+            "remove the file to judge again from scratch"
+        )
+    absent = [key for key in upgrade_keys if key not in meta_stored]
+    if absent:
+        return {**meta_stored, **{key: meta[key] for key in absent}}, True
+    return meta_stored, False
 
 
 def _provenance(run_dir: Path) -> dict | None:
@@ -185,26 +221,25 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
                     f"value-raw.jsonl holds the comprehension design {stored_design!r}, "
                     "which this tool does not know; use a newer tool or remove the file"
                 )
-            if stored_design != COMPREHENSION_DESIGN:
-                match_keys = TRANSITION_MATCH_KEYS
-            else:
-                match_keys = (*META_MATCH_KEYS, "replicates")
-            mismatched = [key for key in match_keys if meta_stored.get(key) != meta[key]]
-            if mismatched:
-                raise _fail(
-                    f"value-raw.jsonl does not match this invocation on {', '.join(mismatched)}; "
-                    "remove the file to judge again from scratch"
-                )
-            if stored_design != COMPREHENSION_DESIGN:
+            transition = stored_design != COMPREHENSION_DESIGN
+            match_keys = TRANSITION_MATCH_KEYS if transition else (*META_MATCH_KEYS, "replicates")
+            merged, meta_upgraded = reconcile_meta(
+                meta,
+                meta_stored,
+                match_keys=match_keys,
+                upgrade_keys=META_UPGRADE_KEYS,
+                filename="value-raw.jsonl",
+            )
+            if transition:
                 meta = {
-                    **meta_stored,
+                    **merged,
                     "comprehension_design": COMPREHENSION_DESIGN,
                     "questions": meta["questions"],
                     "replicates": meta["replicates"],
                 }
                 meta_upgraded = True
             else:
-                meta = meta_stored
+                meta = merged
 
         with raw_path.open("a", encoding="utf-8") as raw_file:
             if meta_stored is None or meta_upgraded:

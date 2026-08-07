@@ -3,6 +3,7 @@ subprocess is replaced with a fake runner that returns canned
 stream-json output."""
 
 import json
+import re
 import threading
 from collections import Counter
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from string import ascii_lowercase
 import pytest
 import yaml
 
+from cost.analysis import task_type
 from runner import (
     GenerationError,
     PluginLeakError,
@@ -28,6 +30,7 @@ from runner.screening import screening_provenance, screening_section, select_scr
 
 HERE = Path(__file__).parent
 PROMPTS = HERE.parent / "prompts" / "prompts.yaml"
+HOLDOUT = HERE.parent / "prompts" / "holdout.yaml"
 
 TASK_TYPES = {"explanation", "code-review", "summarization", "debugging"}
 
@@ -86,9 +89,28 @@ def test_prompt_set_is_complete():
     assert len(set(ids)) == 32
     types = {p["type"] for p in prompts}
     assert types == TASK_TYPES
-    for task_type in TASK_TYPES:
-        assert sum(1 for p in prompts if p["type"] == task_type) == 8
+    for kind in TASK_TYPES:
+        assert sum(1 for p in prompts if p["type"] == kind) == 8
     assert all(p["text"].strip() for p in prompts)
+
+
+def test_holdout_set_is_complete():
+    prompts = yaml.safe_load(HOLDOUT.read_text())["prompts"]
+    assert len(prompts) == 24
+    ids = [p["id"] for p in prompts]
+    assert len(set(ids)) == 24
+    types = {p["type"] for p in prompts}
+    assert types == TASK_TYPES
+    for kind in TASK_TYPES:
+        assert sum(1 for p in prompts if p["type"] == kind) == 6
+    assert all(p["text"].strip() for p in prompts)
+    # The h mark keeps the ids disjoint from the main set under any
+    # growth, and the per-type tables still resolve the type.
+    for prompt in prompts:
+        assert re.fullmatch(rf"{re.escape(prompt['type'])}-h\d{{2}}", prompt["id"])
+        assert task_type(prompt["id"]) == prompt["type"]
+    main_ids = {p["id"] for p in yaml.safe_load(PROMPTS.read_text())["prompts"]}
+    assert not main_ids & set(ids)
 
 
 def make_plugin(root, name="test-plugin", styles=("alpha",)):
@@ -526,6 +548,54 @@ def test_cli_rejects_screening_answers_outside_the_subset(screening_project):
     (screening_project / "run" / "provenance.json").unlink()
     with pytest.raises(SystemExit, match="outside the screening subset"):
         run_cli(screening_project, FakeRunner(), "run", "--screening")
+
+
+def test_cli_rejects_screening_with_holdout(project):
+    with pytest.raises(SystemExit, match="never uses the held-out set"):
+        run_cli(project, FakeRunner(), "run", "--screening", "--holdout")
+
+
+def test_cli_holdout_defaults_to_the_holdout_prompt_file(project, monkeypatch):
+    monkeypatch.chdir(project)
+    (project / "prompts").mkdir()
+    holdout = [{"id": "explanation-h01", "type": "explanation", "text": "Explain H."}]
+    (project / "prompts" / "holdout.yaml").write_text(yaml.safe_dump({"prompts": holdout}))
+    argv = [
+        "--rules-dir",
+        str(project / "rules"),
+        "--plugin-dir",
+        str(project / "plugin"),
+        "--out",
+        str(project / "run"),
+        "--holdout",
+    ]
+    assert cli.main(argv, run=FakeRunner()) == 0
+    answers = [
+        json.loads(line) for line in (project / "run" / "answers.jsonl").read_text().splitlines()
+    ]
+    assert {a["prompt_id"] for a in answers} == {"explanation-h01"}
+    provenance = json.loads((project / "run" / "provenance.json").read_text())
+    assert provenance["prompt_set"]["path"] == "prompts/holdout.yaml"
+
+
+def test_cli_a_holdout_run_uses_its_own_directory_family(project, monkeypatch):
+    # run_cli_default_out passes an explicit --prompts, which also
+    # pins that --prompts wins over the holdout default.
+    monkeypatch.chdir(project)
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    assert run_cli_default_out(project, FakeRunner(), "--holdout") == 0
+    assert (project / "runs" / f"{date}-holdout" / "answers.jsonl").exists()
+    assert not (project / "runs" / date).exists()
+
+
+def test_cli_rejects_a_prompt_set_mismatch_on_resume(project):
+    assert run_cli(project, FakeRunner()) == 0
+    provenance_path = project / "run" / "provenance.json"
+    provenance = json.loads(provenance_path.read_text())
+    provenance["prompt_set"]["sha256"] = "0" * 64
+    provenance_path.write_text(json.dumps(provenance))
+    with pytest.raises(SystemExit, match="another prompt set"):
+        run_cli(project, FakeRunner())
 
 
 def test_provenance_holds_the_linter_toolchain(project):

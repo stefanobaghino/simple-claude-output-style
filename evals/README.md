@@ -114,7 +114,8 @@ conflict pair in the conflict map of that file.
 
 The prompt set in `prompts/prompts.yaml` is shared: every axis reads
 the same prompts, so a new prompt grows the sample of every check.
-Add a prompt with these steps:
+These steps grow the main set; the held-out set has its own section
+below. Add a prompt with these steps:
 
 1. Append the entry at the tail of its type block, with the next
    `<type>-NN` id. Keep the counts uniform across the 4 types, and
@@ -132,6 +133,39 @@ a comparison. The screening subset also redraws, because the seed-0
 sample runs over a longer sorted id list. Old runs stay comparable
 among themselves.
 
+## The held-out prompt set
+
+The style-design loop optimizes a candidate style against the scores
+on `prompts/prompts.yaml`, so a candidate can overfit that set. The
+held-out set in `prompts/holdout.yaml` exists for the final check: 24
+prompts, 6 per task type, with 4 confident and 2 hedge-rich prompts
+per type, the same mix as the main set. The ids carry the h mark
+(`explanation-h01`), so the two sets stay disjoint under any growth
+of the main set.
+
+The isolation policy: the design loop never reads the held-out set.
+No artifact of the held-out set — no answers, no scores, no reports —
+enters the design loop. A candidate style runs over the held-out set
+once, as the final check, after the design loop has picked it. A
+candidate that wins on the main set but not on the held-out set is
+overfit. A screening run never uses the held-out set, and the pair
+runner refuses the flag combination.
+
+`uv run style-campaign --holdout` runs the final check, and
+`uv run style-pairs --holdout` runs the pair stage alone. The runs
+land under their own `runs/<date>-holdout` directory family, and the
+prompt-set hash in the provenance separates held-out runs from
+main-set runs in every comparison. A main-set run never reads or
+hashes `holdout.yaml`. On a resume, the pair runner rejects a
+directory whose stored prompt-set hash differs from the passed
+prompt file, so a held-out pass cannot extend a main-set run.
+
+Grow the held-out set like the main set: the next `<type>-hNN` id at
+the tail of its type block, uniform counts across the 4 types, and
+the counts in `tests/test_pairs.py` (`test_holdout_set_is_complete`)
+updated. A change to `holdout.yaml` opens a comparability era for
+held-out runs only.
+
 ## How to run
 
 The harness uses [uv](https://docs.astral.sh/uv/). From this directory:
@@ -139,22 +173,22 @@ The harness uses [uv](https://docs.astral.sh/uv/). From this directory:
 ```
 uv run pytest
 uv run style-lint FILE.md --rules rules/technical-simplified.rules.yaml
-uv run style-pairs [--parallel N]
+uv run style-pairs [--parallel N] [--screening] [--holdout]
 uv run style-gate runs/<date>
 uv run style-cost runs/<date> [--probe] [--repeats N]
 uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-rank runs/<date> [--judge] [--parallel N]
-uv run style-campaign [--runs N] [--budget W] [--probe-repeats N] [--screening]
+uv run style-campaign [--runs N] [--budget W] [--probe-repeats N] [--screening] [--holdout]
 uv run style-drift [--generate] [--scripts prompts/sessions/*.yaml] [--out runs/<date>-drift]
 uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
 
 The linter exits with code 1 when it finds a violation.
 
-The pair runner reads the prompt set in `prompts/prompts.yaml` and calls
-the `claude` CLI once per answer, on the account of the person who runs
-it. The call is isolated as far as the CLI permits: no tools, no MCP
+The pair runner reads the prompt set in `prompts/prompts.yaml`, or
+another prompt file through `--prompts`, and calls the `claude` CLI
+once per answer, on the account of the person who runs it. The call is isolated as far as the CLI permits: no tools, no MCP
 servers, no hooks, one turn, and no dynamic system-prompt sections.
 Every call also runs in an empty temp directory outside the repository,
 because the CLI loads instruction files, the memory index, and the git
@@ -577,7 +611,8 @@ a screening note, because the error bars of a screening run are
 wider than the error bars of a full run. `style-compare` rejects a
 comparison that mixes a screening run with a full run. A resume
 through `--dirs` needs `--screening` again, and the pair runner
-rejects a directory whose mode differs from the flag.
+rejects a directory whose mode differs from the flag. A screening
+run never covers the held-out set; see "The held-out prompt set".
 
 ## Run data
 
@@ -611,6 +646,11 @@ runs/<YYYY-MM-DD>-screening/
   # the same files as a pair run, over the fixed prompt subset; the
   # provenance carries the screening block, and every report starts
   # with the screening note
+
+runs/<YYYY-MM-DD>-holdout/
+  # the same files as a pair run, over the held-out prompt set; the
+  # prompt-set hash in the provenance separates these runs from the
+  # main-set runs
 
 runs/<YYYY-MM-DD>-drift/
   provenance.json   # like the pair runs, plus the session script per repeat
@@ -646,5 +686,6 @@ top-level `README.md` states the full split.
 This document is the only description of the harness workflow. A change
 to the harness must update this document in the same PR. The sections
 that go stale are: the component list in the introduction, "How to add
-a style", "How to run", and "Run data". No automated check makes sure that
+a style", "The held-out prompt set", "How to run", and "Run data". No
+automated check makes sure that
 the document matches the code, so the reviewer must check it.

@@ -31,6 +31,34 @@ the quantile, the permutation count, and the seed. The
 section then states both values.
 """
 
+HEADER_DEEP = """\
+# Drift report
+
+Run: {run}
+
+The report measures rule obedience across long sessions. A session is
+{turns} scripted turns in one Claude Code session, with the style
+active. Each turn resumes the session of the previous turn, so the
+context grows. Each session follows one coherent script with heavy
+turn material, and later turns reference earlier material, so the
+model must read deep context while it obeys the style. A coherent
+script cannot rotate, so the {repeats} repeat(s) spread over several
+different scripts, and the coupling of turn position to content
+averages over scripts. The shallow rotated run is the control. The
+linter checks each answer with the rule set of the style. The rate
+of a turn position pools the complete sessions: 100 times the
+violations at that position over the sentences at that position.
+Thus a short answer weighs by its sentence count and cannot dominate
+the series. The verdict compares the slope of the pooled series
+against a per-style threshold: "growing" when the slope is larger,
+else "flat". The threshold comes from a permutation null: the turn
+order of each session shuffles, the pooled slope refits, and the
+threshold is a nearest-rank quantile of the shuffled slopes. The
+section of each style states the quantile, the permutation count,
+and the seed. The `--slope-threshold` flag replaces the derived
+threshold, and the section then states both values.
+"""
+
 
 def build_drift_summary(
     *,
@@ -43,8 +71,10 @@ def build_drift_summary(
     toolchain: dict,
     run_toolchain: dict | None,
     warnings: list[str],
+    mode: str | None = None,
+    scripts: dict[str, str] | None = None,
 ) -> dict:
-    return {
+    summary = {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "run": run_name,
         "turns": turns,
@@ -56,6 +86,13 @@ def build_drift_summary(
         "run_linter_toolchain": run_toolchain,
         "warnings": warnings,
     }
+    # The keys land only in deep mode, so a shallow summary stays
+    # byte-identical to the pre-script era.
+    if mode is not None:
+        summary["mode"] = mode
+    if scripts is not None:
+        summary["scripts"] = scripts
+    return summary
 
 
 def _rate(value: float | None) -> str:
@@ -96,13 +133,19 @@ def _style_section(style: str, stats: dict, summary: dict) -> list[str]:
 
 
 def build_drift_report(summary: dict, spend: dict | None = None) -> str:
+    deep = summary.get("mode") == "deep"
+    header = HEADER_DEEP if deep else HEADER
     lines = [
-        HEADER.format(
+        header.format(
             run=summary["run"],
             turns=summary["turns"],
             repeats=summary["repeats"],
         )
     ]
+    if deep:
+        for repeat, script_id in sorted(summary["scripts"].items(), key=lambda item: int(item[0])):
+            lines.append(f"- Repeat {repeat}: script `{script_id}`")
+        lines.append("")
     for style in sorted(summary["styles"]):
         lines += _style_section(style, summary["styles"][style], summary)
     lines += spend_section(spend)

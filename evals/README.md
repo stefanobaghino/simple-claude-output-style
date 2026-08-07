@@ -26,7 +26,9 @@ in the styled answer, the facts that only the styled answer states,
 and each uncertain claim that lost its uncertainty. The seventh is a
 drift report. It runs a scripted long session per style, several
 times, lints every turn, and shows the violation rate over turn
-positions with a verdict per style: flat or growing. The eighth is a cross-run
+positions with a verdict per style: flat or growing. A deep mode
+replaces the short scripted turns with coherent session scripts
+full of heavy material, so the sessions reach deep context. The eighth is a cross-run
 comparison. It reads several runs with identical conditions and
 states, per style and axis, the spread across the runs: the error
 bar of the harness. The ninth is a clarity ranking. It runs blind
@@ -122,7 +124,7 @@ uv run style-value runs/<date> [--judge] [--parallel N]
 uv run style-loss runs/<date> [--judge] [--parallel N]
 uv run style-rank runs/<date> [--judge] [--parallel N]
 uv run style-campaign [--runs N] [--budget W] [--probe-repeats N] [--screening]
-uv run style-drift [--generate] [--out runs/<date>-drift]
+uv run style-drift [--generate] [--scripts prompts/sessions/*.yaml] [--out runs/<date>-drift]
 uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
 
@@ -387,6 +389,30 @@ every session is complete, every verdict is flat, and no warnings
 exist, 1 when a session failed or a verdict is "growing" or warnings
 exist, 2 when the run cannot run or cannot be scored.
 
+The drift sessions also have a deep mode, because the shallow
+prompts reach only the start of the context window: a shallow
+session ends near 20K tokens. `--scripts` selects coherent session
+scripts, one YAML file per script in `prompts/sessions/`, with
+about 8K input tokens per turn, so 15 turns reach about 120K
+tokens. Later turns of a script reference earlier material by
+name, so the model must read deep context while it obeys the
+style. A coherent script cannot rotate. Thus each repeat runs one
+whole script, the repeats spread over several different scripts
+(repeat r runs script (r - 1) mod the script count), and the
+repeat count must spread evenly over the scripts. The shallow
+rotated run stays as the control. The scripts fix the turn count:
+`--turns` does not combine with `--scripts`, and every passed
+script must hold the same turn count, because the analysis pools
+by turn position. The row schema does not change; the `prompt_id`
+of a deep turn composes the script id and the turn id. A deep run
+lands in its own directory family, `runs/<date>-drift-deep`, and
+the tool rejects an invocation whose mode differs from the mode of
+the stored run. The provenance records the mode, the sha256 per
+script file, and the script per repeat; the shallow provenance
+does not change, so old shallow runs stay comparable. A change to
+a script file changes the measurement, like a change to the
+prompt set.
+
 The cross-run comparison reads the stored artifacts of two or more
 runs and writes `compare.json` and `compare.md` into its own
 directory, because the comparison belongs to no single run. Per
@@ -566,6 +592,11 @@ runs/<YYYY-MM-DD>-drift/
   sessions.jsonl    # one line per turn, with the session-id chain
   drift.json        # pooled rate series, slope, derived threshold, and verdict per style
   drift.md          # the drift report for a human
+
+runs/<YYYY-MM-DD>-drift-deep/
+  # the same files as a drift run, over coherent deep session
+  # scripts; the provenance carries the mode, the script hashes,
+  # and the script per repeat
 
 runs/<YYYY-MM-DD>-compare/
   compare.json      # the spread per style and axis across runs, machine-readable

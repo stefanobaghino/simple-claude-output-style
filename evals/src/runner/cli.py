@@ -19,6 +19,7 @@ from .generate import GenerationError, Runner, generate, subprocess_runner
 from .hermetic import hermetic_call
 from .provenance import build_provenance, claude_version, sha256_of
 from .report import arm_name, build_report
+from .reuse import check_answer_conditions, import_answers, importable_arms, load_source_provenance
 from .screening import screening_provenance, select_screening_prompts
 
 
@@ -128,6 +129,14 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         default=8,
         help="concurrent generation calls (1 runs one call at a time)",
     )
+    parser.add_argument(
+        "--reuse-from",
+        metavar="RUN_DIR",
+        help=(
+            "import the stored answers of another run for the arms whose "
+            "style text, prompt set, and model match; generate only the rest"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.parallel < 1:
         raise SystemExit(f"--parallel must be 1 or more, not {args.parallel}")
@@ -195,6 +204,33 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
             raise SystemExit(
                 f"{out}: the answers hold prompts outside the screening subset: {', '.join(stray)}"
             )
+
+    if args.reuse_from:
+        source_dir = Path(args.reuse_from)
+        source_provenance = load_source_provenance(source_dir)
+        check_answer_conditions(
+            source_dir,
+            source_provenance,
+            out=out,
+            prompts_path=prompts_path,
+            model=args.model,
+            screening=args.screening,
+        )
+        style_shas = {
+            style: sha256_of(plugin_dir / "output-styles" / f"{style}.md") for style in styles
+        }
+        qualifying, notes = importable_arms(source_provenance, styles, style_shas)
+        for note in notes:
+            print(note, file=sys.stderr)
+        imported = import_answers(
+            source_dir=source_dir,
+            answers_path=answers_path,
+            existing=existing,
+            arms=qualifying,
+            prompt_ids=[prompt["id"] for prompt in prompts],
+            source_name=source_dir.name,
+        )
+        print(f"reuse: {imported} answer(s) imported from {source_dir.name}", file=sys.stderr)
 
     todo = [
         (style, prompt)
@@ -281,8 +317,16 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     )
     if args.screening:
         provenance["screening"] = screening_provenance(prompts, full_count)
-    (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     answers = list(load_existing(answers_path).values())
+    # The reuse block derives from the stored markers, not from the
+    # flag, so a plain resume of a reuse run keeps it.
+    sources = sorted({a["reused_from"] for a in answers if "reused_from" in a})
+    if sources:
+        provenance["reuse"] = {
+            "source": sources[0] if len(sources) == 1 else sources,
+            "imported_answers": sum(1 for a in answers if "reused_from" in a),
+        }
+    (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     report = build_report(prompts, styles, answers, provenance, failures)
     (out / "report.md").write_text(report, encoding="utf-8")
 

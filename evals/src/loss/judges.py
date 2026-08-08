@@ -340,6 +340,7 @@ def run_judges(
     run: Runner = subprocess_runner,
     env: dict[str, str] | None = None,
     parallel: int = 1,
+    force_keys: set[str] | None = None,
 ) -> list[str]:
     """Run the judge calls for every pair and return the warnings.
 
@@ -348,9 +349,12 @@ def run_judges(
     extended in place; every new row also goes to the sink. One pool
     spans the checks, the parallel count sets how many tasks run at
     a time, and a check call starts as soon as its own extraction is
-    complete.
+    complete. Each key in force_keys runs live once, past the stored
+    row: the freshness sample of a reuse pass.
     """
-    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run, env=env)
+    session = JudgeSession(
+        rows=rows, sink=sink, workdir=workdir, run=run, env=env, force_keys=force_keys or set()
+    )
     pool = TaskPool(parallel)
 
     if "completeness" in checks:

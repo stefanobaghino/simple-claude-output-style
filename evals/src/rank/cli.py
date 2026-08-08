@@ -22,9 +22,18 @@ from runner.spend import spend_summary
 from runner.timing import timing_summary
 from value.analysis import select_pairs
 from value.cli import answer_index, load_fidelity, load_raw, reconcile_meta, resolved_models
+from value.reuse import (
+    check_source_meta,
+    check_source_pins,
+    freshness_block,
+    import_judge_rows,
+    read_raw_calls,
+    reuse_summary,
+    sample_forced_keys,
+)
 
 from .analysis import UNSTYLED, build_schedule, score_contests
-from .judges import build_meta, run_judges
+from .judges import build_meta, parse_pick, run_judges
 from .report import build_rank_report, build_rank_summary
 
 META_MATCH_KEYS = ("model", "design", "orders", "replicates", "answers_sha256")
@@ -56,7 +65,9 @@ def _check_writer_constraint(run_dir: Path, model: str) -> list[str]:
     return []
 
 
-def _judge(args, run_dir: Path, contests, meta_stored, rows, run: Runner) -> tuple[dict, list]:
+def _judge(
+    args, run_dir: Path, contests, index, meta_stored, rows, run: Runner
+) -> tuple[dict, list]:
     """Run the live judge calls. Returns the meta row and the warnings."""
     warnings = _check_writer_constraint(run_dir, args.model)
 
@@ -86,6 +97,10 @@ def _judge(args, run_dir: Path, contests, meta_stored, rows, run: Runner) -> tup
                 raw_file.write(json.dumps(row, ensure_ascii=False) + "\n")
                 raw_file.flush()
 
+            forced: set[str] = set()
+            if args.reuse_from:
+                forced = _import_source_rows(args, meta, index, rows, sink, warnings)
+
             try:
                 warnings += run_judges(
                     contests=contests,
@@ -96,10 +111,58 @@ def _judge(args, run_dir: Path, contests, meta_stored, rows, run: Runner) -> tup
                     run=run,
                     env=hermetic.env,
                     parallel=args.parallel,
+                    force_keys=forced,
                 )
             except GenerationError as error:
                 raise _fail(f"a judge call failed: {error}") from error
     return meta, warnings
+
+
+def _row_valid(current_shas: set[str]):
+    """The import test for a rank row: both shown texts are current."""
+
+    def valid(row: dict) -> bool:
+        return row.get("first_sha256") in current_shas and row.get("second_sha256") in current_shas
+
+    return valid
+
+
+def _freshness_parser():
+    """The verdict parser for a sampled contest row."""
+
+    def parse(row: dict) -> object:
+        return parse_pick(row["output"])
+
+    return parse
+
+
+def _import_source_rows(args, meta, index, rows, sink, warnings) -> set[str]:
+    """Import the reusable source rows; returns the freshness sample keys."""
+    source_dir = Path(args.reuse_from)
+    source_raw = source_dir / "rank-raw.jsonl"
+    source_meta, source_rows = load_raw(source_raw)
+    check_source_meta(
+        source_meta,
+        meta,
+        match_keys=("model", "design", "orders", "replicates"),
+        upgrade_keys=META_UPGRADE_KEYS,
+        source_raw=source_raw,
+    )
+    check_source_pins(source_rows, source_raw)
+    current_shas = {arm["sha256"] for arm in index.values()}
+    candidates = any(key not in rows for key in source_rows)
+    imported = import_judge_rows(
+        source_rows=source_rows,
+        source_name=source_dir.name,
+        rows=rows,
+        sink=sink,
+        valid=_row_valid(current_shas),
+    )
+    if candidates and not imported and not any("reused_from" in row for row in rows.values()):
+        warnings.append(
+            f"{source_dir}: no stored judge row was reusable for this run; every call runs live"
+        )
+    return sample_forced_keys(imported, "rank")
 
 
 def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
@@ -124,12 +187,24 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         default=8,
         help="concurrent judge calls (1 runs one call at a time)",
     )
+    parser.add_argument(
+        "--reuse-from",
+        metavar="RUN_DIR",
+        help=(
+            "import the stored judge rows of another run whose conditions "
+            "match; a small fixed sample of the imported verdicts re-runs live"
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.parallel < 1:
         raise _fail(f"--parallel must be 1 or more, not {args.parallel}")
+    if args.reuse_from and not args.judge:
+        raise _fail("--reuse-from implies --judge")
 
     run_dir = Path(args.run_dir)
+    if args.reuse_from and Path(args.reuse_from).resolve() == run_dir.resolve():
+        raise _fail(f"{args.reuse_from}: the reuse source is the run itself; pass another run")
     answers = load_answers(run_dir / "answers.jsonl")
     index = answer_index(answers)
     answer_shas = {key: arm["sha256"] for key, arm in index.items()}
@@ -151,22 +226,26 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     meta, rows = load_raw(raw_path)
     judge_warnings: list[str] = []
     if args.judge:
-        meta, judge_warnings = _judge(args, run_dir, contests, meta, rows, run)
+        meta, judge_warnings = _judge(args, run_dir, contests, index, meta, rows, run)
     elif meta is None:
         raise _fail(f"{raw_path}: no judge data; run style-rank {run_dir} --judge")
 
     result = score_contests(competitors, contests, rows)
-    warnings = pair_warnings + judge_warnings + result.warnings
+    raw_calls = read_raw_calls(raw_path)
+    freshness, fresh_warnings = freshness_block(raw_calls, _freshness_parser())
+    warnings = pair_warnings + judge_warnings + result.warnings + fresh_warnings
     summary = build_rank_summary(
         run_name=run_dir.name,
         meta=meta,
         result=result,
         warnings=warnings,
         model_resolved=resolved_models(rows).get(meta["model"]),
+        reuse=reuse_summary(rows, raw_calls, freshness),
     )
     (run_dir / "rank.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    timing = timing_summary(rows.values())
-    spend = spend_summary(rows.values())
+    own_rows = [row for row in rows.values() if "reused_from" not in row]
+    timing = timing_summary(own_rows)
+    spend = spend_summary(own_rows)
     report = build_rank_report(
         summary, timing, spend, screening=screening_section(run_provenance(run_dir))
     )

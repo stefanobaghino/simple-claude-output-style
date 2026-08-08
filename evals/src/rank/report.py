@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from runner.spend import spend_section
 from runner.timing import timing_section
+from value.reuse import reuse_section
 
 PROXY_NOTE = (
     "The judge is a proxy reader: the picks state a model preference "
@@ -35,8 +36,9 @@ def build_rank_summary(
     result,
     warnings: list[str],
     model_resolved: object = None,
+    reuse: dict | None = None,
 ) -> dict:
-    return {
+    summary = {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "run": run_name,
         "judge": {
@@ -56,6 +58,9 @@ def build_rank_summary(
         "length_confound": result.length_confound,
         "warnings": warnings,
     }
+    if reuse is not None:
+        summary["reuse"] = reuse
+    return summary
 
 
 def _value(value) -> str:
@@ -201,6 +206,7 @@ def build_rank_report(
     lines += _length_section(summary["length_confound"])
     lines += timing_section(timing)
     lines += spend_section(spend)
+    lines += reuse_section(summary.get("reuse"))
     lines += ["## Warnings", ""]
     lines += [f"- {warning}" for warning in summary["warnings"]] or ["- none"]
     lines.append("")

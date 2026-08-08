@@ -830,3 +830,51 @@ def test_cli_groups_the_contests_by_task_type(tmp_path):
     assert sorted(summary["by_task_type"]) == ["debugging", "explanation"]
     for matchups in summary["by_task_type"].values():
         assert [m["contests"] for m in matchups] == [1, 1, 1]
+
+
+def test_cli_reuse_from_without_judge_exits_2(project):
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--reuse-from", "other")
+    assert error.value.code == 2
+
+
+def test_cli_reuse_imports_the_contests_and_forces_the_freshness_sample(tmp_path):
+    # Two prompts give 12 stored contest rows, so the sample of 6
+    # does not swallow the whole import.
+    prompt_ids = ("explanation-01", "explanation-02")
+    src = tmp_path / "src"
+    src.mkdir()
+    make_project(src, prompt_ids=prompt_ids)
+    assert run_cli(src, "--judge") == 0
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst, prompt_ids=prompt_ids)
+    runner = FakeRankRunner()
+    assert run_cli(dst, "--judge", "--reuse-from", str(src / "run"), run=runner) == 0
+    assert len(runner.calls) == 6
+    summary = json.loads((dst / "run" / "rank.json").read_text())
+    assert summary["reuse"]["reused_rows"] == 6
+    assert summary["reuse"]["live_calls"] == 6
+    assert summary["reuse"]["freshness"]["sampled"] == 6
+    assert summary["reuse"]["freshness"]["agreements"] == 6
+    assert "## Reuse" in (dst / "run" / "rank.md").read_text()
+
+
+def test_cli_reuse_pairs_on_both_shas(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    make_project(src)
+    assert run_cli(src, "--judge") == 0
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst, styled_answers={"alpha": ALPHA_TEXT, "beta": "The huge red bear naps."})
+    runner = FakeRankRunner()
+    assert run_cli(dst, "--judge", "--reuse-from", str(src / "run"), run=runner) == 0
+    # Only the alpha-unstyled orders import (2 rows); the sample
+    # forces both live, and the four beta orders run live as well.
+    assert len(runner.calls) == 6
+    summary = json.loads((dst / "run" / "rank.json").read_text())
+    assert summary["reuse"]["reused_rows"] == 0
+    assert summary["reuse"]["live_calls"] == 6
+    assert summary["reuse"]["freshness"]["sampled"] == 2
+    assert summary["reuse"]["freshness"]["agreements"] == 2

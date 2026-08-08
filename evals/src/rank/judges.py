@@ -132,15 +132,20 @@ def run_judges(
     run: Runner = subprocess_runner,
     env: dict[str, str] | None = None,
     parallel: int = 1,
+    force_keys: set[str] | None = None,
 ) -> list[str]:
     """Run both orders of every contest and return the warnings.
 
     An identical contest (both texts equal) gets no call: the scorer
     marks the split. The rows mapping is read for reuse and extended
     in place; every new row also goes to the sink. Every order is
-    its own task, so the orders run several at a time.
+    its own task, so the orders run several at a time. Each key in
+    force_keys runs live once, past the stored row: the freshness
+    sample of a reuse pass.
     """
-    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run, env=env)
+    session = JudgeSession(
+        rows=rows, sink=sink, workdir=workdir, run=run, env=env, force_keys=force_keys or set()
+    )
     pool = TaskPool(parallel)
     for contest in contests:
         if contest["identical"]:

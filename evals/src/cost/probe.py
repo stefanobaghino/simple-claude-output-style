@@ -139,12 +139,18 @@ def weighted_total(arm: dict) -> float:
 def overhead_stats(arms: list[dict], styles: list[str]) -> dict:
     """The token and weighted overhead stats per style, from the arm rows.
 
-    Each styled arm subtracts the unstyled arm of its own repeat. An
-    old arm row without a repeat index reads as repeat 0, and an old
-    unstyled-check arm never matches a style, so a stored old-format
-    probe yields one sample per style.
+    Each styled arm subtracts the unstyled arm of its own origin and
+    repeat: the origin is the reuse marker of an imported arm, or
+    None for a live arm, so the repeat indices of two origins never
+    meet. An old arm row without a repeat index reads as repeat 0,
+    and an old unstyled-check arm never matches a style, so a stored
+    old-format probe yields one sample per style.
     """
-    unstyled = {arm.get("repeat", 0): arm for arm in arms if arm["arm"] == "unstyled"}
+    unstyled = {
+        (arm.get("reused_from"), arm.get("repeat", 0)): arm
+        for arm in arms
+        if arm["arm"] == "unstyled"
+    }
     result = {}
     for style in styles:
         tokens: list[int] = []
@@ -152,7 +158,7 @@ def overhead_stats(arms: list[dict], styles: list[str]) -> dict:
         for arm in arms:
             if arm["arm"] != style:
                 continue
-            baseline = unstyled.get(arm.get("repeat", 0))
+            baseline = unstyled.get((arm.get("reused_from"), arm.get("repeat", 0)))
             if baseline is None:
                 continue
             tokens.append(arm["total_input_tokens"] - baseline["total_input_tokens"])

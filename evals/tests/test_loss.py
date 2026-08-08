@@ -687,3 +687,147 @@ def test_cli_unparseable_marks_retry_then_warn_and_exit_1(project):
     assert any("the fact check returned no usable marks" in w for w in summary["warnings"])
     assert any("the fact reverse check returned no usable marks" in w for w in summary["warnings"])
     assert any("no usable survival marks" in w for w in summary["warnings"])
+
+
+def make_reuse_source(tmp_path):
+    """A judged source run under its own root."""
+    src = tmp_path / "src"
+    src.mkdir()
+    make_project(src)
+    assert run_cli(src, "--judge") == 0
+    return src / "run"
+
+
+def rewrite_unstyled(run_dir, text):
+    """Replace the unstyled answer of a run, with its gate row."""
+    answers = [json.loads(line) for line in (run_dir / "answers.jsonl").read_text().splitlines()]
+    for answer in answers:
+        if answer["style"] is None:
+            answer["answer"] = text
+    write_jsonl(run_dir / "answers.jsonl", answers)
+    fidelity = [json.loads(line) for line in (run_dir / "fidelity.jsonl").read_text().splitlines()]
+    for row in fidelity:
+        if row["style"] is None:
+            row["answer_sha256"] = sha(text)
+    write_jsonl(run_dir / "fidelity.jsonl", fidelity)
+
+
+def test_cli_reuse_from_without_judge_exits_2(project):
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--reuse-from", "other")
+    assert error.value.code == 2
+
+
+def test_cli_reuse_imports_the_rows_and_forces_the_freshness_sample(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    runner = FakeLossRunner()
+    assert run_cli(dst, "--judge", "--reuse-from", str(source), run=runner) == 0
+    # One forced verdict per check family: check, reverse, hedging.
+    assert len(runner.calls) == 3
+    summary = json.loads((dst / "run" / "loss.json").read_text())
+    reuse = summary["reuse"]
+    assert reuse["source"] == "run"
+    assert reuse["reused_rows"] == 3
+    assert reuse["live_calls"] == 3
+    assert reuse["freshness"]["sampled"] == 3
+    assert reuse["freshness"]["agreements"] == 3
+    assert all(entry["agree"] is True for entry in reuse["freshness"]["comparisons"])
+    raw = [json.loads(line) for line in (dst / "run" / "loss-raw.jsonl").read_text().splitlines()]
+    assert sum(1 for row in raw if row.get("reused_from") == "run") == 6
+    report = (dst / "run" / "loss.md").read_text()
+    assert "## Reuse" in report
+    assert "Reused rows: 3, imported from run." in report
+    # The spend section counts only the live calls of this run.
+    assert "Calls: 3, measured: 3." in report
+
+
+def test_cli_reuse_resume_makes_no_new_calls(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    run_cli(dst, "--judge", "--reuse-from", str(source))
+    second = FakeLossRunner()
+    assert run_cli(dst, "--judge", "--reuse-from", str(source), run=second) == 0
+    assert second.calls == []
+
+
+def test_cli_reuse_meta_mismatch_exits_2(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    with pytest.raises(SystemExit) as error:
+        run_cli(dst, "--judge", "--model", "haiku", "--reuse-from", str(source))
+    assert error.value.code == 2
+
+
+def test_cli_reuse_pin_mismatch_exits_2(tmp_path):
+    source = make_reuse_source(tmp_path)
+    rows = [json.loads(line) for line in (source / "loss-raw.jsonl").read_text().splitlines()]
+    for row in rows:
+        if row.get("type") == "call":
+            row["model_resolved"] = "claude-opus-4"
+    write_jsonl(source / "loss-raw.jsonl", rows)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    with pytest.raises(SystemExit) as error:
+        run_cli(dst, "--judge", "--reuse-from", str(source))
+    assert error.value.code == 2
+
+
+def test_cli_reuse_skips_the_rows_of_changed_answers(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst, styled_answers={"alpha": BETA_TEXT})
+    runner = FakeLossRunner()
+    assert run_cli(dst, "--judge", "--reuse-from", str(source), run=runner) == 0
+    # Only the two extractions of the unchanged unstyled text import;
+    # the styled-dependent rows run live, and no verdict was imported,
+    # so no freshness sample runs.
+    assert len(runner.calls) == 4
+    summary = json.loads((dst / "run" / "loss.json").read_text())
+    assert summary["reuse"]["reused_rows"] == 2
+    assert summary["reuse"]["live_calls"] == 4
+    assert summary["reuse"]["freshness"] is None
+
+
+def test_cli_reuse_reverse_needs_both_texts_current(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    rewrite_unstyled(dst / "run", "The pale blue whale floats.")
+    runner = FakeLossRunner()
+    assert run_cli(dst, "--judge", "--reuse-from", str(source), run=runner) == 0
+    # Only the styled fact extraction imports: the reverse check and
+    # the forward checks need the unstyled text of the source pair.
+    assert len(runner.calls) == 5
+    summary = json.loads((dst / "run" / "loss.json").read_text())
+    assert summary["reuse"]["reused_rows"] == 1
+    assert summary["reuse"]["live_calls"] == 5
+
+
+def test_cli_reuse_freshness_disagreement_warns(tmp_path):
+    source = make_reuse_source(tmp_path)
+    rows = [json.loads(line) for line in (source / "loss-raw.jsonl").read_text().splitlines()]
+    for row in rows:
+        if row.get("key") == f"hedging:check:{sha(STYLED_TEXT)}":
+            row["output"] = '["certain", "certain"]'
+    write_jsonl(source / "loss-raw.jsonl", rows)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    assert run_cli(dst, "--judge", "--reuse-from", str(source)) == 1
+    summary = json.loads((dst / "run" / "loss.json").read_text())
+    freshness = summary["reuse"]["freshness"]
+    assert freshness["sampled"] == 3
+    assert freshness["agreements"] == 2
+    disagreeing = [entry for entry in freshness["comparisons"] if entry["agree"] is False]
+    assert [entry["key"] for entry in disagreeing] == [f"hedging:check:{sha(STYLED_TEXT)}"]
+    assert any("the live verdict differs from the reused one" in w for w in summary["warnings"])

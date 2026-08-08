@@ -417,6 +417,50 @@ def test_campaign_dirs_flag_resumes_a_screening_run(project):
     assert "screening" in provenance
 
 
+def test_campaign_forwards_the_reuse_source(project):
+    first = CampaignRunner()
+    assert run_campaign(project, first, "--runs", "1", "--budget", "8") == 0
+    source_dir, reuse_dir = run_dirs(project, 2)
+
+    second = CampaignRunner()
+    assert run_campaign(project, second, "--reuse-from", str(source_dir), "--budget", "8") == 0
+    tags = {tag for tag, _, _, _ in second.events}
+    # Only the forced freshness samples run live: no generation call,
+    # no probe call, and no value-pr call.
+    assert tags == {"loss", "value-c", "rank"}
+    for artifact in ARTIFACTS:
+        assert (reuse_dir / artifact).exists(), f"{reuse_dir / artifact} is missing"
+    provenance = json.loads((reuse_dir / "provenance.json").read_text())
+    assert provenance["reuse"]["source"] == source_dir.name
+    cost = json.loads((reuse_dir / "cost.json").read_text())
+    assert cost["reuse"]["live_arms"] == 0
+    for name in ("loss", "value"):
+        summary = json.loads((reuse_dir / f"{name}.json").read_text())
+        assert summary["reuse"]["reused_rows"] > 0
+        assert (
+            summary["reuse"]["freshness"]["agreements"] == summary["reuse"]["freshness"]["sampled"]
+        )
+    # The two prompts share one answer text per arm, so the rank
+    # import is 4 rows and the sample of 6 replaces every one; the
+    # block still states the comparisons.
+    rank = json.loads((reuse_dir / "rank.json").read_text())
+    assert rank["reuse"]["reused_rows"] == 0
+    assert rank["reuse"]["freshness"]["sampled"] == 4
+
+    third = CampaignRunner()
+    args = ("--dirs", str(reuse_dir), "--reuse-from", str(source_dir), "--budget", "8")
+    assert run_campaign(project, third, *args) == 0
+    assert third.events == []
+
+
+def test_campaign_reuse_rejects_more_than_one_run(project):
+    runner = CampaignRunner()
+    with pytest.raises(SystemExit) as error:
+        run_campaign(project, runner, "--reuse-from", "x", "--runs", "2")
+    assert error.value.code == 2
+    assert runner.events == []
+
+
 # --- Worker gate unit tests: fake runners behind wrapped leases. ---
 
 

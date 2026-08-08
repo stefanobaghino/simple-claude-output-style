@@ -38,8 +38,17 @@ def build_report(
         f"- Model requested: {provenance['conditions']['model_requested']}",
         f"- Prompts: {len(prompt_ids)}",
         f"- Styles: {', '.join(styles)}",
-        "",
     ]
+    reused = [a for a in answers if "reused_from" in a]
+    if reused:
+        reuse = provenance.get("reuse") or {}
+        source = reuse.get("source")
+        source_text = source if isinstance(source, str) else ", ".join(source or [])
+        lines.append(
+            f"- Answers imported from {source_text}: {len(reused)} "
+            f"(generated live: {len(answers) - len(reused)})"
+        )
+    lines.append("")
 
     lines += ["## Completeness", "", "| Arm | Answers | Missing |", "|---|---|---|"]
     complete = True
@@ -63,8 +72,9 @@ def build_report(
         lines.append(f"| {name} | {tokens} | {mean_words} |")
     lines.append("")
 
-    lines += timing_section(timing_summary(answers))
-    lines += spend_section(spend_summary(answers))
+    own_answers = [a for a in answers if "reused_from" not in a]
+    lines += timing_section(timing_summary(own_answers))
+    lines += spend_section(spend_summary(own_answers))
 
     versions = sorted({a.get("claude_code_version", "") for a in answers} - {""})
     models = sorted({m for a in answers for m in a.get("models_used", [])})

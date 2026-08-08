@@ -8,6 +8,7 @@ import pytest
 
 from cost import analyze_ratios, cli, probe_argv, probe_overhead
 from cost.analysis import distribution
+from cost.probe import overhead_stats
 from cost.report import SHORTNESS_WARNING
 from runner import GenerationError, PluginLeakError
 from runner.provenance import sha256_of
@@ -492,4 +493,119 @@ def test_cli_needs_a_model_for_the_probe(project):
     (project / "run" / "provenance.json").unlink()
     with pytest.raises(SystemExit) as error:
         run_cli(project, "--probe")
+    assert error.value.code == 2
+
+
+def test_overhead_stats_pairs_within_one_origin():
+    arms = [
+        {"arm": "unstyled", "repeat": 0, "reused_from": "src", "total_input_tokens": 1000},
+        {"arm": "alpha", "repeat": 0, "reused_from": "src", "total_input_tokens": 1300},
+        {"arm": "unstyled", "repeat": 0, "total_input_tokens": 2000},
+        {"arm": "beta", "repeat": 0, "total_input_tokens": 2600},
+    ]
+    for arm in arms:
+        for field in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"):
+            arm.setdefault(field, 0)
+    stats = overhead_stats(arms, ["alpha", "beta"])
+    # The repeat indices collide across the origins, but each styled
+    # arm meets only the unstyled arm of its own origin.
+    assert stats["alpha"]["tokens"]["per_repeat"] == [300]
+    assert stats["beta"]["tokens"]["per_repeat"] == [600]
+
+
+def make_second_run(tmp_path, name, styles=("alpha",)):
+    """Another run directory next to the fixture run, same plugin."""
+    plugin = tmp_path / "plugin"
+    run_dir = tmp_path / name
+    run_dir.mkdir()
+    rows = [answer("explanation-01", None, 100)]
+    style_shas = {}
+    for style in styles:
+        rows.append(answer("explanation-01", style, 90))
+        style_file = plugin / "output-styles" / f"{style}.md"
+        if not style_file.exists():
+            style_file.write_text(f"# {style}\n")
+        style_shas[style] = {"sha256": sha256_of(style_file)}
+    with (run_dir / "answers.jsonl").open("w") as file:
+        for line in rows:
+            file.write(json.dumps(line) + "\n")
+    provenance = {"conditions": {"model_requested": "sonnet"}, "styles": style_shas}
+    (run_dir / "provenance.json").write_text(json.dumps(provenance))
+    return run_dir
+
+
+def test_cli_reuse_probe_implies_probe(project):
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--reuse-from", "other")
+    assert error.value.code == 2
+
+
+def test_cli_reuse_probe_imports_the_matching_styles_with_their_baselines(project):
+    assert run_cli(project, "--probe") == 0
+    dst = make_second_run(project, "dst")
+    runner = FakeProbeRunner()
+    argv = [str(dst), "--plugin-dir", str(project / "plugin")]
+    argv += ["--probe", "--reuse-from", str(project / "run")]
+    assert cli.main(argv, run=runner) == 0
+    assert runner.calls == []
+    probe = json.loads((dst / "cost-probe.json").read_text())
+    assert len(probe["arms"]) == 6
+    assert all(arm["reused_from"] == "run" for arm in probe["arms"])
+    assert probe["overhead"]["alpha"]["tokens"]["mean"] == 300
+    assert probe["reuse"] == {
+        "source": "run",
+        "source_date": probe["reuse"]["source_date"],
+        "styles": ["alpha"],
+        "reused_arms": 6,
+        "live_arms": 0,
+    }
+    summary = json.loads((dst / "cost.json").read_text())
+    assert summary["reuse"]["reused_arms"] == 6
+    assert summary["reuse"]["live_arms"] == 0
+    report = (dst / "cost.md").read_text()
+    assert "## Reuse" in report
+    assert "Live probe arms of this run: 0." in report
+    assert "## Harness spend" not in report
+
+
+def test_cli_reuse_probe_probes_only_the_new_style(project):
+    assert run_cli(project, "--probe") == 0
+    dst = make_second_run(project, "dst", styles=("alpha", "beta"))
+    runner = FakeProbeRunner()
+    argv = [str(dst), "--plugin-dir", str(project / "plugin")]
+    argv += ["--probe", "--reuse-from", str(project / "run")]
+    assert cli.main(argv, run=runner) == 0
+    # Three repeats of one fresh unstyled arm plus one beta arm.
+    assert len(runner.calls) == 6
+    probe = json.loads((dst / "cost-probe.json").read_text())
+    assert len(probe["arms"]) == 12
+    assert probe["reuse"]["styles"] == ["alpha"]
+    assert probe["reuse"]["reused_arms"] == 6
+    assert probe["reuse"]["live_arms"] == 6
+    # Each style pairs with the baselines of its own origin.
+    assert probe["overhead"]["alpha"]["tokens"]["per_repeat"] == [300, 300, 300]
+    assert probe["overhead"]["beta"]["tokens"]["per_repeat"] == [300, 300, 300]
+    summary = json.loads((dst / "cost.json").read_text())
+    assert summary["input_overhead"]["per_style"]["alpha"]["unstyled_input_total_mean"] == 1110
+    report = (dst / "cost.md").read_text()
+    assert "## Harness spend" in report
+
+
+def test_cli_reuse_probe_requires_equal_repeats(project):
+    assert run_cli(project, "--probe") == 0
+    dst = make_second_run(project, "dst")
+    argv = [str(dst), "--plugin-dir", str(project / "plugin")]
+    argv += ["--probe", "--repeats", "2", "--reuse-from", str(project / "run")]
+    with pytest.raises(SystemExit) as error:
+        cli.main(argv, run=FakeProbeRunner())
+    assert error.value.code == 2
+
+
+def test_cli_reuse_probe_rejects_another_model(project):
+    assert run_cli(project, "--probe") == 0
+    dst = make_second_run(project, "dst")
+    argv = [str(dst), "--plugin-dir", str(project / "plugin")]
+    argv += ["--probe", "--model", "opus", "--reuse-from", str(project / "run")]
+    with pytest.raises(SystemExit) as error:
+        cli.main(argv, run=FakeProbeRunner())
     assert error.value.code == 2

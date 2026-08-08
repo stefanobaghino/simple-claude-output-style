@@ -13,6 +13,7 @@ from statistics import fmean
 from runner.spend import spend_section
 
 from .probe import PRICE_WEIGHTS, overhead_stats
+from .reuse import probe_reuse_block
 
 SHORTNESS_WARNING = (
     "A lower ratio is not by itself a win: fewer tokens with less "
@@ -34,12 +35,21 @@ def _overhead_block(probe: dict | None, styles: list[str]) -> dict:
     unstyled_totals = [arm["total_input_tokens"] for arm in arms if arm["arm"] == "unstyled"]
     per_style = {}
     for style, stats in overhead_stats(arms, styles).items():
-        styled_totals = [arm["total_input_tokens"] for arm in arms if arm["arm"] == style]
+        styled_arms = [arm for arm in arms if arm["arm"] == style]
+        styled_totals = [arm["total_input_tokens"] for arm in styled_arms]
+        # The baseline mean stays within the origin of the style, so
+        # a mixed probe never averages the baselines of two eras.
+        origins = {arm.get("reused_from") for arm in styled_arms}
+        origin_unstyled = [
+            arm["total_input_tokens"]
+            for arm in arms
+            if arm["arm"] == "unstyled" and arm.get("reused_from") in origins
+        ]
         per_style[style] = {
             "tokens": stats["tokens"],
             "weighted": stats["weighted"],
             "styled_input_total_mean": round(fmean(styled_totals), 3),
-            "unstyled_input_total_mean": round(fmean(unstyled_totals), 3),
+            "unstyled_input_total_mean": round(fmean(origin_unstyled or unstyled_totals), 3),
         }
     return {
         "measured": True,
@@ -59,13 +69,17 @@ def build_cost_summary(
     warnings: list[str],
 ) -> dict:
     styles = sorted(per_style)
-    return {
+    summary = {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "run": run_name,
         "answer_ratio": {"per_style": per_style},
         "input_overhead": _overhead_block(probe, styles),
         "warnings": warnings,
     }
+    reuse = probe_reuse_block(probe)
+    if reuse is not None:
+        summary["reuse"] = reuse
+    return summary
 
 
 def _mean_spread(stats: dict) -> str:
@@ -133,6 +147,25 @@ def build_cost_report(
 
     if spend is not None:
         lines += spend_section(spend)
+
+    reuse = summary.get("reuse")
+    if reuse:
+        source = reuse["source"]
+        source_text = source if isinstance(source, str) else ", ".join(source)
+        lines += [
+            "## Reuse",
+            "",
+            (
+                f"Reused probe arms: {reuse['reused_arms']}, imported from "
+                f"{source_text} (probe of {reuse['source_date']})."
+            ),
+            f"Live probe arms of this run: {reuse['live_arms']}.",
+            f"Imported styles: {', '.join(reuse['styles']) or 'none'}.",
+            "",
+            "The probe arms carry no freshness sample: they are token",
+            "measurements, not judge scores.",
+            "",
+        ]
 
     lines += [
         "## Answer-length ratio",

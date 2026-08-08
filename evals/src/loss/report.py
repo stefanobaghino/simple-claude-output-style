@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from runner.spend import spend_section
 from runner.timing import timing_section
+from value.reuse import reuse_section
 
 from .judges import CHECKS
 
@@ -49,8 +50,9 @@ def build_loss_summary(
     checks: dict[str, dict],
     warnings: list[str],
     model_resolved: object = None,
+    reuse: dict | None = None,
 ) -> dict:
-    return {
+    summary = {
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "run": run_name,
         "judge": {
@@ -65,6 +67,9 @@ def build_loss_summary(
         "checks": checks,
         "warnings": warnings,
     }
+    if reuse is not None:
+        summary["reuse"] = reuse
+    return summary
 
 
 def _fraction(value: float | None) -> str:
@@ -195,6 +200,7 @@ def build_loss_report(
 
     lines += timing_section(timing)
     lines += spend_section(spend)
+    lines += reuse_section(summary.get("reuse"))
     lines += ["## Warnings", ""]
     lines += [f"- {warning}" for warning in summary["warnings"]] or ["- none"]
     lines.append("")

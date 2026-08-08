@@ -22,6 +22,7 @@ from runner.spend import spend_summary
 from .analysis import analyze_ratios
 from .probe import probe_overhead
 from .report import build_cost_report, build_cost_summary
+from .reuse import check_source_probe, load_source_probe, merge_probe, select_imported_styles
 
 
 def _fail(message: str) -> SystemExit:
@@ -92,11 +93,23 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         default=3,
         help="probe calls per arm (with --probe)",
     )
+    parser.add_argument(
+        "--reuse-from",
+        metavar="RUN_DIR",
+        help=(
+            "import the stored probe arms of another run for the styles "
+            "whose text matches; probe live only the rest"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.repeats < 1:
         raise _fail("--repeats must be at least 1")
+    if args.reuse_from and not args.probe:
+        raise _fail("--reuse-from implies --probe")
 
     run_dir = Path(args.run_dir)
+    if args.reuse_from and Path(args.reuse_from).resolve() == run_dir.resolve():
+        raise _fail(f"{args.reuse_from}: the reuse source is the run itself; pass another run")
     answers = load_answers(run_dir / "answers.jsonl")
     styles = sorted({a["style"] for a in answers if a.get("style") is not None})
     if not styles:
@@ -109,7 +122,27 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         model = args.model or (provenance or {}).get("conditions", {}).get("model_requested")
         if not model:
             raise _fail(f"{run_dir}: no provenance.json with a model; pass --model")
-        probe = _run_probe(styles, model, Path(args.plugin_dir).resolve(), run, args.repeats)
+        plugin_dir = Path(args.plugin_dir).resolve()
+        if args.reuse_from:
+            source_dir = Path(args.reuse_from)
+            source_probe = load_source_probe(source_dir)
+            check_source_probe(
+                source_probe, model=model, repeats=args.repeats, source_dir=source_dir
+            )
+            imported_styles, fresh = select_imported_styles(source_probe, plugin_dir, styles)
+            live = _run_probe(fresh, model, plugin_dir, run, args.repeats) if fresh else None
+            probe = merge_probe(
+                source_probe=source_probe,
+                source_name=source_dir.name,
+                imported_styles=imported_styles,
+                live=live,
+                styles=styles,
+                repeats=args.repeats,
+                model=model,
+                plugin_dir=plugin_dir,
+            )
+        else:
+            probe = _run_probe(styles, model, plugin_dir, run, args.repeats)
         probe_path.write_text(json.dumps(probe, indent=2) + "\n", encoding="utf-8")
     elif probe_path.exists():
         probe = json.loads(probe_path.read_text(encoding="utf-8"))
@@ -127,7 +160,8 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         run_name=run_dir.name, per_style=ratios.per_style, probe=probe, warnings=warnings
     )
     (run_dir / "cost.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    spend = spend_summary(probe["arms"]) if probe is not None else None
+    own_arms = [arm for arm in probe["arms"] if "reused_from" not in arm] if probe else []
+    spend = spend_summary(own_arms) if own_arms else None
     report = build_cost_report(summary, spend, screening=screening_section(provenance))
     (run_dir / "cost.md").write_text(report, encoding="utf-8")
 

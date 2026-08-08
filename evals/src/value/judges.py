@@ -382,7 +382,9 @@ class JudgeSession:
     a GenerationError runs once more before the error propagates,
     because one transient failure must not abort a whole pass; the
     retry becomes a warning. A pin mismatch is deterministic and
-    never retries.
+    never retries. A key in force_keys skips the row fast path once:
+    the freshness sample of a reuse pass re-runs that stored key
+    live, and the fresh row lands under the same key.
     """
 
     rows: dict[str, dict]
@@ -392,6 +394,7 @@ class JudgeSession:
     env: dict[str, str] | None = None
     warnings: list[str] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    force_keys: set[str] = field(default_factory=set)
 
     def call(
         self,
@@ -409,7 +412,9 @@ class JudgeSession:
     ) -> dict:
         if not force:
             with self.lock:
-                if key in self.rows:
+                if key in self.force_keys:
+                    self.force_keys.discard(key)
+                elif key in self.rows:
                     return self.rows[key]
         try:
             init, result, wall_ms = self._attempt(key, model, prompt)
@@ -721,6 +726,7 @@ def run_judges(
     run: Runner = subprocess_runner,
     env: dict[str, str] | None = None,
     parallel: int = 1,
+    force_keys: set[str] | None = None,
 ) -> list[str]:
     """Run the judge calls for every pair and return the warnings.
 
@@ -730,9 +736,13 @@ def run_judges(
     from facts_by_pair. The rows mapping is read for reuse and
     extended in place; every new row also goes to the sink. One pool
     spans the checks, the parallel count sets how many tasks run at
-    a time, and a call runs as soon as its inputs exist.
+    a time, and a call runs as soon as its inputs exist. Each key in
+    force_keys runs live once, past the stored row: the freshness
+    sample of a reuse pass.
     """
-    session = JudgeSession(rows=rows, sink=sink, workdir=workdir, run=run, env=env)
+    session = JudgeSession(
+        rows=rows, sink=sink, workdir=workdir, run=run, env=env, force_keys=force_keys or set()
+    )
     pool = TaskPool(parallel)
 
     if "comprehension" in checks:

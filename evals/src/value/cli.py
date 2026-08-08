@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from gate.cli import load_answers
-from loss.judges import FACT_MINE
+from loss.judges import FACT_MINE, parse_string_list
 from runner.generate import GenerationError, Runner, subprocess_runner
 from runner.hermetic import hermetic_call
 from runner.provenance import claude_version, sha256_of
@@ -24,8 +24,24 @@ from runner.spend import spend_summary
 from runner.timing import timing_summary
 
 from .analysis import score_checks, select_pairs, shared_facts
-from .judges import CHECKS, COMPREHENSION_DESIGN, COMPREHENSION_DESIGNS, build_meta, run_judges
+from .judges import (
+    CHECKS,
+    COMPREHENSION_DESIGN,
+    COMPREHENSION_DESIGNS,
+    build_meta,
+    parse_bools,
+    run_judges,
+)
 from .report import build_value_report, build_value_summary
+from .reuse import (
+    check_source_meta,
+    check_source_pins,
+    freshness_block,
+    import_judge_rows,
+    read_raw_calls,
+    reuse_summary,
+    sample_forced_keys,
+)
 
 META_MATCH_KEYS = ("models", "questions", "paraphrases", "language", "answers_sha256")
 
@@ -250,6 +266,10 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
                 raw_file.write(json.dumps(row, ensure_ascii=False) + "\n")
                 raw_file.flush()
 
+            forced: set[str] = set()
+            if args.reuse_from:
+                forced = _import_source_rows(args, checks, meta, index, rows, sink, warnings)
+
             try:
                 warnings += run_judges(
                     texts=_texts(pairs, index),
@@ -269,10 +289,109 @@ def _judge(args, run_dir: Path, pairs, index, meta_stored, rows, run: Runner) ->
                     run=run,
                     env=hermetic.env,
                     parallel=args.parallel,
+                    force_keys=forced,
                 )
             except GenerationError as error:
                 raise _fail(f"a judge call failed: {error}") from error
     return meta, warnings
+
+
+def _row_valid(
+    current_shas: set[str],
+    checks: list[str],
+    current_index: dict[tuple[str, str | None], dict],
+    source_index: dict[tuple[str, str | None], dict],
+):
+    """The import test for a reader-value row.
+
+    The paraphrase and roundtrip keys carry the text sha. The
+    comprehension keys carry the style and the prompt id, so their
+    import requires that both arms of the pair hold the same text in
+    the source run and in the current run. Only the rows of the
+    invoked checks import, so each invocation observes its own
+    import and runs its own freshness sample.
+    """
+
+    def pair_matches(style: str, prompt_id: str) -> bool:
+        for arm_key in ((prompt_id, style), (prompt_id, None)):
+            current = current_index.get(arm_key)
+            source = source_index.get(arm_key)
+            if current is None or source is None or current["sha256"] != source["sha256"]:
+                return False
+        return True
+
+    def valid(row: dict) -> bool:
+        parts = str(row.get("key", "")).split(":")
+        if parts[0] in ("paraphrase", "roundtrip"):
+            return parts[0] in checks and len(parts) > 2 and parts[2] in current_shas
+        if parts[0] == "comprehension":
+            if "comprehension" not in checks or len(parts) < 5 or parts[1] != "v3":
+                return False
+            return pair_matches(parts[3], parts[4])
+        return False
+
+    return valid
+
+
+def _freshness_parser(rows: dict[str, dict]):
+    """The verdict parser for a sampled grades row."""
+
+    def parse(row: dict) -> object:
+        parts = str(row.get("key", "")).split(":")
+        if len(parts) < 5:
+            return None
+        questions_row = rows.get(f"comprehension:v3:questions:{parts[3]}:{parts[4]}")
+        questions = parse_string_list(questions_row["output"]) if questions_row else None
+        if not questions:
+            return None
+        return parse_bools(row["output"], len(questions))
+
+    return parse
+
+
+def _import_source_rows(args, checks, meta, index, rows, sink, warnings) -> set[str]:
+    """Import the reusable source rows; returns the freshness sample keys."""
+    source_dir = Path(args.reuse_from)
+    source_raw = source_dir / "value-raw.jsonl"
+    source_answers_path = source_dir / "answers.jsonl"
+    if not source_answers_path.exists():
+        raise _fail(f"{source_answers_path}: no answers, so the source directory is not a run")
+    source_meta, source_rows = load_raw(source_raw)
+    match_keys = ("models", "paraphrases", "language")
+    if "comprehension" in checks:
+        match_keys += ("questions", "replicates")
+    source_meta = check_source_meta(
+        source_meta,
+        meta,
+        match_keys=match_keys,
+        upgrade_keys=META_UPGRADE_KEYS,
+        source_raw=source_raw,
+    )
+    if (
+        "comprehension" in checks
+        and source_meta.get("comprehension_design") != COMPREHENSION_DESIGN
+    ):
+        raise _fail(
+            f"{source_raw} holds the comprehension design "
+            f"{source_meta.get('comprehension_design')!r}, not {COMPREHENSION_DESIGN!r}; "
+            "reuse needs a source with the same judge conditions"
+        )
+    check_source_pins(source_rows, source_raw)
+    source_index = answer_index(load_answers(source_answers_path))
+    current_shas = {arm["sha256"] for arm in index.values()}
+    candidates = any(key not in rows for key in source_rows)
+    imported = import_judge_rows(
+        source_rows=source_rows,
+        source_name=source_dir.name,
+        rows=rows,
+        sink=sink,
+        valid=_row_valid(current_shas, checks, index, source_index),
+    )
+    if candidates and not imported and not any("reused_from" in row for row in rows.values()):
+        warnings.append(
+            f"{source_dir}: no stored judge row was reusable for this run; every call runs live"
+        )
+    return sample_forced_keys(imported, "value")
 
 
 def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
@@ -312,6 +431,14 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         default=8,
         help="concurrent judge calls (1 runs one call at a time)",
     )
+    parser.add_argument(
+        "--reuse-from",
+        metavar="RUN_DIR",
+        help=(
+            "import the stored judge rows of another run whose conditions "
+            "match; a small fixed sample of the imported verdicts re-runs live"
+        ),
+    )
     args = parser.parse_args(argv)
 
     args.check_list = [check for check in args.checks.split(",") if check]
@@ -320,8 +447,12 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         raise _fail(f"unknown check(s): {', '.join(unknown)}; the checks are {', '.join(CHECKS)}")
     if args.parallel < 1:
         raise _fail(f"--parallel must be 1 or more, not {args.parallel}")
+    if args.reuse_from and not args.judge:
+        raise _fail("--reuse-from implies --judge")
 
     run_dir = Path(args.run_dir)
+    if args.reuse_from and Path(args.reuse_from).resolve() == run_dir.resolve():
+        raise _fail(f"{args.reuse_from}: the reuse source is the run itself; pass another run")
     answers = load_answers(run_dir / "answers.jsonl")
     index = answer_index(answers)
     answer_shas = {key: arm["sha256"] for key, arm in index.items()}
@@ -347,7 +478,9 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         comprehension_design=meta.get("comprehension_design"),
         replicates=meta.get("replicates", 1),
     )
-    warnings = pair_warnings + judge_warnings + result.warnings
+    raw_calls = read_raw_calls(raw_path)
+    freshness, fresh_warnings = freshness_block(raw_calls, _freshness_parser(rows))
+    warnings = pair_warnings + judge_warnings + result.warnings + fresh_warnings
     resolved = resolved_models(rows)
     summary = build_value_summary(
         run_name=run_dir.name,
@@ -356,10 +489,12 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         checks=result.checks,
         warnings=warnings,
         models_resolved={role: resolved.get(alias) for role, alias in meta["models"].items()},
+        reuse=reuse_summary(rows, raw_calls, freshness),
     )
     (run_dir / "value.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    timing = timing_summary(rows.values())
-    spend = spend_summary(rows.values())
+    own_rows = [row for row in rows.values() if "reused_from" not in row]
+    timing = timing_summary(own_rows)
+    spend = spend_summary(own_rows)
     report = build_value_report(
         summary, timing, spend, screening=screening_section(_provenance(run_dir))
     )

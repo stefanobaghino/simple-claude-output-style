@@ -110,6 +110,8 @@ def build_stages(
         ]
         if args.screening:
             argv.append("--screening")
+        if args.reuse_from:
+            argv += ["--reuse-from", args.reuse_from]
         return runner_cli.main(argv, run=run)
 
     def gate_action(index: int, _run: Runner, workers: int) -> int:
@@ -131,6 +133,8 @@ def build_stages(
             "--repeats",
             str(args.probe_repeats),
         ]
+        if args.reuse_from:
+            argv += ["--reuse-from", args.reuse_from]
         return cost_cli.main(argv, run=run)
 
     def loss_action(index: int, run: Runner, workers: int) -> int:
@@ -142,6 +146,8 @@ def build_stages(
             "--parallel",
             str(workers),
         ]
+        if args.reuse_from:
+            argv += ["--reuse-from", args.reuse_from]
         return loss_cli.main(argv, run=run)
 
     def value_action(index: int, run: Runner, workers: int, *, checks: str) -> int:
@@ -157,6 +163,8 @@ def build_stages(
             "--parallel",
             str(workers),
         ]
+        if args.reuse_from:
+            argv += ["--reuse-from", args.reuse_from]
         return value_cli.main(argv, run=run)
 
     def rank_action(index: int, run: Runner, workers: int) -> int:
@@ -168,6 +176,8 @@ def build_stages(
             "--parallel",
             str(workers),
         ]
+        if args.reuse_from:
+            argv += ["--reuse-from", args.reuse_from]
         return rank_cli.main(argv, run=run)
 
     pairs_threads = max(1, args.budget // 2)
@@ -318,6 +328,15 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
     parser.add_argument(
         "--reader-model", default="haiku", help="the weak-reader model of the value checks"
     )
+    parser.add_argument(
+        "--reuse-from",
+        metavar="RUN_DIR",
+        help=(
+            "import the stored rows of another run in every stage; only "
+            "the fresh work runs live (implies --runs 1, because an "
+            "imported repetition measures no variance)"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.budget < 1:
         raise _fail(f"--budget must be 1 or more, not {args.budget}")
@@ -329,12 +348,16 @@ def main(argv: list[str] | None = None, run: Runner = subprocess_runner) -> int:
         )
     if args.screening and args.runs not in (None, 1):
         raise _fail(f"--screening implies --runs 1, not {args.runs}")
+    if args.reuse_from and args.runs not in (None, 1):
+        raise _fail(f"--reuse-from implies --runs 1, not {args.runs}")
+    if args.reuse_from and args.dirs and len(args.dirs) != 1:
+        raise _fail(f"--reuse-from implies --runs 1, not {len(args.dirs)} directories")
     # The pairs action forwards args.prompts verbatim, so the default
     # resolves here, before the stage table is built.
     if args.prompts is None:
         args.prompts = "prompts/holdout.yaml" if args.holdout else "prompts/prompts.yaml"
     if args.runs is None:
-        args.runs = 1 if args.screening else 3
+        args.runs = 1 if args.screening or args.reuse_from else 3
     if not args.dirs and args.runs < 1:
         raise _fail(f"--runs must be 1 or more, not {args.runs}")
 

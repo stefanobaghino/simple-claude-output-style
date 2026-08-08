@@ -82,7 +82,10 @@ of the baseline, and `runs/2026-08-07` is the calibration run of the
 field. A later addition goes through the process below and re-opens
 the field on purpose. Every member adds a linear cost to every
 campaign, so an addition needs a reason that a smaller field cannot
-serve.
+serve. The reuse layer (#76) keeps the cost of an addition linear
+in practice: a new run with `--reuse-from` imports the stored rows
+of the frozen field, so the addition costs the calls of the new
+member plus its new contests. See "Reuse across runs".
 
 ## How to add a style
 
@@ -104,7 +107,10 @@ harness measures the style. Add both parts:
    data sets the threshold and takes the test.
 5. Produce a new pair run with `uv run style-pairs`, then gate the run,
    then produce the reports. Do not extend an old run, because the
-   provenance of a run records the styles of the run.
+   provenance of a run records the styles of the run. To avoid a
+   full re-measurement, pass `--reuse-from` with a stored run of the
+   current era: the new run imports the unchanged arms and their
+   judge rows, and only the new style runs live.
 6. Run the drift sessions with `uv run style-drift --generate`.
 
 The CLI tests need no change for a new style, because they use
@@ -176,13 +182,13 @@ The harness uses [uv](https://docs.astral.sh/uv/). From this directory:
 ```
 uv run pytest
 uv run style-lint FILE.md --rules rules/technical-simplified.rules.yaml
-uv run style-pairs [--parallel N] [--screening] [--holdout]
+uv run style-pairs [--parallel N] [--screening] [--holdout] [--reuse-from RUN]
 uv run style-gate runs/<date>
-uv run style-cost runs/<date> [--probe] [--repeats N]
-uv run style-value runs/<date> [--judge] [--parallel N]
-uv run style-loss runs/<date> [--judge] [--parallel N]
-uv run style-rank runs/<date> [--judge] [--parallel N]
-uv run style-campaign [--runs N] [--budget W] [--probe-repeats N] [--screening] [--holdout]
+uv run style-cost runs/<date> [--probe] [--repeats N] [--reuse-from RUN]
+uv run style-value runs/<date> [--judge] [--parallel N] [--reuse-from RUN]
+uv run style-loss runs/<date> [--judge] [--parallel N] [--reuse-from RUN]
+uv run style-rank runs/<date> [--judge] [--parallel N] [--reuse-from RUN]
+uv run style-campaign [--runs N] [--budget W] [--probe-repeats N] [--screening] [--holdout] [--reuse-from RUN]
 uv run style-drift [--generate] [--scripts prompts/sessions/*.yaml] [--out runs/<date>-drift]
 uv run style-compare runs/<a> runs/<b> [...] [--out runs/<date>-compare]
 ```
@@ -259,6 +265,16 @@ the default directory already holds a complete run, a repeat without
 and so on) and tells the choice, because a silent reuse of a complete
 run produces no new sample. The
 runner exits with code 1 when the pair set is incomplete.
+Reuse across runs exists, but only as an explicit flag, never as a
+default: `--reuse-from RUN` imports the stored answers of another
+run for the arms whose conditions match, and generates only the
+rest. The conditions are the prompt-set hash, the writer model, the
+screening mode, and the style text hash per styled arm. An imported
+row is the source row plus a `reused_from` marker, so the report
+and the provenance state the counts. Reuse opens no era, because a
+reused row and a live row are the same row. The section "Reuse
+across runs" below describes the judge side and the freshness
+sample.
 
 The gate reads the answers of a run and writes the fidelity files into
 the run directory. It checks every styled answer with the rules of its
@@ -288,7 +304,11 @@ price. The repeat count changes no call condition, so old runs stay
 comparable, and a stored probe in the old single-call format reads
 as one repeat. The probe data
 lands in `cost-probe.json`, and a later `style-cost` call without
-`--probe` reuses it. Exit codes: 0 when both numbers exist and no
+`--probe` reuses it. With `--probe --reuse-from RUN`, the tool
+imports the stored probe arms of another run per style, together
+with the unstyled baseline arms of their repeats, and probes live
+only the styles that the source cannot serve, as "Reuse across
+runs" describes. Exit codes: 0 when both numbers exist and no
 warnings exist, 1 when warnings exist (for example, the overhead is not
 measured), 2 when the run cannot be reported.
 
@@ -337,7 +357,10 @@ the tool. A raw file from before the hash gets the hash backfilled
 on the next `--judge`, because the prompts did not change across
 that boundary. A stored hash that differs from the current
 templates stops the resume with exit code 2, because a resumed
-pass must not mix two prompt versions in one raw file. A judge call that
+pass must not mix two prompt versions in one raw file. With
+`--reuse-from`, the tool also imports the stored judge rows of
+another run whose conditions match, as "Reuse across runs"
+describes. A judge call that
 fails runs once more, and the retry becomes a warning, because one
 transient failure must not abort a whole pass. A second failure
 stops the pass. The judge calls
@@ -369,7 +392,7 @@ run, and the judge-model pin applies here as well. `--judge` runs
 the live calls and appends the raw
 outputs to `loss-raw.jsonl`; an interrupted judge run resumes when
 the same invocation runs again, and the prompt-hash rule applies
-here as well. A failed judge call retries once
+here as well. The reuse flag applies here as well. A failed judge call retries once
 here as well, with the same warning. The judge calls run several at a
 time (8 by default), and `--parallel` sets the count (1 runs one
 call at a time). One pool spans the checks here as well, and a
@@ -406,7 +429,8 @@ must differ from the writer model of the run, and the judge-model
 pin applies here as well. `--judge` runs the
 live calls and appends the raw outputs to `rank-raw.jsonl`; an
 interrupted judge run resumes when the same invocation runs again,
-and the prompt-hash rule applies here as well.
+and the prompt-hash rule applies here as well. The reuse flag
+applies here as well.
 A failed judge call retries once here as well, with the same
 warning. The judge calls run several at a time (8 by default), and
 `--parallel` sets the count (1 runs one call at a time). Without
@@ -499,6 +523,55 @@ for that run, and n states the run count per axis. Exit codes: 0
 when no warnings exist, 1 when warnings exist, 2 when the
 comparison cannot run.
 
+### Reuse across runs
+
+A campaign re-judges every style in every run, but with a fixed
+prompt set and fixed styles most calls repeat stored work.
+`--reuse-from RUN` imports the stored rows of a source run and
+calls only for the rest. Reuse is explicit, never the default,
+because the multi-run repetition of a campaign measures variance,
+and a silent cache hit turns a repetition into a copy. Reuse opens
+no era: an imported row is the source row plus a `reused_from`
+marker, and nothing else changes.
+
+The reuse works in two chained layers, because a fresh generation
+of the same style and prompt yields a different text, and a stored
+judge row speaks about the stored answer. First the pair runner
+imports the answers whose conditions match: the prompt-set hash,
+the writer model, the screening mode, and the style text hash per
+styled arm. Then each judge tool imports the stored rows that
+reference the answers of the current run. The judge keys carry the
+answer hashes, so a key hit is a content hit. The comprehension
+keys carry the style and the prompt id instead, so those rows
+import only when both arms of the pair hold the same text in both
+runs. The source must match the invocation on the META match keys
+of the resume path, minus the whole-file answers hash that the
+per-row checks replace, and the resolved judge models of the
+source must obey the current pins. The cost probe imports per
+style: the arms of a style whose text matches the source travel
+with the unstyled baseline arms of their own repeats, and only the
+missing styles probe live.
+
+On each import, a small fixed sample of the imported verdict rows
+re-runs live: the first sorted keys per verdict family, 2 per loss
+check family, 6 comprehension grades, and 6 contests. The judge
+can shift between the store date of a row and the reuse date, in
+ways that the key does not see, and the sample measures that
+shift. The report of each tool states the reused and live counts
+and the comparison per sampled key, and a disagreement is a
+warning. The comparison uses exact verdict equality until the
+noise floor of issue #29 exists. A deviation past that floor will
+invalidate the reuse for the axis. The probe arms carry no
+freshness sample, because they are token measurements, not judge
+scores.
+
+`uv run style-campaign --reuse-from RUN` runs the whole chain. A
+field extension then makes only the calls of the new style, its
+new contests, and the freshness samples. The flag implies
+`--runs 1`, because an imported repetition measures no variance.
+With the flag off, the behavior is byte-identical to a run without
+the reuse layer.
+
 ### Human spot check
 
 The judges are models, so the verdicts need a human anchor. Run
@@ -553,7 +626,9 @@ clean. An interrupted campaign resumes through `--dirs`, with the
 run directories of the interrupted campaign. The first value
 invocation of a run exits 1 by design, because its comprehension
 check is not judged yet; the driver reports that exit code but does
-not count it.
+not count it. `--reuse-from RUN` forwards to every stage except
+the gate and implies `--runs 1`, because an imported repetition
+measures no variance.
 
 The default budget rests on the probe of #73, stored in
 `runs/2026-08-07`: at a sustained peak of 48 live calls, the
@@ -564,7 +639,9 @@ about 4,500 calls with about 59,500 s of subprocess time, and its
 wall was 24 minutes at 85 percent permit utilization. Thus a 3-run
 campaign of the current era expects a wall near 70 minutes at
 budget 48. A wall bar must state the budget and the era that it
-assumes.
+assumes. A reuse campaign sits outside this bar: with
+`--reuse-from` it makes only the fresh calls of its field
+extension plus the freshness samples.
 
 The schedule rests on four dependencies:
 
@@ -615,7 +692,8 @@ prompt file, sorted and with seed 0, so every screening run uses
 the same 8 of the 32 prompts. By design, the generation calls are
 about 8% of a full campaign, and the judge calls are about 25% of
 one full run. These fractions are design numbers until a
-measurement against the baseline campaign replaces them. A grown
+measurement against the baseline campaign replaces them, and they
+describe a run without reuse. A grown
 prompt set redraws the subset, so screening runs across a
 prompt-set change warn on the screening block of the provenance as
 well as on the prompt-set hash. The run
@@ -686,6 +764,14 @@ A pair is not stored twice: it is the line for `(prompt, style)` plus
 the line for `(prompt, null)`. The data is plain text in plain git: no
 LFS, and no single file above about 5 MB. Keep raw transcripts out;
 store only what the reports consume.
+
+A row of `answers.jsonl`, a call row of a raw file, and a probe arm
+can carry a `reused_from` marker: the row came from the named run
+through the reuse flag, byte-identical apart from the marker. Such
+a run also carries a `reuse` block in `provenance.json`,
+`cost-probe.json`, and the `loss.json`, `value.json`, `rank.json`,
+and `cost.json` reports, with the reused and live counts and the
+freshness comparison. See "Reuse across runs".
 
 ## License
 

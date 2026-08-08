@@ -626,3 +626,126 @@ def test_provenance_holds_the_config_fields(project):
     assert "CLAUDE_CONFIG_DIR" in conditions["env_passed"]
     # The names of the variables land here, never the values.
     assert all(isinstance(name, str) and "/" not in name for name in conditions["env_passed"])
+
+
+def test_cli_reuse_imports_the_source_answers(project):
+    run_cli(project, FakeRunner(), "source")
+    second = FakeRunner()
+    assert run_cli(project, second, "run", "--reuse-from", str(project / "source")) == 0
+    assert second.calls == []
+    answers = [
+        json.loads(line) for line in (project / "run" / "answers.jsonl").read_text().splitlines()
+    ]
+    assert len(answers) == 4
+    assert all(answer["reused_from"] == "source" for answer in answers)
+    provenance = json.loads((project / "run" / "provenance.json").read_text())
+    assert provenance["reuse"] == {"source": "source", "imported_answers": 4}
+    report = (project / "run" / "report.md").read_text()
+    assert "- Answers imported from source: 4 (generated live: 0)" in report
+
+
+def test_cli_reuse_generates_only_the_new_style(project):
+    run_cli(project, FakeRunner(), "source")
+    (project / "rules" / "beta.rules.yaml").write_text("style: beta\n")
+    (project / "plugin" / "output-styles" / "beta.md").write_text("Beta style.\n")
+    second = FakeRunner()
+    assert run_cli(project, second, "run", "--reuse-from", str(project / "source")) == 0
+    assert len(second.calls) == 2
+    assert all(style_of(argv) == "test-plugin:beta" for argv in second.calls)
+    answers = {
+        (a["prompt_id"], a["style"]): a
+        for a in map(json.loads, (project / "run" / "answers.jsonl").read_text().splitlines())
+    }
+    assert len(answers) == 6
+    assert "reused_from" not in answers[("explanation-01", "beta")]
+    assert answers[("explanation-01", "alpha")]["reused_from"] == "source"
+    assert answers[("explanation-01", None)]["reused_from"] == "source"
+
+
+def test_cli_reuse_regenerates_a_changed_style(project):
+    run_cli(project, FakeRunner(), "source")
+    (project / "plugin" / "output-styles" / "alpha.md").write_text("Changed alpha.\n")
+    second = FakeRunner()
+    assert run_cli(project, second, "run", "--reuse-from", str(project / "source")) == 0
+    assert len(second.calls) == 2
+    answers = {
+        (a["prompt_id"], a["style"]): a
+        for a in map(json.loads, (project / "run" / "answers.jsonl").read_text().splitlines())
+    }
+    assert "reused_from" not in answers[("explanation-01", "alpha")]
+    assert answers[("explanation-01", None)]["reused_from"] == "source"
+
+
+def test_cli_reuse_rejects_another_prompt_set(project):
+    run_cli(project, FakeRunner(), "source")
+    prompts = [
+        {"id": "explanation-01", "type": "explanation", "text": "Explain C."},
+        {"id": "debugging-01", "type": "debugging", "text": "Debug D."},
+    ]
+    (project / "prompts.yaml").write_text(yaml.safe_dump({"prompts": prompts}))
+    with pytest.raises(SystemExit, match="another prompt set"):
+        run_cli(project, FakeRunner(), "run", "--reuse-from", str(project / "source"))
+
+
+def test_cli_reuse_rejects_another_model(project):
+    run_cli(project, FakeRunner(), "source")
+    with pytest.raises(SystemExit, match="the model"):
+        run_cli(
+            project, FakeRunner(), "run", "--model", "opus", "--reuse-from", str(project / "source")
+        )
+
+
+def test_cli_reuse_rejects_a_screening_mismatch(screening_project):
+    run_cli(screening_project, FakeRunner(), "source")
+    with pytest.raises(SystemExit, match="screening"):
+        run_cli(
+            screening_project,
+            FakeRunner(),
+            "run",
+            "--screening",
+            "--reuse-from",
+            str(screening_project / "source"),
+        )
+
+
+def test_cli_reuse_rejects_the_run_itself(project):
+    run_cli(project, FakeRunner(), "source")
+    with pytest.raises(SystemExit, match="the run itself"):
+        run_cli(project, FakeRunner(), "source", "--reuse-from", str(project / "source"))
+
+
+def test_cli_reuse_needs_a_source_with_provenance(project):
+    (project / "empty").mkdir()
+    with pytest.raises(SystemExit, match="not a run"):
+        run_cli(project, FakeRunner(), "run", "--reuse-from", str(project / "empty"))
+
+
+def test_cli_reuse_imports_only_the_missing_pairs(project):
+    run_cli(project, FakeRunner(), "source")
+    run_cli(project, FakeRunner(), "run")
+    answers_path = project / "run" / "answers.jsonl"
+    lines = answers_path.read_text().splitlines()
+    answers_path.write_text("\n".join(lines[:1]) + "\n")
+
+    second = FakeRunner()
+    assert run_cli(project, second, "run", "--reuse-from", str(project / "source")) == 0
+    assert second.calls == []
+    answers = [json.loads(line) for line in answers_path.read_text().splitlines()]
+    assert len(answers) == 4
+    assert len({(a["prompt_id"], a["style"]) for a in answers}) == 4
+    assert sum(1 for a in answers if "reused_from" in a) == 3
+
+    third = FakeRunner()
+    assert run_cli(project, third, "run", "--reuse-from", str(project / "source")) == 0
+    assert third.calls == []
+    assert len(answers_path.read_text().splitlines()) == 4
+
+
+def test_cli_without_reuse_writes_no_reuse_marks(project):
+    assert run_cli(project, FakeRunner()) == 0
+    answers = [
+        json.loads(line) for line in (project / "run" / "answers.jsonl").read_text().splitlines()
+    ]
+    assert all("reused_from" not in answer for answer in answers)
+    assert "reuse" not in json.loads((project / "run" / "provenance.json").read_text())
+    assert "imported" not in (project / "run" / "report.md").read_text()

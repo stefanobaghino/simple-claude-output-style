@@ -1516,3 +1516,97 @@ def test_load_raw_takes_the_last_row_per_key(tmp_path):
     meta, rows = cli.load_raw(Path(path))
     assert meta["type"] == "meta"
     assert rows["k"]["output"] == "new"
+
+
+def make_reuse_source(tmp_path):
+    """A fully judged source run under its own root."""
+    src = tmp_path / "src"
+    src.mkdir()
+    make_project(src)
+    assert run_cli(src, "--judge") == 0
+    return src / "run"
+
+
+def test_cli_reuse_from_without_judge_exits_2(project):
+    with pytest.raises(SystemExit) as error:
+        run_cli(project, "--reuse-from", "other")
+    assert error.value.code == 2
+
+
+def test_cli_reuse_pr_imports_the_paraphrase_and_roundtrip_rows(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    runner = FakeJudgeRunner()
+    exit_code = run_cli(
+        dst,
+        "--judge",
+        "--checks",
+        "paraphrase,roundtrip",
+        "--reuse-from",
+        str(source),
+        run=runner,
+    )
+    # The comprehension check is not judged yet, so the exit code is
+    # the structural 1 of every first value invocation.
+    assert exit_code == 1
+    assert runner.calls == []
+    summary = json.loads((dst / "run" / "value.json").read_text())
+    # Two texts: 6 paraphrase rows plus 4 roundtrip rows.
+    assert summary["reuse"]["reused_rows"] == 10
+    assert summary["reuse"]["live_calls"] == 0
+    assert summary["reuse"]["freshness"] is None
+
+
+def test_cli_reuse_c_forces_the_freshness_sample_and_counts_cumulatively(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    run_cli(dst, "--judge", "--checks", "paraphrase,roundtrip", "--reuse-from", str(source))
+    runner = FakeJudgeRunner()
+    exit_code = run_cli(
+        dst, "--judge", "--checks", "comprehension", "--reuse-from", str(source), run=runner
+    )
+    assert exit_code == 0
+    # The pair holds six grades keys, and the sample forces every one.
+    assert len(runner.calls) == 6
+    summary = json.loads((dst / "run" / "value.json").read_text())
+    # 10 pr rows plus 13 comprehension rows, minus the 6 forced ones.
+    assert summary["reuse"]["reused_rows"] == 17
+    assert summary["reuse"]["live_calls"] == 6
+    assert summary["reuse"]["freshness"]["sampled"] == 6
+    assert summary["reuse"]["freshness"]["agreements"] == 6
+    assert "## Reuse" in (dst / "run" / "value.md").read_text()
+
+
+def test_cli_reuse_comprehension_needs_both_arm_texts_equal(tmp_path):
+    source = make_reuse_source(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst, styled_answers={"alpha": "The big red bear sleeps."})
+    runner = FakeJudgeRunner()
+    exit_code = run_cli(
+        dst, "--judge", "--checks", "comprehension", "--reuse-from", str(source), run=runner
+    )
+    assert exit_code == 1
+    assert runner.calls != []
+    summary = json.loads((dst / "run" / "value.json").read_text())
+    assert "reuse" not in summary
+    assert any("no stored judge row was reusable" in w for w in summary["warnings"])
+
+
+def test_cli_reuse_design_mismatch_exits_2(tmp_path):
+    source = make_reuse_source(tmp_path)
+    rows = [json.loads(line) for line in (source / "value-raw.jsonl").read_text().splitlines()]
+    for row in rows:
+        if row.get("type") == "meta":
+            row["comprehension_design"] = "shared-facts-v2"
+    write_jsonl(source / "value-raw.jsonl", rows)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    make_project(dst)
+    with pytest.raises(SystemExit) as error:
+        run_cli(dst, "--judge", "--checks", "comprehension", "--reuse-from", str(source))
+    assert error.value.code == 2
